@@ -1,0 +1,33 @@
+
+                            Telegram Server
+                            ===============
+
+Copyright 2015 Aykut Alparslan KOÇ
+
+Telegram Server licenses this file to you under GNU GPL v. 3 or later.
+You should have received a copy of the license in this archive (see LICENSE).
+
+-------------------------------------------------------------------------------
+This product contains The Netty Project
+
+  * LICENSE:
+    * license/LICENSE.netty.txt (Apache License Version 2.0)
+  * HOMEPAGE:
+    * http://gee.cs.oswego.edu/cgi-bin/viewcvs.cgi/jsr166/
+    * http://viewvc.jboss.org/cgi-bin/viewvc.cgi/jbosscache/experimental/jsr166/
+
+This product contains a modified portion of Nikolai Kudashov's 'Telegram for Android v. 2.x.x.'
+ which can be obtained at:
+
+  * LICENSE:
+    * GNU GPL v. 2 or later
+  * HOMEPAGE:
+    * https://github.com/DrKLO/Telegram
+
+This product contains a modified portion of Korshakov Stepan's 'Java MTProto Implementation'
+ which can be obtained at:
+
+  * LICENSE:
+    * The MIT License (MIT)
+  * HOMEPAGE:
+    * https://github.com/ex3ndr/telegram-mt

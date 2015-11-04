@@ -1,0 +1,28 @@
+group 'org.telegram.TelegramServer'
+version '1.0-SNAPSHOT'
+
+apply plugin: 'java'
+apply plugin: 'idea'
+
+sourceCompatibility = 1.5
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testCompile group: 'junit', name: 'junit', version: '4.11'
+    compile 'io.netty:netty-all:4.0.31.Final'
+    compile 'org.bouncycastle:bcprov-jdk15on:1.52'
+    compile 'com.datastax.cassandra:cassandra-driver-core:2.2.0-rc3'
+}
+
+idea {
+    module{
+        //if you love browsing Javadoc
+        downloadJavadoc = true
+
+        //and hate reading sources :)
+        downloadSources = false
+    }
+}
