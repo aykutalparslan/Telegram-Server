@@ -31,3 +31,12 @@ This product contains a modified portion of Korshakov Stepan's 'Java MTProto Imp
     * The MIT License (MIT)
   * HOMEPAGE:
     * https://github.com/ex3ndr/telegram-mt
+
+
+This product contains Bouncy Castle
+ which can be obtained at:
+
+  * LICENSE:
+    * The MIT License (MIT)
+  * HOMEPAGE:
+    * https://www.bouncycastle.org/

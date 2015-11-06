@@ -18,6 +18,7 @@
 
 package org.telegram.mtproto;
 
+import org.bouncycastle.crypto.params.DHParameters;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.mtproto.secure.CryptoUtils;
 import org.telegram.tl.APIContext;
@@ -26,9 +27,9 @@ import org.telegram.tl.pq.*;
 import org.telegram.tl.service.msgs_ack;
 
 import java.math.BigInteger;
-import java.security.KeyPair;
-import java.security.PublicKey;
-import java.security.SecureRandom;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.security.*;
 import java.util.Date;
 import java.util.Random;
 
@@ -155,6 +156,9 @@ public class MTProtoAuth {
         g = BigInteger.valueOf(server_dh_inner_data.g);
 
         SecureRandom srnd = new SecureRandom();
+        //String prime = "C7 1C AE B9 C6 B1 C9 04 8E 6C 52 2F 70 F1 3F 73 98 0D 40 23 8E 3E 21 C1 49 34 D0 37 56 3D 93 0F 48 19 8A 0A A7 C1 40 58 22 94 93 D2 25 30 F4 DB FA 33 6F 6E 0A C9 25 13 95 43 AE D4 4C CE 7C 37 20 FD 51 F6 94 58 70 5A C6 8C D4 FE 6B 6B 13 AB DC 97 46 51 29 69 32 84 54 F1 8F AF 8C 59 5F 64 24 77 FE 96 BB 2A 94 1D 5B CD 1D 4A C8 CC 49 88 07 08 FA 9B 37 8E 3C 4F 3A 90 60 BE E6 7C F9 A4 A4 A6 95 81 10 51 90 7E 16 27 53 B5 6B 0F 6B 41 0D BA 74 D8 A8 4B 2A 14 B3 14 4E 0E F1 28 47 54 FD 17 ED 95 0D 59 65 B4 B9 DD 46 58 2D B1 17 8D 16 9C 6B C4 65 B0 D6 FF 9C A3 92 8F EF 5B 9A E4 E4 18 FC 15 E8 3E BE A0 F8 7F A9 FF 5E ED 70 05 0D ED 28 49 F4 7B F9 59 D9 56 85 0C E9 29 85 1F 0D 81 15 F6 35 B1 05 EE 2E 4E 15 D0 4B 24 54 BF 6F 4F AD F0 34 B1 04 03 11 9C D8 E3 B9 2F CC 5B";
+        //String prime_hex = prime.replace(" ", "");
+
         dh_prime = BigInteger.probablePrime(2048, srnd);
         byte[] dh_primeBytes = dh_prime.toByteArray();
         if(dh_primeBytes[0] == 0 && dh_primeBytes.length == 257){
@@ -210,11 +214,13 @@ public class MTProtoAuth {
         g_b = CryptoUtils.loadBigInt(client_dh_inner_data.g_b);
 
         authKey = g_b.modPow(a, dh_prime).toByteArray();
-        byte[] authKeyIdBytes = subStr(authKey, authKey.length - 9, 8);
-        for (int i = 0; i < authKeyIdBytes.length; i++)
-        {
-            authKeyId = (authKeyId << 8) + (authKeyIdBytes[i] & 0xff);
-        }
+        byte[] authKeyHash = Utilities.computeSHA1(authKey);
+        byte[] authKeyArr = new byte[8];
+        System.arraycopy(authKeyHash, authKeyHash.length - 8, authKeyArr, 0, 8);
+        ByteBuffer buffer = ByteBuffer.wrap(authKeyArr);
+        buffer.order(ByteOrder.LITTLE_ENDIAN);
+        authKeyId = buffer.getLong();
+
         authKeyAuxHash = subStr(Utilities.computeSHA1(authKey), 0 ,8);
         byte[] b_t1 = new byte[1];
         b_t1[0] = 1;
@@ -242,6 +248,7 @@ public class MTProtoAuth {
             srnd.nextBytes(serverSaltBytes);
             DatabaseConnection.getInstance().saveServerSalt(authKeyId, time_salt + ((i+1) * 86400000L), Utilities.bytesToLong(serverSaltBytes), (i+1) * 86400);
         }
+
         return prepareMessageData(dh_gen_ok, generateMessageId());
     }
 

@@ -28,7 +28,10 @@ public class InvokeWithLayer extends TLObject {
     public int layer;
     public TLObject query;
 
-    public InvokeWithLayer(int layer, TLObject query){
+    public InvokeWithLayer() {
+    }
+
+    public InvokeWithLayer(int layer, TLObject query) {
         this.layer = layer;
         this.query = query;
     }
@@ -36,7 +39,7 @@ public class InvokeWithLayer extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         layer = buffer.readInt();
-        query = (TLObject) buffer.readTLObject(APIContext.getInstance());
+        query = buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override

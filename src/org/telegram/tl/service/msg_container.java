@@ -27,6 +27,10 @@ public class msg_container extends TLObject {
 
     public TLVector<message> messages;
 
+    public msg_container() {
+        this.messages = new TLVector<>();
+    }
+
     public msg_container(TLVector<message> messages){
         this.messages = messages;
     }

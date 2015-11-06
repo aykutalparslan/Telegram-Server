@@ -46,9 +46,9 @@ public class DatabaseConnection {
     }
 
     public void createSchema() {
-        session.execute("DROP TABLE telegram.sessions;");
-        session.execute("DROP TABLE telegram.server_salts;");
-        session.execute("DROP KEYSPACE telegram;");
+        //session.execute("DROP TABLE telegram.sessions;");
+        //session.execute("DROP TABLE telegram.server_salts;");
+        //session.execute("DROP KEYSPACE telegram;");
 
         session.execute("CREATE KEYSPACE IF NOT EXISTS telegram WITH replication " +
                 "= {'class':'SimpleStrategy', 'replication_factor':1};");
