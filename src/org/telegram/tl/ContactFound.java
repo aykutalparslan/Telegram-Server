@@ -27,6 +27,9 @@ public class ContactFound extends TLContactFound {
 
     public int user_id;
 
+    public ContactFound() {
+    }
+
     public ContactFound(int user_id){
         this.user_id = user_id;
     }

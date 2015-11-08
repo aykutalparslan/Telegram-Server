@@ -29,6 +29,10 @@ public class InputMediaUploadedDocument extends TLInputMedia {
     public String mime_type;
     public TLVector<TLDocumentAttribute> attributes;
 
+    public InputMediaUploadedDocument() {
+        this.attributes = new TLVector<>();
+    }
+
     public InputMediaUploadedDocument(TLInputFile file, String mime_type, TLVector<TLDocumentAttribute> attributes){
         this.file = file;
         this.mime_type = mime_type;

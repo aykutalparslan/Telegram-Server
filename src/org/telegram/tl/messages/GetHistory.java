@@ -30,6 +30,9 @@ public class GetHistory extends TLObject {
     public int max_id;
     public int limit;
 
+    public GetHistory() {
+    }
+
     public GetHistory(TLInputPeer peer, int offset, int max_id, int limit){
         this.peer = peer;
         this.offset = offset;

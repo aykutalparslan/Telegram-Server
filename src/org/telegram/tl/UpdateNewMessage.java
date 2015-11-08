@@ -28,6 +28,9 @@ public class UpdateNewMessage extends TLUpdate {
     public TLMessage message;
     public int pts;
 
+    public UpdateNewMessage() {
+    }
+
     public UpdateNewMessage(TLMessage message, int pts){
         this.message = message;
         this.pts = pts;

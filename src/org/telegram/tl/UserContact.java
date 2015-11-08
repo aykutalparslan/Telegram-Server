@@ -34,6 +34,9 @@ public class UserContact extends TLUser {
     public TLUserProfilePhoto photo;
     public TLUserStatus status;
 
+    public UserContact() {
+    }
+
     public UserContact(int id, String first_name, String last_name, String username, long access_hash, String phone, TLUserProfilePhoto photo, TLUserStatus status){
         this.id = id;
         this.first_name = first_name;

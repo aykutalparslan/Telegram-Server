@@ -30,6 +30,9 @@ public class File extends TLFile {
     public int mtime;
     public byte[] bytes;
 
+    public File() {
+    }
+
     public File(TLFileType type, int mtime, byte[] bytes){
         this.type = type;
         this.mtime = mtime;

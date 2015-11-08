@@ -28,6 +28,9 @@ public class ImportAuthorization extends TLObject {
     public int id;
     public byte[] bytes;
 
+    public ImportAuthorization() {
+    }
+
     public ImportAuthorization(int id, byte[] bytes){
         this.id = id;
         this.bytes = bytes;

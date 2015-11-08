@@ -34,6 +34,9 @@ public class UserSelf extends TLUser {
     public TLUserStatus status;
     public boolean inactive;
 
+    public UserSelf() {
+    }
+
     public UserSelf(int id, String first_name, String last_name, String username, String phone, TLUserProfilePhoto photo, TLUserStatus status, boolean inactive){
         this.id = id;
         this.first_name = first_name;

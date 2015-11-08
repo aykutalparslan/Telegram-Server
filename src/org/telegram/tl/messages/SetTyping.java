@@ -28,6 +28,9 @@ public class SetTyping extends TLObject {
     public TLInputPeer peer;
     public TLSendMessageAction action;
 
+    public SetTyping() {
+    }
+
     public SetTyping(TLInputPeer peer, TLSendMessageAction action){
         this.peer = peer;
         this.action = action;

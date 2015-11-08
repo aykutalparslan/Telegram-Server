@@ -101,9 +101,10 @@ public class DatabaseConnection {
         ServerSaltModel[] salts = new ServerSaltModel[size];
 
         for (int i = 0; i < size; i++) {
+            Row result = results.one();
             ServerSaltModel s = new ServerSaltModel();
-            s.salt = results.one().getLong("server_salt");
-            s.validSince = results.one().getLong("valid_since");
+            s.salt = result.getLong("server_salt");
+            s.validSince = result.getTimestamp("valid_since").getTime();
             salts[i] = s;
         }
 

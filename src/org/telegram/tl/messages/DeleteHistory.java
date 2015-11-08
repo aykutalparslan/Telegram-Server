@@ -28,6 +28,9 @@ public class DeleteHistory extends TLObject {
     public TLInputPeer peer;
     public int offset;
 
+    public DeleteHistory() {
+    }
+
     public DeleteHistory(TLInputPeer peer, int offset){
         this.peer = peer;
         this.offset = offset;

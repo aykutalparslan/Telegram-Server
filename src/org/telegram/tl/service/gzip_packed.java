@@ -27,6 +27,10 @@ public class gzip_packed extends TLObject {
 
     public String packed_data;
 
+    public gzip_packed() {
+
+    }
+
     public gzip_packed(String packed_data){
         this.packed_data = packed_data;
     }

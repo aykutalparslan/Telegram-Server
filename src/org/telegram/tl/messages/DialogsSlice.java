@@ -31,6 +31,13 @@ public class DialogsSlice extends TLDialogs {
     public TLVector<TLChat> chats;
     public TLVector<TLUser> users;
 
+    public DialogsSlice() {
+        this.dialogs = new TLVector<>();
+        this.messages = new TLVector<>();
+        this.chats = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public DialogsSlice(int count, TLVector<TLDialog> dialogs, TLVector<TLMessage> messages, TLVector<TLChat> chats, TLVector<TLUser> users){
         this.count = count;
         this.dialogs = dialogs;

@@ -30,6 +30,9 @@ public class AppUpdate extends TLAppUpdate {
     public String url;
     public String text;
 
+    public AppUpdate() {
+    }
+
     public AppUpdate(int id, boolean critical, String url, String text){
         this.id = id;
         this.critical = critical;

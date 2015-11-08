@@ -27,6 +27,9 @@ public class ResolveUsername extends TLObject {
 
     public String username;
 
+    public ResolveUsername() {
+    }
+
     public ResolveUsername(String username){
         this.username = username;
     }

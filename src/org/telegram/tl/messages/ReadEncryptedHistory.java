@@ -28,6 +28,9 @@ public class ReadEncryptedHistory extends TLObject {
     public TLInputEncryptedChat peer;
     public int max_date;
 
+    public ReadEncryptedHistory() {
+    }
+
     public ReadEncryptedHistory(TLInputEncryptedChat peer, int max_date){
         this.peer = peer;
         this.max_date = max_date;

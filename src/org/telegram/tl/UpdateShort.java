@@ -28,6 +28,9 @@ public class UpdateShort extends TLUpdates {
     public TLUpdate update;
     public int date;
 
+    public UpdateShort() {
+    }
+
     public UpdateShort(TLUpdate update, int date){
         this.update = update;
         this.date = date;

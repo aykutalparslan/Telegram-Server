@@ -28,6 +28,9 @@ public class UpdateNotifySettings extends TLUpdate {
     public TLNotifyPeer peer;
     public TLPeerNotifySettings notify_settings;
 
+    public UpdateNotifySettings() {
+    }
+
     public UpdateNotifySettings(TLNotifyPeer peer, TLPeerNotifySettings notify_settings){
         this.peer = peer;
         this.notify_settings = notify_settings;

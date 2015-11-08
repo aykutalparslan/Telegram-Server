@@ -31,6 +31,9 @@ public class EncryptedFile extends TLEncryptedFile {
     public int dc_id;
     public int key_fingerprint;
 
+    public EncryptedFile() {
+    }
+
     public EncryptedFile(long id, long access_hash, int size, int dc_id, int key_fingerprint){
         this.id = id;
         this.access_hash = access_hash;

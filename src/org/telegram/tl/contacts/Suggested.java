@@ -28,6 +28,11 @@ public class Suggested extends TLSuggested {
     public TLVector<TLContactSuggested> results;
     public TLVector<TLUser> users;
 
+    public Suggested() {
+        this.results = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public Suggested(TLVector<TLContactSuggested> results, TLVector<TLUser> users){
         this.results = results;
         this.users = users;

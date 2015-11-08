@@ -29,6 +29,9 @@ public class InputFileBig extends TLInputFile {
     public int parts;
     public String name;
 
+    public InputFileBig() {
+    }
+
     public InputFileBig(long id, int parts, String name){
         this.id = id;
         this.parts = parts;

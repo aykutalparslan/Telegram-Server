@@ -27,6 +27,9 @@ public class MessageActionChatEditTitle extends TLMessageAction {
 
     public String title;
 
+    public MessageActionChatEditTitle() {
+    }
+
     public MessageActionChatEditTitle(String title){
         this.title = title;
     }

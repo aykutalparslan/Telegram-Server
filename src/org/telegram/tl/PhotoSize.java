@@ -31,6 +31,9 @@ public class PhotoSize extends TLPhotoSize {
     public int h;
     public int size;
 
+    public PhotoSize() {
+    }
+
     public PhotoSize(String type, TLFileLocation location, int w, int h, int size){
         this.type = type;
         this.location = location;

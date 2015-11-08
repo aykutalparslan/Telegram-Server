@@ -28,6 +28,10 @@ public class rpc_result extends TLObject {
     public long req_msg_id;
     public TLObject result;
 
+    public rpc_result() {
+
+    }
+
     public rpc_result(long req_msg_id, TLObject result){
         this.req_msg_id = req_msg_id;
         this.result = result;

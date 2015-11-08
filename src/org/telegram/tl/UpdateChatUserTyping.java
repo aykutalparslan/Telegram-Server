@@ -29,6 +29,9 @@ public class UpdateChatUserTyping extends TLUpdate {
     public int user_id;
     public TLSendMessageAction action;
 
+    public UpdateChatUserTyping() {
+    }
+
     public UpdateChatUserTyping(int chat_id, int user_id, TLSendMessageAction action){
         this.chat_id = chat_id;
         this.user_id = user_id;

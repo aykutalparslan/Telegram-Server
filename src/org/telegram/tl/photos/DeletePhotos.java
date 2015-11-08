@@ -27,6 +27,10 @@ public class DeletePhotos extends TLObject {
 
     public TLVector<TLInputPhoto> id;
 
+    public DeletePhotos() {
+        this.id = new TLVector<>();
+    }
+
     public DeletePhotos(TLVector<TLInputPhoto> id){
         this.id = id;
     }

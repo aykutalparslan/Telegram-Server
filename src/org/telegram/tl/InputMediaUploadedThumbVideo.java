@@ -32,6 +32,9 @@ public class InputMediaUploadedThumbVideo extends TLInputMedia {
     public int h;
     public String mime_type;
 
+    public InputMediaUploadedThumbVideo() {
+    }
+
     public InputMediaUploadedThumbVideo(TLInputFile file, TLInputFile thumb, int duration, int w, int h, String mime_type){
         this.file = file;
         this.thumb = thumb;

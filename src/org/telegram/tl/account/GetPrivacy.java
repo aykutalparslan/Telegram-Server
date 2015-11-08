@@ -27,6 +27,9 @@ public class GetPrivacy extends TLObject {
 
     public TLInputPrivacyKey key;
 
+    public GetPrivacy() {
+    }
+
     public GetPrivacy(TLInputPrivacyKey key){
         this.key = key;
     }

@@ -28,6 +28,9 @@ public class ContactSuggested extends TLContactSuggested {
     public int user_id;
     public int mutual_contacts;
 
+    public ContactSuggested() {
+    }
+
     public ContactSuggested(int user_id, int mutual_contacts){
         this.user_id = user_id;
         this.mutual_contacts = mutual_contacts;

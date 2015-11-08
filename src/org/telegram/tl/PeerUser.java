@@ -27,6 +27,9 @@ public class PeerUser extends TLPeer {
 
     public int user_id;
 
+    public PeerUser() {
+    }
+
     public PeerUser(int user_id){
         this.user_id = user_id;
     }

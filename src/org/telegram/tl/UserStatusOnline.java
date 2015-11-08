@@ -27,6 +27,9 @@ public class UserStatusOnline extends TLUserStatus {
 
     public int expires;
 
+    public UserStatusOnline() {
+    }
+
     public UserStatusOnline(int expires){
         this.expires = expires;
     }

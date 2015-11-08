@@ -27,6 +27,9 @@ public class VideoEmpty extends TLVideo {
 
     public long id;
 
+    public VideoEmpty() {
+    }
+
     public VideoEmpty(long id){
         this.id = id;
     }

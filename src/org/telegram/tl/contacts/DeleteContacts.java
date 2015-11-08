@@ -27,6 +27,10 @@ public class DeleteContacts extends TLObject {
 
     public TLVector<TLInputUser> id;
 
+    public DeleteContacts() {
+        this.id = new TLVector<>();
+    }
+
     public DeleteContacts(TLVector<TLInputUser> id){
         this.id = id;
     }

@@ -29,6 +29,9 @@ public class SignIn extends TLObject {
     public String phone_code_hash;
     public String phone_code;
 
+    public SignIn() {
+    }
+
     public SignIn(String phone_number, String phone_code_hash, String phone_code){
         this.phone_number = phone_number;
         this.phone_code_hash = phone_code_hash;

@@ -33,6 +33,9 @@ public class RegisterDevice extends TLObject {
     public boolean app_sandbox;
     public String lang_code;
 
+    public RegisterDevice() {
+    }
+
     public RegisterDevice(int token_type, String token, String device_model, String system_version, String app_version, boolean app_sandbox, String lang_code){
         this.token_type = token_type;
         this.token = token;

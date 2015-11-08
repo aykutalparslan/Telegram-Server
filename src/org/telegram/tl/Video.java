@@ -38,6 +38,9 @@ public class Video extends TLVideo {
     public int w;
     public int h;
 
+    public Video() {
+    }
+
     public Video(long id, long access_hash, int user_id, int date, String caption, int duration, String mime_type, int size, TLPhotoSize thumb, int dc_id, int w, int h){
         this.id = id;
         this.access_hash = access_hash;

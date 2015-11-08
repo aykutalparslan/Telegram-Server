@@ -28,6 +28,9 @@ public class DisabledFeature extends TLDisabledFeature {
     public String feature;
     public String description;
 
+    public DisabledFeature() {
+    }
+
     public DisabledFeature(String feature, String description){
         this.feature = feature;
         this.description = description;

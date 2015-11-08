@@ -27,6 +27,9 @@ public class ReceivedQueue extends TLObject {
 
     public int max_qts;
 
+    public ReceivedQueue() {
+    }
+
     public ReceivedQueue(int max_qts){
         this.max_qts = max_qts;
     }

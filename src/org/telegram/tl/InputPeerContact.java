@@ -27,6 +27,9 @@ public class InputPeerContact extends TLInputPeer {
 
     public int user_id;
 
+    public InputPeerContact() {
+    }
+
     public InputPeerContact(int user_id){
         this.user_id = user_id;
     }

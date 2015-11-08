@@ -27,6 +27,9 @@ public class UpdateUsername extends TLObject {
 
     public String username;
 
+    public UpdateUsername() {
+    }
+
     public UpdateUsername(String username){
         this.username = username;
     }

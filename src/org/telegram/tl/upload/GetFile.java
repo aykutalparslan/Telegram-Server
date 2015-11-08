@@ -29,6 +29,9 @@ public class GetFile extends TLObject {
     public int offset;
     public int limit;
 
+    public GetFile() {
+    }
+
     public GetFile(TLInputFileLocation location, int offset, int limit){
         this.location = location;
         this.offset = offset;

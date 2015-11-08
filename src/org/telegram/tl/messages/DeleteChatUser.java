@@ -28,6 +28,9 @@ public class DeleteChatUser extends TLObject {
     public int chat_id;
     public TLInputUser user_id;
 
+    public DeleteChatUser() {
+    }
+
     public DeleteChatUser(int chat_id, TLInputUser user_id){
         this.chat_id = chat_id;
         this.user_id = user_id;

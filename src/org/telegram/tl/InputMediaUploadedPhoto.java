@@ -27,6 +27,9 @@ public class InputMediaUploadedPhoto extends TLInputMedia {
 
     public TLInputFile file;
 
+    public InputMediaUploadedPhoto() {
+    }
+
     public InputMediaUploadedPhoto(TLInputFile file){
         this.file = file;
     }

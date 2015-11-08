@@ -28,6 +28,11 @@ public class PrivacyRules extends TLPrivacyRules {
     public TLVector<TLPrivacyRule> rules;
     public TLVector<TLUser> users;
 
+    public PrivacyRules() {
+        this.rules = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public PrivacyRules(TLVector<TLPrivacyRule> rules, TLVector<TLUser> users){
         this.rules = rules;
         this.users = users;

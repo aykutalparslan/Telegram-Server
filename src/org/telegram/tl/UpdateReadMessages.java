@@ -28,6 +28,10 @@ public class UpdateReadMessages extends TLUpdate {
     public TLVector<Integer> messages;
     public int pts;
 
+    public UpdateReadMessages() {
+        this.messages = new TLVector<>();
+    }
+
     public UpdateReadMessages(TLVector<Integer> messages, int pts){
         this.messages = messages;
         this.pts = pts;

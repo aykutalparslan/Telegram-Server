@@ -29,6 +29,10 @@ public class http_wait extends TLObject {
     public int wait_after;
     public int max_wait;
 
+    public http_wait() {
+
+    }
+
     public http_wait(int max_delay, int wait_after, int max_wait){
         this.max_delay = max_delay;
         this.wait_after = wait_after;

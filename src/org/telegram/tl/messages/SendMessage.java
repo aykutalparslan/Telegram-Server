@@ -29,6 +29,9 @@ public class SendMessage extends TLObject {
     public String message;
     public long random_id;
 
+    public SendMessage() {
+    }
+
     public SendMessage(TLInputPeer peer, String message, long random_id){
         this.peer = peer;
         this.message = message;

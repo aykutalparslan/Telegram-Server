@@ -29,6 +29,9 @@ public class UpdateChatParticipantDelete extends TLUpdate {
     public int user_id;
     public int version;
 
+    public UpdateChatParticipantDelete() {
+    }
+
     public UpdateChatParticipantDelete(int chat_id, int user_id, int version){
         this.chat_id = chat_id;
         this.user_id = user_id;

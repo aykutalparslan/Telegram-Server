@@ -27,6 +27,9 @@ public class Unblock extends TLObject {
 
     public TLInputUser id;
 
+    public Unblock() {
+    }
+
     public Unblock(TLInputUser id){
         this.id = id;
     }

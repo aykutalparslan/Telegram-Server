@@ -28,6 +28,9 @@ public class Support extends TLSupport {
     public String phone_number;
     public TLUser user;
 
+    public Support() {
+    }
+
     public Support(String phone_number, TLUser user){
         this.phone_number = phone_number;
         this.user = user;

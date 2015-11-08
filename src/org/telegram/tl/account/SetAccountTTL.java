@@ -27,6 +27,9 @@ public class SetAccountTTL extends TLObject {
 
     public TLAccountDaysTTL ttl;
 
+    public SetAccountTTL() {
+    }
+
     public SetAccountTTL(TLAccountDaysTTL ttl){
         this.ttl = ttl;
     }

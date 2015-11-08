@@ -27,6 +27,9 @@ public class AccountDaysTTL extends TLAccountDaysTTL {
 
     public int days;
 
+    public AccountDaysTTL() {
+    }
+
     public AccountDaysTTL(int days){
         this.days = days;
     }

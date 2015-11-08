@@ -30,6 +30,9 @@ public class GetAppUpdate extends TLObject {
     public String app_version;
     public String lang_code;
 
+    public GetAppUpdate() {
+    }
+
     public GetAppUpdate(String device_model, String system_version, String app_version, String lang_code){
         this.device_model = device_model;
         this.system_version = system_version;

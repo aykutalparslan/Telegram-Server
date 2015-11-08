@@ -30,6 +30,9 @@ public class WallPaperSolid extends TLWallPaper {
     public int bg_color;
     public int color;
 
+    public WallPaperSolid() {
+    }
+
     public WallPaperSolid(int id, String title, int bg_color, int color){
         this.id = id;
         this.title = title;

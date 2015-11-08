@@ -28,6 +28,9 @@ public class InputDocument extends TLInputDocument {
     public long id;
     public long access_hash;
 
+    public InputDocument() {
+    }
+
     public InputDocument(long id, long access_hash){
         this.id = id;
         this.access_hash = access_hash;

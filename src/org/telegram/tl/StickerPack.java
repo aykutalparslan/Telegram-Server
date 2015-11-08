@@ -28,6 +28,10 @@ public class StickerPack extends TLStickerPack {
     public String emoticon;
     public TLVector<Long> documents;
 
+    public StickerPack() {
+        this.documents = new TLVector<>();
+    }
+
     public StickerPack(String emoticon, TLVector<Long> documents){
         this.emoticon = emoticon;
         this.documents = documents;

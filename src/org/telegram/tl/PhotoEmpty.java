@@ -27,6 +27,9 @@ public class PhotoEmpty extends TLPhoto {
 
     public long id;
 
+    public PhotoEmpty() {
+    }
+
     public PhotoEmpty(long id){
         this.id = id;
     }

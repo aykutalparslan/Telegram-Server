@@ -28,6 +28,9 @@ public class DifferenceEmpty extends TLDifference {
     public int date;
     public int seq;
 
+    public DifferenceEmpty() {
+    }
+
     public DifferenceEmpty(int date, int seq){
         this.date = date;
         this.seq = seq;

@@ -28,6 +28,9 @@ public class EditChatTitle extends TLObject {
     public int chat_id;
     public String title;
 
+    public EditChatTitle() {
+    }
+
     public EditChatTitle(int chat_id, String title){
         this.chat_id = chat_id;
         this.title = title;

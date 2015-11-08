@@ -32,6 +32,9 @@ public class MessageService extends TLMessage {
     public int date;
     public TLMessageAction action;
 
+    public MessageService() {
+    }
+
     public MessageService(int flags, int id, int from_id, TLPeer to_id, int date, TLMessageAction action){
         this.flags = flags;
         this.id = id;

@@ -30,6 +30,9 @@ public class InputEncryptedFileUploaded extends TLInputEncryptedFile {
     public String md5_checksum;
     public int key_fingerprint;
 
+    public InputEncryptedFileUploaded() {
+    }
+
     public InputEncryptedFileUploaded(long id, int parts, String md5_checksum, int key_fingerprint){
         this.id = id;
         this.parts = parts;

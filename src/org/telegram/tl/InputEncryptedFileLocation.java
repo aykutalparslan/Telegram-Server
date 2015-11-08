@@ -28,6 +28,9 @@ public class InputEncryptedFileLocation extends TLInputFileLocation {
     public long id;
     public long access_hash;
 
+    public InputEncryptedFileLocation() {
+    }
+
     public InputEncryptedFileLocation(long id, long access_hash){
         this.id = id;
         this.access_hash = access_hash;

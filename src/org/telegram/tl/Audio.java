@@ -34,6 +34,9 @@ public class Audio extends TLAudio {
     public int size;
     public int dc_id;
 
+    public Audio() {
+    }
+
     public Audio(long id, long access_hash, int user_id, int date, int duration, String mime_type, int size, int dc_id){
         this.id = id;
         this.access_hash = access_hash;

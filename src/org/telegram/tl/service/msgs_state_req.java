@@ -27,6 +27,10 @@ public class msgs_state_req extends TLObject {
 
     public TLVector<Long> msg_ids;
 
+    public msgs_state_req() {
+        this.msg_ids = new TLVector<>();
+    }
+
     public msgs_state_req(TLVector<Long> msg_ids){
         this.msg_ids = msg_ids;
     }

@@ -27,6 +27,9 @@ public class GetFullUser extends TLObject {
 
     public TLInputUser id;
 
+    public GetFullUser() {
+    }
+
     public GetFullUser(TLInputUser id){
         this.id = id;
     }

@@ -28,6 +28,9 @@ public class SentEncryptedFile extends TLSentEncryptedMessage {
     public int date;
     public TLEncryptedFile file;
 
+    public SentEncryptedFile() {
+    }
+
     public SentEncryptedFile(int date, TLEncryptedFile file){
         this.date = date;
         this.file = file;

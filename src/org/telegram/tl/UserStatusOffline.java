@@ -27,6 +27,9 @@ public class UserStatusOffline extends TLUserStatus {
 
     public int was_online;
 
+    public UserStatusOffline() {
+    }
+
     public UserStatusOffline(int was_online){
         this.was_online = was_online;
     }

@@ -28,6 +28,10 @@ public class UpdatePrivacy extends TLUpdate {
     public TLPrivacyKey key;
     public TLVector<TLPrivacyRule> rules;
 
+    public UpdatePrivacy() {
+        this.rules = new TLVector<>();
+    }
+
     public UpdatePrivacy(TLPrivacyKey key, TLVector<TLPrivacyRule> rules){
         this.key = key;
         this.rules = rules;

@@ -28,6 +28,9 @@ public class ImportedContact extends TLImportedContact {
     public int user_id;
     public long client_id;
 
+    public ImportedContact() {
+    }
+
     public ImportedContact(int user_id, long client_id){
         this.user_id = user_id;
         this.client_id = client_id;

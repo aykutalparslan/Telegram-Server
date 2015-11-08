@@ -33,6 +33,14 @@ public class Difference extends TLDifference {
     public TLVector<TLUser> users;
     public TLState state;
 
+    public Difference() {
+        this.new_messages = new TLVector<>();
+        this.new_encrypted_messages = new TLVector<>();
+        this.other_updates = new TLVector<>();
+        this.chats = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public Difference(TLVector<TLMessage> new_messages, TLVector<TLEncryptedMessage> new_encrypted_messages, TLVector<TLUpdate> other_updates, TLVector<TLChat> chats, TLVector<TLUser> users, TLState state){
         this.new_messages = new_messages;
         this.new_encrypted_messages = new_encrypted_messages;

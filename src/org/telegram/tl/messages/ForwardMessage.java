@@ -29,6 +29,9 @@ public class ForwardMessage extends TLObject {
     public int id;
     public long random_id;
 
+    public ForwardMessage() {
+    }
+
     public ForwardMessage(TLInputPeer peer, int id, long random_id){
         this.peer = peer;
         this.id = id;

@@ -28,6 +28,10 @@ public class SendInvites extends TLObject {
     public TLVector<String> phone_numbers;
     public String message;
 
+    public SendInvites() {
+        this.phone_numbers = new TLVector<>();
+    }
+
     public SendInvites(TLVector<String> phone_numbers, String message){
         this.phone_numbers = phone_numbers;
         this.message = message;

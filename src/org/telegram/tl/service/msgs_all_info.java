@@ -28,6 +28,10 @@ public class msgs_all_info extends TLObject {
     public TLVector<Long> msg_ids;
     public String info;
 
+    public msgs_all_info() {
+        this.msg_ids = new TLVector<>();
+    }
+
     public msgs_all_info(TLVector<Long> msg_ids, String info){
         this.msg_ids = msg_ids;
         this.info = info;

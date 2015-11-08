@@ -27,6 +27,9 @@ public class SendChangePhoneCode extends TLObject {
 
     public String phone_number;
 
+    public SendChangePhoneCode() {
+    }
+
     public SendChangePhoneCode(String phone_number){
         this.phone_number = phone_number;
     }

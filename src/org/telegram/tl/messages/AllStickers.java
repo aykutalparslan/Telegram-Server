@@ -29,6 +29,11 @@ public class AllStickers extends TLAllStickers {
     public TLVector<TLStickerPack> packs;
     public TLVector<TLDocument> documents;
 
+    public AllStickers() {
+        this.packs = new TLVector<>();
+        this.documents = new TLVector<>();
+    }
+
     public AllStickers(String hash, TLVector<TLStickerPack> packs, TLVector<TLDocument> documents){
         this.hash = hash;
         this.packs = packs;

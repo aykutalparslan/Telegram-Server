@@ -27,6 +27,9 @@ public class InputMediaVideo extends TLInputMedia {
 
     public TLInputVideo id;
 
+    public InputMediaVideo() {
+    }
+
     public InputMediaVideo(TLInputVideo id){
         this.id = id;
     }

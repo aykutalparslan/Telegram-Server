@@ -29,6 +29,9 @@ public class GetDialogs extends TLObject {
     public int max_id;
     public int limit;
 
+    public GetDialogs() {
+    }
+
     public GetDialogs(int offset, int max_id, int limit){
         this.offset = offset;
         this.max_id = max_id;

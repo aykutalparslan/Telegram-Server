@@ -30,6 +30,9 @@ public class UserDeleted extends TLUser {
     public String last_name;
     public String username;
 
+    public UserDeleted() {
+    }
+
     public UserDeleted(int id, String first_name, String last_name, String username){
         this.id = id;
         this.first_name = first_name;

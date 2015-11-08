@@ -28,6 +28,9 @@ public class InputEncryptedFile extends TLInputEncryptedFile {
     public long id;
     public long access_hash;
 
+    public InputEncryptedFile() {
+    }
+
     public InputEncryptedFile(long id, long access_hash){
         this.id = id;
         this.access_hash = access_hash;

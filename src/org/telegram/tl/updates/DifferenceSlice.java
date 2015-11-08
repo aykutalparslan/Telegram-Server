@@ -33,6 +33,14 @@ public class DifferenceSlice extends TLDifference {
     public TLVector<TLUser> users;
     public TLState intermediate_state;
 
+    public DifferenceSlice() {
+        this.new_messages = new TLVector<>();
+        this.new_encrypted_messages = new TLVector<>();
+        this.other_updates = new TLVector<>();
+        this.chats = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public DifferenceSlice(TLVector<TLMessage> new_messages, TLVector<TLEncryptedMessage> new_encrypted_messages, TLVector<TLUpdate> other_updates, TLVector<TLChat> chats, TLVector<TLUser> users, TLState intermediate_state){
         this.new_messages = new_messages;
         this.new_encrypted_messages = new_encrypted_messages;

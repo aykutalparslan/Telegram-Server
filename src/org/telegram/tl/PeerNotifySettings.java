@@ -30,6 +30,9 @@ public class PeerNotifySettings extends TLPeerNotifySettings {
     public boolean show_previews;
     public int events_mask;
 
+    public PeerNotifySettings() {
+    }
+
     public PeerNotifySettings(int mute_until, String sound, boolean show_previews, int events_mask){
         this.mute_until = mute_until;
         this.sound = sound;

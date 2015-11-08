@@ -28,6 +28,11 @@ public class Found extends TLFound {
     public TLVector<TLContactFound> results;
     public TLVector<TLUser> users;
 
+    public Found() {
+        this.results = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public Found(TLVector<TLContactFound> results, TLVector<TLUser> users){
         this.results = results;
         this.users = users;

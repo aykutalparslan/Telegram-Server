@@ -27,6 +27,10 @@ public class msg_resend_ans_req extends TLObject {
 
     public TLVector<Long> msg_ids;
 
+    public msg_resend_ans_req() {
+
+    }
+
     public msg_resend_ans_req(TLVector<Long> msg_ids){
         this.msg_ids = msg_ids;
     }

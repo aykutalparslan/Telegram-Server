@@ -27,6 +27,9 @@ public class InputPeerChat extends TLInputPeer {
 
     public int chat_id;
 
+    public InputPeerChat() {
+    }
+
     public InputPeerChat(int chat_id){
         this.chat_id = chat_id;
     }

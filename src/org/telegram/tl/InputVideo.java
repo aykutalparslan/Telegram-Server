@@ -28,6 +28,9 @@ public class InputVideo extends TLInputVideo {
     public long id;
     public long access_hash;
 
+    public InputVideo() {
+    }
+
     public InputVideo(long id, long access_hash){
         this.id = id;
         this.access_hash = access_hash;

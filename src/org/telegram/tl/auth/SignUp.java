@@ -31,6 +31,9 @@ public class SignUp extends TLObject {
     public String first_name;
     public String last_name;
 
+    public SignUp() {
+    }
+
     public SignUp(String phone_number, String phone_code_hash, String phone_code, String first_name, String last_name){
         this.phone_number = phone_number;
         this.phone_code_hash = phone_code_hash;

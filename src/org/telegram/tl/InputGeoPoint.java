@@ -28,6 +28,9 @@ public class InputGeoPoint extends TLInputGeoPoint {
     public double lat;
     public double lon;
 
+    public InputGeoPoint() {
+    }
+
     public InputGeoPoint(double lat, double lon){
         this.lat = lat;
         this.lon = lon;

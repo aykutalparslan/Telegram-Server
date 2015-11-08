@@ -27,6 +27,9 @@ public class GetSuggested extends TLObject {
 
     public int limit;
 
+    public GetSuggested() {
+    }
+
     public GetSuggested(int limit){
         this.limit = limit;
     }

@@ -28,6 +28,10 @@ public class CreateChat extends TLObject {
     public TLVector<TLInputUser> users;
     public String title;
 
+    public CreateChat() {
+        this.users = new TLVector<>();
+    }
+
     public CreateChat(TLVector<TLInputUser> users, String title){
         this.users = users;
         this.title = title;

@@ -31,6 +31,9 @@ public class PhotoCachedSize extends TLPhotoSize {
     public int h;
     public byte[] bytes;
 
+    public PhotoCachedSize() {
+    }
+
     public PhotoCachedSize(String type, TLFileLocation location, int w, int h, byte[] bytes){
         this.type = type;
         this.location = location;

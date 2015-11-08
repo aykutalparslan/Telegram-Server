@@ -29,6 +29,9 @@ public class UserProfilePhoto extends TLUserProfilePhoto {
     public TLFileLocation photo_small;
     public TLFileLocation photo_big;
 
+    public UserProfilePhoto() {
+    }
+
     public UserProfilePhoto(long photo_id, TLFileLocation photo_small, TLFileLocation photo_big){
         this.photo_id = photo_id;
         this.photo_small = photo_small;

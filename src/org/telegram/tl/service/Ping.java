@@ -29,6 +29,10 @@ public class Ping extends TLObject implements TLMethod{
 
     public long ping_id;
 
+    public Ping() {
+
+    }
+
     public Ping(long ping_id){
         this.ping_id = ping_id;
     }

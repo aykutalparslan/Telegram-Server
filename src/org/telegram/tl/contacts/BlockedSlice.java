@@ -29,6 +29,11 @@ public class BlockedSlice extends TLBlocked {
     public TLVector<TLContactBlocked> blocked;
     public TLVector<TLUser> users;
 
+    public BlockedSlice() {
+        this.blocked = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public BlockedSlice(int count, TLVector<TLContactBlocked> blocked, TLVector<TLUser> users){
         this.count = count;
         this.blocked = blocked;

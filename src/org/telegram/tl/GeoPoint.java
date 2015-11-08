@@ -28,6 +28,9 @@ public class GeoPoint extends TLGeoPoint {
     public double lon;
     public double lat;
 
+    public GeoPoint() {
+    }
+
     public GeoPoint(double lon, double lat){
         this.lon = lon;
         this.lat = lat;

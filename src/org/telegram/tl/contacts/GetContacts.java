@@ -27,6 +27,9 @@ public class GetContacts extends TLObject {
 
     public String hash;
 
+    public GetContacts() {
+    }
+
     public GetContacts(String hash){
         this.hash = hash;
     }

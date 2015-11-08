@@ -27,6 +27,9 @@ public class DocumentAttributeFilename extends TLDocumentAttribute {
 
     public String file_name;
 
+    public DocumentAttributeFilename() {
+    }
+
     public DocumentAttributeFilename(String file_name){
         this.file_name = file_name;
     }

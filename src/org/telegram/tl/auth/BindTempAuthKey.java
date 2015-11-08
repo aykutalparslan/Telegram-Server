@@ -30,6 +30,9 @@ public class BindTempAuthKey extends TLObject {
     public int expires_at;
     public byte[] encrypted_message;
 
+    public BindTempAuthKey() {
+    }
+
     public BindTempAuthKey(long perm_auth_key_id, long nonce, int expires_at, byte[] encrypted_message){
         this.perm_auth_key_id = perm_auth_key_id;
         this.nonce = nonce;

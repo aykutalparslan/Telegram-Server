@@ -27,6 +27,9 @@ public class MessageActionChatAddUser extends TLMessageAction {
 
     public int user_id;
 
+    public MessageActionChatAddUser() {
+    }
+
     public MessageActionChatAddUser(int user_id){
         this.user_id = user_id;
     }

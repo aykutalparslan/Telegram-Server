@@ -27,6 +27,9 @@ public class CheckUsername extends TLObject {
 
     public String username;
 
+    public CheckUsername() {
+    }
+
     public CheckUsername(String username){
         this.username = username;
     }

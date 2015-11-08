@@ -32,6 +32,10 @@ public class SentMessageLink extends TLSentMessage {
     public int seq;
     public TLVector<TLLink> links;
 
+    public SentMessageLink() {
+        this.links = new TLVector<>();
+    }
+
     public SentMessageLink(int id, int date, int pts, int seq, TLVector<TLLink> links){
         this.id = id;
         this.date = date;

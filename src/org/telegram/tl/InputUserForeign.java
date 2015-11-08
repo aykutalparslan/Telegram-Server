@@ -28,6 +28,9 @@ public class InputUserForeign extends TLInputUser {
     public int user_id;
     public long access_hash;
 
+    public InputUserForeign() {
+    }
+
     public InputUserForeign(int user_id, long access_hash){
         this.user_id = user_id;
         this.access_hash = access_hash;

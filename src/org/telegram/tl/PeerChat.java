@@ -27,6 +27,9 @@ public class PeerChat extends TLPeer {
 
     public int chat_id;
 
+    public PeerChat() {
+    }
+
     public PeerChat(int chat_id){
         this.chat_id = chat_id;
     }

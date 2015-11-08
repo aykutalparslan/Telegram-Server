@@ -27,6 +27,9 @@ public class InputUserContact extends TLInputUser {
 
     public int user_id;
 
+    public InputUserContact() {
+    }
+
     public InputUserContact(int user_id){
         this.user_id = user_id;
     }

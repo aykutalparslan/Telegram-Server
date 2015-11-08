@@ -34,6 +34,9 @@ public class Search extends TLObject {
     public int max_id;
     public int limit;
 
+    public Search() {
+    }
+
     public Search(TLInputPeer peer, String q, TLMessagesFilter filter, int min_date, int max_date, int offset, int max_id, int limit){
         this.peer = peer;
         this.q = q;

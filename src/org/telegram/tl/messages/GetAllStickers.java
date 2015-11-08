@@ -27,6 +27,9 @@ public class GetAllStickers extends TLObject {
 
     public String hash;
 
+    public GetAllStickers() {
+    }
+
     public GetAllStickers(String hash){
         this.hash = hash;
     }

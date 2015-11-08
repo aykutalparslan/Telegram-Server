@@ -28,6 +28,9 @@ public class ChatPhoto extends TLChatPhoto {
     public TLFileLocation photo_small;
     public TLFileLocation photo_big;
 
+    public ChatPhoto() {
+    }
+
     public ChatPhoto(TLFileLocation photo_small, TLFileLocation photo_big){
         this.photo_small = photo_small;
         this.photo_big = photo_big;

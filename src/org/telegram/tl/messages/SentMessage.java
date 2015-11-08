@@ -30,6 +30,9 @@ public class SentMessage extends TLSentMessage {
     public int pts;
     public int seq;
 
+    public SentMessage() {
+    }
+
     public SentMessage(int id, int date, int pts, int seq){
         this.id = id;
         this.date = date;

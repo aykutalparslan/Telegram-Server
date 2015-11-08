@@ -27,6 +27,9 @@ public class ChatEmpty extends TLChat {
 
     public int id;
 
+    public ChatEmpty() {
+    }
+
     public ChatEmpty(int id){
         this.id = id;
     }

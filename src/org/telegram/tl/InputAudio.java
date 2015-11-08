@@ -28,6 +28,9 @@ public class InputAudio extends TLInputAudio {
     public long id;
     public long access_hash;
 
+    public InputAudio() {
+    }
+
     public InputAudio(long id, long access_hash){
         this.id = id;
         this.access_hash = access_hash;

@@ -28,6 +28,9 @@ public class DocumentAttributeImageSize extends TLDocumentAttribute {
     public int w;
     public int h;
 
+    public DocumentAttributeImageSize() {
+    }
+
     public DocumentAttributeImageSize(int w, int h){
         this.w = w;
         this.h = h;

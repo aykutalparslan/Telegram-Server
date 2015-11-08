@@ -27,6 +27,9 @@ public class InputNotifyPeer extends TLInputNotifyPeer {
 
     public TLInputPeer peer;
 
+    public InputNotifyPeer() {
+    }
+
     public InputNotifyPeer(TLInputPeer peer){
         this.peer = peer;
     }

@@ -27,6 +27,9 @@ public class DocumentEmpty extends TLDocument {
 
     public long id;
 
+    public DocumentEmpty() {
+    }
+
     public DocumentEmpty(long id){
         this.id = id;
     }

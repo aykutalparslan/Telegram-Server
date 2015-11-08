@@ -35,6 +35,11 @@ public class Config extends TLConfig {
     public int broadcast_size_max;
     public TLVector<TLDisabledFeature> disabled_features;
 
+    public Config() {
+        this.dc_options = new TLVector<>();
+        this.disabled_features = new TLVector<>();
+    }
+
     public Config(int date, int expires, boolean test_mode, int this_dc, TLVector<TLDcOption> dc_options, int chat_big_size, int chat_size_max, int broadcast_size_max, TLVector<TLDisabledFeature> disabled_features){
         this.date = date;
         this.expires = expires;

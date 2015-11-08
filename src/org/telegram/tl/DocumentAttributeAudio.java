@@ -27,6 +27,9 @@ public class DocumentAttributeAudio extends TLDocumentAttribute {
 
     public int duration;
 
+    public DocumentAttributeAudio() {
+    }
+
     public DocumentAttributeAudio(int duration){
         this.duration = duration;
     }

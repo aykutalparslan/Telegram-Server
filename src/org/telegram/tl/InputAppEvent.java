@@ -30,6 +30,9 @@ public class InputAppEvent extends TLInputAppEvent {
     public long peer;
     public String data;
 
+    public InputAppEvent() {
+    }
+
     public InputAppEvent(double time, String type, long peer, String data){
         this.time = time;
         this.type = type;

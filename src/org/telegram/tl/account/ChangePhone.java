@@ -29,6 +29,9 @@ public class ChangePhone extends TLObject {
     public String phone_code_hash;
     public String phone_code;
 
+    public ChangePhone() {
+    }
+
     public ChangePhone(String phone_number, String phone_code_hash, String phone_code){
         this.phone_number = phone_number;
         this.phone_code_hash = phone_code_hash;

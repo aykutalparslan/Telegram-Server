@@ -27,6 +27,9 @@ public class GetNotifySettings extends TLObject {
 
     public TLInputNotifyPeer peer;
 
+    public GetNotifySettings() {
+    }
+
     public GetNotifySettings(TLInputNotifyPeer peer){
         this.peer = peer;
     }

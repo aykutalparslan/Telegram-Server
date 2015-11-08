@@ -27,6 +27,10 @@ public class ImportCard extends TLObject {
 
     public TLVector<Integer> export_card;
 
+    public ImportCard() {
+        this.export_card = new TLVector<>();
+    }
+
     public ImportCard(TLVector<Integer> export_card){
         this.export_card = export_card;
     }

@@ -30,6 +30,9 @@ public class ReadHistory extends TLObject {
     public int offset;
     public boolean read_contents;
 
+    public ReadHistory() {
+    }
+
     public ReadHistory(TLInputPeer peer, int max_id, int offset, boolean read_contents){
         this.peer = peer;
         this.max_id = max_id;

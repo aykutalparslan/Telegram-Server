@@ -35,6 +35,9 @@ public class MessageForwarded extends TLMessage {
     public String message;
     public TLMessageMedia media;
 
+    public MessageForwarded() {
+    }
+
     public MessageForwarded(int flags, int id, int fwd_from_id, int fwd_date, int from_id, TLPeer to_id, int date, String message, TLMessageMedia media){
         this.flags = flags;
         this.id = id;

@@ -30,6 +30,9 @@ public class InputFile extends TLInputFile {
     public String name;
     public String md5_checksum;
 
+    public InputFile() {
+    }
+
     public InputFile(long id, int parts, String name, String md5_checksum){
         this.id = id;
         this.parts = parts;

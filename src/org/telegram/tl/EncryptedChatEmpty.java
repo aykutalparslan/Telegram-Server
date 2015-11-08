@@ -27,6 +27,9 @@ public class EncryptedChatEmpty extends TLEncryptedChat {
 
     public int id;
 
+    public EncryptedChatEmpty() {
+    }
+
     public EncryptedChatEmpty(int id){
         this.id = id;
     }

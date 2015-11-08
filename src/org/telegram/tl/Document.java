@@ -34,6 +34,10 @@ public class Document extends TLDocument {
     public int dc_id;
     public TLVector<TLDocumentAttribute> attributes;
 
+    public Document() {
+        this.attributes = new TLVector<>();
+    }
+
     public Document(long id, long access_hash, int date, String mime_type, int size, TLPhotoSize thumb, int dc_id, TLVector<TLDocumentAttribute> attributes){
         this.id = id;
         this.access_hash = access_hash;

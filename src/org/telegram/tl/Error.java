@@ -28,6 +28,9 @@ public class Error extends TLError {
     public int code;
     public String text;
 
+    public Error() {
+    }
+
     public Error(int code, String text){
         this.code = code;
         this.text = text;

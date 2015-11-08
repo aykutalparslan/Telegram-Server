@@ -28,6 +28,9 @@ public class InputAudioFileLocation extends TLInputFileLocation {
     public long id;
     public long access_hash;
 
+    public InputAudioFileLocation() {
+    }
+
     public InputAudioFileLocation(long id, long access_hash){
         this.id = id;
         this.access_hash = access_hash;

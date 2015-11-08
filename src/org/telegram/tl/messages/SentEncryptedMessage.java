@@ -27,6 +27,9 @@ public class SentEncryptedMessage extends TLSentEncryptedMessage {
 
     public int date;
 
+    public SentEncryptedMessage() {
+    }
+
     public SentEncryptedMessage(int date){
         this.date = date;
     }

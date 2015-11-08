@@ -28,6 +28,9 @@ public class InvokeAfterMsg extends TLObject {
     public long msg_id;
     public TLObject query;
 
+    public InvokeAfterMsg() {
+    }
+
     public InvokeAfterMsg(long msg_id, TLObject query){
         this.msg_id = msg_id;
         this.query = query;

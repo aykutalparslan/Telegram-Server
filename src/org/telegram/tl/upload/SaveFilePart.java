@@ -29,6 +29,9 @@ public class SaveFilePart extends TLObject {
     public int file_part;
     public byte[] bytes;
 
+    public SaveFilePart() {
+    }
+
     public SaveFilePart(long file_id, int file_part, byte[] bytes){
         this.file_id = file_id;
         this.file_part = file_part;

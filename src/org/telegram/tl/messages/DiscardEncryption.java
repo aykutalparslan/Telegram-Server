@@ -27,6 +27,9 @@ public class DiscardEncryption extends TLObject {
 
     public int chat_id;
 
+    public DiscardEncryption() {
+    }
+
     public DiscardEncryption(int chat_id){
         this.chat_id = chat_id;
     }

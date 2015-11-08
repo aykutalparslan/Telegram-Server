@@ -29,6 +29,9 @@ public class InputMediaUploadedAudio extends TLInputMedia {
     public int duration;
     public String mime_type;
 
+    public InputMediaUploadedAudio() {
+    }
+
     public InputMediaUploadedAudio(TLInputFile file, int duration, String mime_type){
         this.file = file;
         this.duration = duration;

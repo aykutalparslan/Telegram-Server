@@ -29,6 +29,10 @@ public class new_session_created extends TLObject {
     public long unique_id;
     public long server_salt;
 
+    public new_session_created() {
+
+    }
+
     public new_session_created(long first_msg_id, long unique_id, long server_salt){
         this.first_msg_id = first_msg_id;
         this.unique_id = unique_id;

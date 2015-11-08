@@ -29,6 +29,10 @@ public class destroy_session extends TLObject implements TLMethod{
 
     public long session_id;
 
+    public destroy_session() {
+
+    }
+
     public destroy_session(long session_id){
         this.session_id = session_id;
     }

@@ -28,6 +28,11 @@ public class Photos extends TLPhotos {
     public TLVector<TLPhoto> photos;
     public TLVector<TLUser> users;
 
+    public Photos() {
+        this.photos = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public Photos(TLVector<TLPhoto> photos, TLVector<TLUser> users){
         this.photos = photos;
         this.users = users;

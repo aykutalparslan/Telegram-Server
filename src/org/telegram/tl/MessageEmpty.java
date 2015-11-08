@@ -27,6 +27,9 @@ public class MessageEmpty extends TLMessage {
 
     public int id;
 
+    public MessageEmpty() {
+    }
+
     public MessageEmpty(int id){
         this.id = id;
     }

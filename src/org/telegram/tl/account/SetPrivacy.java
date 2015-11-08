@@ -28,6 +28,10 @@ public class SetPrivacy extends TLObject {
     public TLInputPrivacyKey key;
     public TLVector<TLInputPrivacyRule> rules;
 
+    public SetPrivacy() {
+        this.rules = new TLVector<>();
+    }
+
     public SetPrivacy(TLInputPrivacyKey key, TLVector<TLInputPrivacyRule> rules){
         this.key = key;
         this.rules = rules;

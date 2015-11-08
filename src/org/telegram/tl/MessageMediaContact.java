@@ -30,6 +30,9 @@ public class MessageMediaContact extends TLMessageMedia {
     public String last_name;
     public int user_id;
 
+    public MessageMediaContact() {
+    }
+
     public MessageMediaContact(String phone_number, String first_name, String last_name, int user_id){
         this.phone_number = phone_number;
         this.first_name = first_name;

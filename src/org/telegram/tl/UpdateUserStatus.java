@@ -28,6 +28,9 @@ public class UpdateUserStatus extends TLUpdate {
     public int user_id;
     public TLUserStatus status;
 
+    public UpdateUserStatus() {
+    }
+
     public UpdateUserStatus(int user_id, TLUserStatus status){
         this.user_id = user_id;
         this.status = status;

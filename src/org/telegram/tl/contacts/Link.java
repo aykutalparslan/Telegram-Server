@@ -31,6 +31,9 @@ public class Link extends TLLink {
     public TLForeignLink foreign_link;
     public TLUser user;
 
+    public Link() {
+    }
+
     public Link(TLMyLink my_link, TLForeignLink foreign_link, TLUser user){
         this.my_link = my_link;
         this.foreign_link = foreign_link;

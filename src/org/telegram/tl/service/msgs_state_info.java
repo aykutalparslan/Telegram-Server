@@ -28,6 +28,10 @@ public class msgs_state_info extends TLObject {
     public long req_msg_id;
     public String info;
 
+    public msgs_state_info() {
+
+    }
+
     public msgs_state_info(long req_msg_id, String info){
         this.req_msg_id = req_msg_id;
         this.info = info;

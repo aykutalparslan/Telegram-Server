@@ -28,6 +28,9 @@ public class UpdateUserBlocked extends TLUpdate {
     public int user_id;
     public boolean blocked;
 
+    public UpdateUserBlocked() {
+    }
+
     public UpdateUserBlocked(int user_id, boolean blocked){
         this.user_id = user_id;
         this.blocked = blocked;

@@ -30,6 +30,9 @@ public class UpdateUserPhoto extends TLUpdate {
     public TLUserProfilePhoto photo;
     public boolean previous;
 
+    public UpdateUserPhoto() {
+    }
+
     public UpdateUserPhoto(int user_id, int date, TLUserProfilePhoto photo, boolean previous){
         this.user_id = user_id;
         this.date = date;

@@ -27,6 +27,9 @@ public class MessageMediaAudio extends TLMessageMedia {
 
     public TLAudio audio;
 
+    public MessageMediaAudio() {
+    }
+
     public MessageMediaAudio(TLAudio audio){
         this.audio = audio;
     }

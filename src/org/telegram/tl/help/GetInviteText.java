@@ -27,6 +27,9 @@ public class GetInviteText extends TLObject {
 
     public String lang_code;
 
+    public GetInviteText() {
+    }
+
     public GetInviteText(String lang_code){
         this.lang_code = lang_code;
     }

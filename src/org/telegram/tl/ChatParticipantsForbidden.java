@@ -27,6 +27,9 @@ public class ChatParticipantsForbidden extends TLChatParticipants {
 
     public int chat_id;
 
+    public ChatParticipantsForbidden() {
+    }
+
     public ChatParticipantsForbidden(int chat_id){
         this.chat_id = chat_id;
     }

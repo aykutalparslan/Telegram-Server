@@ -30,6 +30,9 @@ public class Dialog extends TLDialog {
     public int unread_count;
     public TLPeerNotifySettings notify_settings;
 
+    public Dialog() {
+    }
+
     public Dialog(TLPeer peer, int top_message, int unread_count, TLPeerNotifySettings notify_settings){
         this.peer = peer;
         this.top_message = top_message;

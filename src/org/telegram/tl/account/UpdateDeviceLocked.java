@@ -27,6 +27,9 @@ public class UpdateDeviceLocked extends TLObject {
 
     public int period;
 
+    public UpdateDeviceLocked() {
+    }
+
     public UpdateDeviceLocked(int period){
         this.period = period;
     }

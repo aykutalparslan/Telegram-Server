@@ -29,6 +29,9 @@ public class DocumentAttributeVideo extends TLDocumentAttribute {
     public int w;
     public int h;
 
+    public DocumentAttributeVideo() {
+    }
+
     public DocumentAttributeVideo(int duration, int w, int h){
         this.duration = duration;
         this.w = w;

@@ -33,6 +33,10 @@ public class Photo extends TLPhoto {
     public TLGeoPoint geo;
     public TLVector<TLPhotoSize> sizes;
 
+    public Photo() {
+        this.sizes = new TLVector<>();
+    }
+
     public Photo(long id, long access_hash, int user_id, int date, String caption, TLGeoPoint geo, TLVector<TLPhotoSize> sizes){
         this.id = id;
         this.access_hash = access_hash;

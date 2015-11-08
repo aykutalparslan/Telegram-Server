@@ -30,6 +30,9 @@ public class InputPeerNotifySettings extends TLInputPeerNotifySettings {
     public boolean show_previews;
     public int events_mask;
 
+    public InputPeerNotifySettings() {
+    }
+
     public InputPeerNotifySettings(int mute_until, String sound, boolean show_previews, int events_mask){
         this.mute_until = mute_until;
         this.sound = sound;

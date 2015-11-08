@@ -30,6 +30,9 @@ public class UpdateChatParticipantAdd extends TLUpdate {
     public int inviter_id;
     public int version;
 
+    public UpdateChatParticipantAdd() {
+    }
+
     public UpdateChatParticipantAdd(int chat_id, int user_id, int inviter_id, int version){
         this.chat_id = chat_id;
         this.user_id = user_id;

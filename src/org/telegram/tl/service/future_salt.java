@@ -29,6 +29,10 @@ public class future_salt extends TLObject {
     public int valid_until;
     public long salt;
 
+    public future_salt() {
+
+    }
+
     public future_salt(int valid_since, int valid_until, long salt){
         this.valid_since = valid_since;
         this.valid_until = valid_until;

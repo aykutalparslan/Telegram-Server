@@ -30,6 +30,10 @@ public class ChatParticipants extends TLChatParticipants {
     public TLVector<TLChatParticipant> participants;
     public int version;
 
+    public ChatParticipants() {
+        this.participants = new TLVector<>();
+    }
+
     public ChatParticipants(int chat_id, int admin_id, TLVector<TLChatParticipant> participants, int version){
         this.chat_id = chat_id;
         this.admin_id = admin_id;

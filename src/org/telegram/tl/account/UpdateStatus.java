@@ -27,6 +27,9 @@ public class UpdateStatus extends TLObject {
 
     public boolean offline;
 
+    public UpdateStatus() {
+    }
+
     public UpdateStatus(boolean offline){
         this.offline = offline;
     }

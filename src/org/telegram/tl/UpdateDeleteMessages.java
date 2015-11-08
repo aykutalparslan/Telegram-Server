@@ -28,6 +28,10 @@ public class UpdateDeleteMessages extends TLUpdate {
     public TLVector<Integer> messages;
     public int pts;
 
+    public UpdateDeleteMessages() {
+        this.messages = new TLVector<>();
+    }
+
     public UpdateDeleteMessages(TLVector<Integer> messages, int pts){
         this.messages = messages;
         this.pts = pts;

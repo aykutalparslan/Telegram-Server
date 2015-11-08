@@ -29,6 +29,9 @@ public class AcceptEncryption extends TLObject {
     public byte[] g_b;
     public long key_fingerprint;
 
+    public AcceptEncryption() {
+    }
+
     public AcceptEncryption(TLInputEncryptedChat peer, byte[] g_b, long key_fingerprint){
         this.peer = peer;
         this.g_b = g_b;

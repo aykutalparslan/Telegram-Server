@@ -32,6 +32,9 @@ public class InitConnection extends TLObject {
     public String lang_code;
     public TLObject query;
 
+    public InitConnection() {
+    }
+
     public InitConnection(int api_id, String device_model, String system_version, String app_version, String lang_code, TLObject query){
         this.api_id = api_id;
         this.device_model = device_model;

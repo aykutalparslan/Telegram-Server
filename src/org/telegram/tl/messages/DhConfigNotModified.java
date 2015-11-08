@@ -27,6 +27,9 @@ public class DhConfigNotModified extends TLDhConfig {
 
     public byte[] random;
 
+    public DhConfigNotModified() {
+    }
+
     public DhConfigNotModified(byte[] random){
         this.random = random;
     }

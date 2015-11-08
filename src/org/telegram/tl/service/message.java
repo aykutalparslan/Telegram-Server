@@ -31,6 +31,10 @@ public class message extends TLObject {
     public int bytes;
     public TLObject body;
 
+    public message() {
+
+    }
+
     public message(long msg_id, int seq_no, int bytes, TLObject body){
         this.msg_id = msg_id;
         this.seq_no = seq_no;

@@ -28,6 +28,10 @@ public class Pong extends TLObject {
     public long msg_id;
     public long ping_id;
 
+    public Pong() {
+
+    }
+
     public Pong(long msg_id, long ping_id){
         this.msg_id = msg_id;
         this.ping_id = ping_id;

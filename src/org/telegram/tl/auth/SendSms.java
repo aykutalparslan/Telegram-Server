@@ -28,6 +28,9 @@ public class SendSms extends TLObject {
     public String phone_number;
     public String phone_code_hash;
 
+    public SendSms() {
+    }
+
     public SendSms(String phone_number, String phone_code_hash){
         this.phone_number = phone_number;
         this.phone_code_hash = phone_code_hash;

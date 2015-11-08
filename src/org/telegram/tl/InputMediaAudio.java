@@ -27,6 +27,9 @@ public class InputMediaAudio extends TLInputMedia {
 
     public TLInputAudio id;
 
+    public InputMediaAudio() {
+    }
+
     public InputMediaAudio(TLInputAudio id){
         this.id = id;
     }

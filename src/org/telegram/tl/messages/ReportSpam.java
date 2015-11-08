@@ -27,6 +27,9 @@ public class ReportSpam extends TLObject {
 
     public TLInputPeer peer;
 
+    public ReportSpam() {
+    }
+
     public ReportSpam(TLInputPeer peer){
         this.peer = peer;
     }

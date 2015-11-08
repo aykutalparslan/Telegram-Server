@@ -30,6 +30,10 @@ public class InputMediaUploadedThumbDocument extends TLInputMedia {
     public String mime_type;
     public TLVector<TLDocumentAttribute> attributes;
 
+    public InputMediaUploadedThumbDocument() {
+        this.attributes = new TLVector<>();
+    }
+
     public InputMediaUploadedThumbDocument(TLInputFile file, TLInputFile thumb, String mime_type, TLVector<TLDocumentAttribute> attributes){
         this.file = file;
         this.thumb = thumb;

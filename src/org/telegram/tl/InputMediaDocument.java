@@ -27,6 +27,9 @@ public class InputMediaDocument extends TLInputMedia {
 
     public TLInputDocument id;
 
+    public InputMediaDocument() {
+    }
+
     public InputMediaDocument(TLInputDocument id){
         this.id = id;
     }

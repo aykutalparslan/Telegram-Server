@@ -27,6 +27,9 @@ public class ReceivedMessages extends TLObject {
 
     public int max_id;
 
+    public ReceivedMessages() {
+    }
+
     public ReceivedMessages(int max_id){
         this.max_id = max_id;
     }

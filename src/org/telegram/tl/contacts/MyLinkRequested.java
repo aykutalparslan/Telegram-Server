@@ -27,6 +27,9 @@ public class MyLinkRequested extends TLMyLink {
 
     public boolean contact;
 
+    public MyLinkRequested() {
+    }
+
     public MyLinkRequested(boolean contact){
         this.contact = contact;
     }

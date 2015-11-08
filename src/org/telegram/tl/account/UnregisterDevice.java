@@ -28,6 +28,9 @@ public class UnregisterDevice extends TLObject {
     public int token_type;
     public String token;
 
+    public UnregisterDevice() {
+    }
+
     public UnregisterDevice(int token_type, String token){
         this.token_type = token_type;
         this.token = token;

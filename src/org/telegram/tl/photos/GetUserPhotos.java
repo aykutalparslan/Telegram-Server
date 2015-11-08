@@ -30,6 +30,9 @@ public class GetUserPhotos extends TLObject {
     public int max_id;
     public int limit;
 
+    public GetUserPhotos() {
+    }
+
     public GetUserPhotos(TLInputUser user_id, int offset, int max_id, int limit){
         this.user_id = user_id;
         this.offset = offset;

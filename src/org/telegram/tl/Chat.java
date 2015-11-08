@@ -33,6 +33,9 @@ public class Chat extends TLChat {
     public boolean left;
     public int version;
 
+    public Chat() {
+    }
+
     public Chat(int id, String title, TLChatPhoto photo, int participants_count, int date, boolean left, int version){
         this.id = id;
         this.title = title;

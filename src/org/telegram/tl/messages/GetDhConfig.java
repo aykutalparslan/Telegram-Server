@@ -28,6 +28,9 @@ public class GetDhConfig extends TLObject {
     public int version;
     public int random_length;
 
+    public GetDhConfig() {
+    }
+
     public GetDhConfig(int version, int random_length){
         this.version = version;
         this.random_length = random_length;

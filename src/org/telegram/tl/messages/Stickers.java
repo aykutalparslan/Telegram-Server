@@ -28,6 +28,10 @@ public class Stickers extends TLStickers {
     public String hash;
     public TLVector<TLDocument> stickers;
 
+    public Stickers() {
+        this.stickers = new TLVector<>();
+    }
+
     public Stickers(String hash, TLVector<TLDocument> stickers){
         this.hash = hash;
         this.stickers = stickers;

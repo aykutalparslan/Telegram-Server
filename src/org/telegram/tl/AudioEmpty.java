@@ -27,6 +27,9 @@ public class AudioEmpty extends TLAudio {
 
     public long id;
 
+    public AudioEmpty() {
+    }
+
     public AudioEmpty(long id){
         this.id = id;
     }

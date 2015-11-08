@@ -27,6 +27,9 @@ public class DeleteContact extends TLObject {
 
     public TLInputUser id;
 
+    public DeleteContact() {
+    }
+
     public DeleteContact(TLInputUser id){
         this.id = id;
     }

@@ -28,6 +28,9 @@ public class SendCall extends TLObject {
     public String phone_number;
     public String phone_code_hash;
 
+    public SendCall() {
+    }
+
     public SendCall(String phone_number, String phone_code_hash){
         this.phone_number = phone_number;
         this.phone_code_hash = phone_code_hash;

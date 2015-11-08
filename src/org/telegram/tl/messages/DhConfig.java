@@ -30,6 +30,9 @@ public class DhConfig extends TLDhConfig {
     public int version;
     public byte[] random;
 
+    public DhConfig() {
+    }
+
     public DhConfig(int g, byte[] p, int version, byte[] random){
         this.g = g;
         this.p = p;

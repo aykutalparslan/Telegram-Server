@@ -34,6 +34,9 @@ public class UserRequest extends TLUser {
     public TLUserProfilePhoto photo;
     public TLUserStatus status;
 
+    public UserRequest() {
+    }
+
     public UserRequest(int id, String first_name, String last_name, String username, long access_hash, String phone, TLUserProfilePhoto photo, TLUserStatus status){
         this.id = id;
         this.first_name = first_name;

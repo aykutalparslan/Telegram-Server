@@ -28,6 +28,11 @@ public class Contacts extends TLContacts {
     public TLVector<TLContact> contacts;
     public TLVector<TLUser> users;
 
+    public Contacts() {
+        this.contacts = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public Contacts(TLVector<TLContact> contacts, TLVector<TLUser> users){
         this.contacts = contacts;
         this.users = users;

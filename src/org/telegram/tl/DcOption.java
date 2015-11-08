@@ -30,6 +30,9 @@ public class DcOption extends TLDcOption {
     public String ip_address;
     public int port;
 
+    public DcOption() {
+    }
+
     public DcOption(int id, String hostname, String ip_address, int port){
         this.id = id;
         this.hostname = hostname;

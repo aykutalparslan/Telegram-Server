@@ -33,6 +33,9 @@ public class UpdateShortChatMessage extends TLUpdates {
     public int date;
     public int seq;
 
+    public UpdateShortChatMessage() {
+    }
+
     public UpdateShortChatMessage(int id, int from_id, int chat_id, String message, int pts, int date, int seq){
         this.id = id;
         this.from_id = from_id;

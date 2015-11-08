@@ -33,6 +33,9 @@ public class UserForeign extends TLUser {
     public TLUserProfilePhoto photo;
     public TLUserStatus status;
 
+    public UserForeign() {
+    }
+
     public UserForeign(int id, String first_name, String last_name, String username, long access_hash, TLUserProfilePhoto photo, TLUserStatus status){
         this.id = id;
         this.first_name = first_name;

@@ -28,6 +28,9 @@ public class UpdateContactRegistered extends TLUpdate {
     public int user_id;
     public int date;
 
+    public UpdateContactRegistered() {
+    }
+
     public UpdateContactRegistered(int user_id, int date){
         this.user_id = user_id;
         this.date = date;

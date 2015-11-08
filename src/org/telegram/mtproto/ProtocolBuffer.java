@@ -317,6 +317,12 @@ public class ProtocolBuffer {
         return context.deserialize(this);
     }
 
+    public TLObject readBareTLType(APIContext context, TLObject bareTypeObject) {
+        bareTypeObject.deserialize(this);
+        return bareTypeObject;
+    }
+
+
     /**
      *
      * @param length

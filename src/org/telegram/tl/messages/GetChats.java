@@ -27,6 +27,10 @@ public class GetChats extends TLObject {
 
     public TLVector<Integer> id;
 
+    public GetChats() {
+        this.id = new TLVector<>();
+    }
+
     public GetChats(TLVector<Integer> id){
         this.id = id;
     }

@@ -29,6 +29,9 @@ public class SendMedia extends TLObject {
     public TLInputMedia media;
     public long random_id;
 
+    public SendMedia() {
+    }
+
     public SendMedia(TLInputPeer peer, TLInputMedia media, long random_id){
         this.peer = peer;
         this.media = media;

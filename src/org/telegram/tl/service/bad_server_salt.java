@@ -30,6 +30,10 @@ public class bad_server_salt extends TLObject {
     public int error_code;
     public long new_server_salt;
 
+    public bad_server_salt() {
+
+    }
+
     public bad_server_salt(long bad_msg_id, int bad_msg_seqno, int error_code, long new_server_salt){
         this.bad_msg_id = bad_msg_id;
         this.bad_msg_seqno = bad_msg_seqno;

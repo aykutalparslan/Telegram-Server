@@ -28,6 +28,9 @@ public class UpdateUserTyping extends TLUpdate {
     public int user_id;
     public TLSendMessageAction action;
 
+    public UpdateUserTyping() {
+    }
+
     public UpdateUserTyping(int user_id, TLSendMessageAction action){
         this.user_id = user_id;
         this.action = action;

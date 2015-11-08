@@ -27,6 +27,9 @@ public class MessageActionChatDeleteUser extends TLMessageAction {
 
     public int user_id;
 
+    public MessageActionChatDeleteUser() {
+    }
+
     public MessageActionChatDeleteUser(int user_id){
         this.user_id = user_id;
     }

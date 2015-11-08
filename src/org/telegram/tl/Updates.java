@@ -31,6 +31,12 @@ public class Updates extends TLUpdates {
     public int date;
     public int seq;
 
+    public Updates() {
+        this.updates = new TLVector<>();
+        this.users = new TLVector<>();
+        this.chats = new TLVector<>();
+    }
+
     public Updates(TLVector<TLUpdate> updates, TLVector<TLUser> users, TLVector<TLChat> chats, int date, int seq){
         this.updates = updates;
         this.users = users;

@@ -29,6 +29,9 @@ public class ChatForbidden extends TLChat {
     public String title;
     public int date;
 
+    public ChatForbidden() {
+    }
+
     public ChatForbidden(int id, String title, int date){
         this.id = id;
         this.title = title;

@@ -29,6 +29,11 @@ public class PhotosSlice extends TLPhotos {
     public TLVector<TLPhoto> photos;
     public TLVector<TLUser> users;
 
+    public PhotosSlice() {
+        this.photos = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public PhotosSlice(int count, TLVector<TLPhoto> photos, TLVector<TLUser> users){
         this.count = count;
         this.photos = photos;

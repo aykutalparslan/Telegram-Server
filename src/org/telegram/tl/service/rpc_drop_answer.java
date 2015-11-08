@@ -29,6 +29,10 @@ public class rpc_drop_answer extends TLObject implements TLMethod{
 
     public long req_msg_id;
 
+    public rpc_drop_answer() {
+
+    }
+
     public rpc_drop_answer(long req_msg_id){
         this.req_msg_id = req_msg_id;
     }

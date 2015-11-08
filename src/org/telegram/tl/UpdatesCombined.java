@@ -32,6 +32,12 @@ public class UpdatesCombined extends TLUpdates {
     public int seq_start;
     public int seq;
 
+    public UpdatesCombined() {
+        this.updates = new TLVector<>();
+        this.users = new TLVector<>();
+        this.chats = new TLVector<>();
+    }
+
     public UpdatesCombined(TLVector<TLUpdate> updates, TLVector<TLUser> users, TLVector<TLChat> chats, int date, int seq_start, int seq){
         this.updates = updates;
         this.users = users;

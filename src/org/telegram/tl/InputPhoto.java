@@ -28,6 +28,9 @@ public class InputPhoto extends TLInputPhoto {
     public long id;
     public long access_hash;
 
+    public InputPhoto() {
+    }
+
     public InputPhoto(long id, long access_hash){
         this.id = id;
         this.access_hash = access_hash;

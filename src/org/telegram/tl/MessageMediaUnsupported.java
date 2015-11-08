@@ -27,6 +27,9 @@ public class MessageMediaUnsupported extends TLMessageMedia {
 
     public byte[] bytes;
 
+    public MessageMediaUnsupported() {
+    }
+
     public MessageMediaUnsupported(byte[] bytes){
         this.bytes = bytes;
     }

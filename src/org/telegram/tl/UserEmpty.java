@@ -27,6 +27,9 @@ public class UserEmpty extends TLUser {
 
     public int id;
 
+    public UserEmpty() {
+    }
+
     public UserEmpty(int id){
         this.id = id;
     }

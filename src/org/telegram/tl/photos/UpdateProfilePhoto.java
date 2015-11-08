@@ -28,6 +28,9 @@ public class UpdateProfilePhoto extends TLObject {
     public TLInputPhoto id;
     public TLInputPhotoCrop crop;
 
+    public UpdateProfilePhoto() {
+    }
+
     public UpdateProfilePhoto(TLInputPhoto id, TLInputPhotoCrop crop){
         this.id = id;
         this.crop = crop;

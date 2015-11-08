@@ -30,6 +30,10 @@ public class WallPaper extends TLWallPaper {
     public TLVector<TLPhotoSize> sizes;
     public int color;
 
+    public WallPaper() {
+        this.sizes = new TLVector<>();
+    }
+
     public WallPaper(int id, String title, TLVector<TLPhotoSize> sizes, int color){
         this.id = id;
         this.title = title;

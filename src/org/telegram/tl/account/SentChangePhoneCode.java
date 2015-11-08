@@ -28,6 +28,9 @@ public class SentChangePhoneCode extends TLSentChangePhoneCode {
     public String phone_code_hash;
     public int send_call_timeout;
 
+    public SentChangePhoneCode() {
+    }
+
     public SentChangePhoneCode(String phone_code_hash, int send_call_timeout){
         this.phone_code_hash = phone_code_hash;
         this.send_call_timeout = send_call_timeout;

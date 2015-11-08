@@ -29,6 +29,9 @@ public class SendEncryptedService extends TLObject {
     public long random_id;
     public byte[] data;
 
+    public SendEncryptedService() {
+    }
+
     public SendEncryptedService(TLInputEncryptedChat peer, long random_id, byte[] data){
         this.peer = peer;
         this.random_id = random_id;

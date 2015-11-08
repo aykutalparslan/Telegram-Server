@@ -29,6 +29,9 @@ public class RequestEncryption extends TLObject {
     public int random_id;
     public byte[] g_a;
 
+    public RequestEncryption() {
+    }
+
     public RequestEncryption(TLInputUser user_id, int random_id, byte[] g_a){
         this.user_id = user_id;
         this.random_id = random_id;

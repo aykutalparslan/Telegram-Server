@@ -28,6 +28,9 @@ public class ExportedAuthorization extends TLExportedAuthorization {
     public int id;
     public byte[] bytes;
 
+    public ExportedAuthorization() {
+    }
+
     public ExportedAuthorization(int id, byte[] bytes){
         this.id = id;
         this.bytes = bytes;

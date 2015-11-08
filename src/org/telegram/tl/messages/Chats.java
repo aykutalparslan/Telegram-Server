@@ -28,6 +28,11 @@ public class Chats extends TLChats {
     public TLVector<TLChat> chats;
     public TLVector<TLUser> users;
 
+    public Chats() {
+        this.chats = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public Chats(TLVector<TLChat> chats, TLVector<TLUser> users){
         this.chats = chats;
         this.users = users;

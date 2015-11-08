@@ -27,6 +27,10 @@ public class destroy_session_none extends TLObject {
 
     public long session_id;
 
+    public destroy_session_none() {
+
+    }
+
     public destroy_session_none(long session_id){
         this.session_id = session_id;
     }

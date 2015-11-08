@@ -30,6 +30,9 @@ public class EncryptedMessageService extends TLEncryptedMessage {
     public int date;
     public byte[] bytes;
 
+    public EncryptedMessageService() {
+    }
+
     public EncryptedMessageService(long random_id, int chat_id, int date, byte[] bytes){
         this.random_id = random_id;
         this.chat_id = chat_id;

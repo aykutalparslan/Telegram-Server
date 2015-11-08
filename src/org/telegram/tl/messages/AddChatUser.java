@@ -29,6 +29,9 @@ public class AddChatUser extends TLObject {
     public TLInputUser user_id;
     public int fwd_limit;
 
+    public AddChatUser() {
+    }
+
     public AddChatUser(int chat_id, TLInputUser user_id, int fwd_limit){
         this.chat_id = chat_id;
         this.user_id = user_id;

@@ -30,6 +30,10 @@ public class ping_delay_disconnect extends TLObject implements TLMethod{
     public long ping_id;
     public int disconnect_delay;
 
+    public ping_delay_disconnect() {
+
+    }
+
     public ping_delay_disconnect(long ping_id, int disconnect_delay){
         this.ping_id = ping_id;
         this.disconnect_delay = disconnect_delay;

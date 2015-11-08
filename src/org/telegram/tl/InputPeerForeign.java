@@ -28,6 +28,9 @@ public class InputPeerForeign extends TLInputPeer {
     public int user_id;
     public long access_hash;
 
+    public InputPeerForeign() {
+    }
+
     public InputPeerForeign(int user_id, long access_hash){
         this.user_id = user_id;
         this.access_hash = access_hash;

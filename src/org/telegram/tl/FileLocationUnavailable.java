@@ -29,6 +29,9 @@ public class FileLocationUnavailable extends TLFileLocation {
     public int local_id;
     public long secret;
 
+    public FileLocationUnavailable() {
+    }
+
     public FileLocationUnavailable(long volume_id, int local_id, long secret){
         this.volume_id = volume_id;
         this.local_id = local_id;

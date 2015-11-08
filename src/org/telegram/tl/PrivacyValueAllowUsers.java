@@ -27,6 +27,10 @@ public class PrivacyValueAllowUsers extends TLPrivacyRule {
 
     public TLVector<Integer> users;
 
+    public PrivacyValueAllowUsers() {
+        this.users = new TLVector<>();
+    }
+
     public PrivacyValueAllowUsers(TLVector<Integer> users){
         this.users = users;
     }

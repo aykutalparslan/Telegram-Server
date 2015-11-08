@@ -32,6 +32,9 @@ public class UpdateShortMessage extends TLUpdates {
     public int date;
     public int seq;
 
+    public UpdateShortMessage() {
+    }
+
     public UpdateShortMessage(int id, int from_id, String message, int pts, int date, int seq){
         this.id = id;
         this.from_id = from_id;

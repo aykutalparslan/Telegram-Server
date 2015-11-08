@@ -28,6 +28,9 @@ public class Search extends TLObject {
     public String q;
     public int limit;
 
+    public Search() {
+    }
+
     public Search(String q, int limit){
         this.q = q;
         this.limit = limit;

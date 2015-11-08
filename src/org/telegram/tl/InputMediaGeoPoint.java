@@ -27,6 +27,9 @@ public class InputMediaGeoPoint extends TLInputMedia {
 
     public TLInputGeoPoint geo_point;
 
+    public InputMediaGeoPoint() {
+    }
+
     public InputMediaGeoPoint(TLInputGeoPoint geo_point){
         this.geo_point = geo_point;
     }

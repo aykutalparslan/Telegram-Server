@@ -31,6 +31,12 @@ public class StatedMessages extends TLStatedMessages {
     public int pts;
     public int seq;
 
+    public StatedMessages() {
+        this.messages = new TLVector<>();
+        this.chats = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public StatedMessages(TLVector<TLMessage> messages, TLVector<TLChat> chats, TLVector<TLUser> users, int pts, int seq){
         this.messages = messages;
         this.chats = chats;

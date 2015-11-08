@@ -35,7 +35,9 @@ import org.telegram.tl.TLVector;
 import org.telegram.tl.pq.req_DH_params;
 import org.telegram.tl.pq.req_pq;
 import org.telegram.tl.pq.set_client_DH_params;
+import org.telegram.tl.service.Ping;
 import org.telegram.tl.service.msgs_ack;
+import org.telegram.tl.service.ping_delay_disconnect;
 
 /**
  * Created by aykut on 28/09/15.
@@ -95,10 +97,13 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             TLObject rpc = APIContext.getInstance().deserialize(buff);
 
             if(rpc instanceof TLMethod){
-                TLVector<Long> msg_ids = new TLVector<>();
-                msg_ids.add(message_id);
-                msgs_ack ack = new msgs_ack(msg_ids);
-                ctx.writeAndFlush(encryptRpc(ack, getMessageSeqNo(true)));
+                if (!(rpc instanceof Ping) || !(rpc instanceof ping_delay_disconnect)) {
+                    TLVector<Long> msg_ids = new TLVector<>();
+                    msg_ids.add(message_id);
+                    msgs_ack ack = new msgs_ack(msg_ids);
+                    ctx.writeAndFlush(encryptRpc(ack, getMessageSeqNo(true)));
+                }
+
                 TLObject res = ((TLMethod) rpc).execute(getTlContext(), generateMessageId(), message_id);
                 if(res != null){
                     ctx.writeAndFlush(encryptRpc(res, getMessageSeqNo(true)));

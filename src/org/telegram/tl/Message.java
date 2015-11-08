@@ -33,6 +33,9 @@ public class Message extends TLMessage {
     public String message;
     public TLMessageMedia media;
 
+    public Message() {
+    }
+
     public Message(int flags, int id, int from_id, TLPeer to_id, int date, String message, TLMessageMedia media){
         this.flags = flags;
         this.id = id;

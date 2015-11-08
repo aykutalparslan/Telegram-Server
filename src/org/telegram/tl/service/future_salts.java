@@ -29,6 +29,10 @@ public class future_salts extends TLObject {
     public int now;
     public TLVector<future_salt> salts;
 
+    public future_salts() {
+        this.salts = new TLVector<>();
+    }
+
     public future_salts(long req_msg_id, int now, TLVector<future_salt> salts){
         this.req_msg_id = req_msg_id;
         this.now = now;

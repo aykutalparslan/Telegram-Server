@@ -27,6 +27,9 @@ public class InviteText extends TLInviteText {
 
     public String message;
 
+    public InviteText() {
+    }
+
     public InviteText(String message){
         this.message = message;
     }

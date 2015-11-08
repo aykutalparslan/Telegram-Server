@@ -27,6 +27,10 @@ public class GetUsers extends TLObject {
 
     public TLVector<TLInputUser> id;
 
+    public GetUsers() {
+        this.id = new TLVector<>();
+    }
+
     public GetUsers(TLVector<TLInputUser> id){
         this.id = id;
     }

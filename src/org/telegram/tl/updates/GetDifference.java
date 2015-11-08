@@ -29,6 +29,9 @@ public class GetDifference extends TLObject {
     public int date;
     public int qts;
 
+    public GetDifference() {
+    }
+
     public GetDifference(int pts, int date, int qts){
         this.pts = pts;
         this.date = date;

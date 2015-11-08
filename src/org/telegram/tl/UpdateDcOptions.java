@@ -27,6 +27,10 @@ public class UpdateDcOptions extends TLUpdate {
 
     public TLVector<TLDcOption> dc_options;
 
+    public UpdateDcOptions() {
+        this.dc_options = new TLVector<>();
+    }
+
     public UpdateDcOptions(TLVector<TLDcOption> dc_options){
         this.dc_options = dc_options;
     }

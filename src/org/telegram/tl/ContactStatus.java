@@ -28,6 +28,9 @@ public class ContactStatus extends TLContactStatus {
     public int user_id;
     public TLUserStatus status;
 
+    public ContactStatus() {
+    }
+
     public ContactStatus(int user_id, TLUserStatus status){
         this.user_id = user_id;
         this.status = status;

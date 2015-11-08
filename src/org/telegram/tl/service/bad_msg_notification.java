@@ -29,6 +29,10 @@ public class bad_msg_notification extends TLObject {
     public int bad_msg_seqno;
     public int error_code;
 
+    public bad_msg_notification() {
+
+    }
+
     public bad_msg_notification(long bad_msg_id, int bad_msg_seqno, int error_code){
         this.bad_msg_id = bad_msg_id;
         this.bad_msg_seqno = bad_msg_seqno;

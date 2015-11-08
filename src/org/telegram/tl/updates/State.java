@@ -31,6 +31,9 @@ public class State extends TLState {
     public int seq;
     public int unread_count;
 
+    public State() {
+    }
+
     public State(int pts, int qts, int date, int seq, int unread_count){
         this.pts = pts;
         this.qts = qts;

@@ -30,6 +30,9 @@ public class InputPhoneContact extends TLInputContact {
     public String first_name;
     public String last_name;
 
+    public InputPhoneContact() {
+    }
+
     public InputPhoneContact(long client_id, String phone, String first_name, String last_name){
         this.client_id = client_id;
         this.phone = phone;

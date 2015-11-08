@@ -31,6 +31,10 @@ public class get_future_salts extends TLObject implements TLMethod{
 
     public int num;
 
+    public get_future_salts() {
+
+    }
+
     public get_future_salts(int num){
         this.num = num;
     }

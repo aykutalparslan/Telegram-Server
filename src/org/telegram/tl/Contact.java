@@ -28,6 +28,9 @@ public class Contact extends TLContact {
     public int user_id;
     public boolean mutual;
 
+    public Contact() {
+    }
+
     public Contact(int user_id, boolean mutual){
         this.user_id = user_id;
         this.mutual = mutual;

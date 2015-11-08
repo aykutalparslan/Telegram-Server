@@ -28,6 +28,9 @@ public class UpdateUserPhone extends TLUpdate {
     public int user_id;
     public String phone;
 
+    public UpdateUserPhone() {
+    }
+
     public UpdateUserPhone(int user_id, String phone){
         this.user_id = user_id;
         this.phone = phone;

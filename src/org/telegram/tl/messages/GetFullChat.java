@@ -27,6 +27,9 @@ public class GetFullChat extends TLObject {
 
     public int chat_id;
 
+    public GetFullChat() {
+    }
+
     public GetFullChat(int chat_id){
         this.chat_id = chat_id;
     }

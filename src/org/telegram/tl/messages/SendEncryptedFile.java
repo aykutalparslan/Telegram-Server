@@ -30,6 +30,9 @@ public class SendEncryptedFile extends TLObject {
     public byte[] data;
     public TLInputEncryptedFile file;
 
+    public SendEncryptedFile() {
+    }
+
     public SendEncryptedFile(TLInputEncryptedChat peer, long random_id, byte[] data, TLInputEncryptedFile file){
         this.peer = peer;
         this.random_id = random_id;

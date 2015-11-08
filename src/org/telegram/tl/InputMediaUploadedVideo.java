@@ -31,6 +31,9 @@ public class InputMediaUploadedVideo extends TLInputMedia {
     public int h;
     public String mime_type;
 
+    public InputMediaUploadedVideo() {
+    }
+
     public InputMediaUploadedVideo(TLInputFile file, int duration, int w, int h, String mime_type){
         this.file = file;
         this.duration = duration;

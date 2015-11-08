@@ -28,6 +28,10 @@ public class InvokeAfterMsgs extends TLObject {
     public TLVector<Long> msg_ids;
     public TLObject query;
 
+    public InvokeAfterMsgs() {
+        this.msg_ids = new TLVector<>();
+    }
+
     public InvokeAfterMsgs(TLVector<Long> msg_ids, TLObject query){
         this.msg_ids = msg_ids;
         this.query = query;

@@ -29,6 +29,9 @@ public class AffectedHistory extends TLAffectedHistory {
     public int seq;
     public int offset;
 
+    public AffectedHistory() {
+    }
+
     public AffectedHistory(int pts, int seq, int offset){
         this.pts = pts;
         this.seq = seq;

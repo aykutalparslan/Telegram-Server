@@ -28,6 +28,9 @@ public class InputChatPhoto extends TLInputChatPhoto {
     public TLInputPhoto id;
     public TLInputPhotoCrop crop;
 
+    public InputChatPhoto() {
+    }
+
     public InputChatPhoto(TLInputPhoto id, TLInputPhotoCrop crop){
         this.id = id;
         this.crop = crop;

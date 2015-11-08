@@ -28,6 +28,9 @@ public class EditChatPhoto extends TLObject {
     public int chat_id;
     public TLInputChatPhoto photo;
 
+    public EditChatPhoto() {
+    }
+
     public EditChatPhoto(int chat_id, TLInputChatPhoto photo){
         this.chat_id = chat_id;
         this.photo = photo;

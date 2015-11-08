@@ -29,6 +29,9 @@ public class ChatParticipant extends TLChatParticipant {
     public int inviter_id;
     public int date;
 
+    public ChatParticipant() {
+    }
+
     public ChatParticipant(int user_id, int inviter_id, int date){
         this.user_id = user_id;
         this.inviter_id = inviter_id;

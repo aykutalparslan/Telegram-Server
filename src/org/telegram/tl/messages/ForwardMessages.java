@@ -28,6 +28,10 @@ public class ForwardMessages extends TLObject {
     public TLInputPeer peer;
     public TLVector<Integer> id;
 
+    public ForwardMessages() {
+        this.id = new TLVector<>();
+    }
+
     public ForwardMessages(TLInputPeer peer, TLVector<Integer> id){
         this.peer = peer;
         this.id = id;

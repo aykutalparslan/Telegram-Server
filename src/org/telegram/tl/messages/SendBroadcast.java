@@ -29,6 +29,10 @@ public class SendBroadcast extends TLObject {
     public String message;
     public TLInputMedia media;
 
+    public SendBroadcast() {
+        this.contacts = new TLVector<>();
+    }
+
     public SendBroadcast(TLVector<TLInputUser> contacts, String message, TLInputMedia media){
         this.contacts = contacts;
         this.message = message;

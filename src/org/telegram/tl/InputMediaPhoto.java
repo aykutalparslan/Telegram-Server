@@ -27,6 +27,9 @@ public class InputMediaPhoto extends TLInputMedia {
 
     public TLInputPhoto id;
 
+    public InputMediaPhoto() {
+    }
+
     public InputMediaPhoto(TLInputPhoto id){
         this.id = id;
     }

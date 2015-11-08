@@ -29,6 +29,10 @@ public class rpc_answer_dropped extends TLObject {
     public int seq_no;
     public int bytes;
 
+    public rpc_answer_dropped() {
+
+    }
+
     public rpc_answer_dropped(long msg_id, int seq_no, int bytes){
         this.msg_id = msg_id;
         this.seq_no = seq_no;

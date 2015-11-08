@@ -28,6 +28,10 @@ public class MessageActionChatCreate extends TLMessageAction {
     public String title;
     public TLVector<Integer> users;
 
+    public MessageActionChatCreate() {
+        this.users = new TLVector<>();
+    }
+
     public MessageActionChatCreate(String title, TLVector<Integer> users){
         this.title = title;
         this.users = users;

@@ -29,6 +29,9 @@ public class UpdateEncryptedMessagesRead extends TLUpdate {
     public int max_date;
     public int date;
 
+    public UpdateEncryptedMessagesRead() {
+    }
+
     public UpdateEncryptedMessagesRead(int chat_id, int max_date, int date){
         this.chat_id = chat_id;
         this.max_date = max_date;

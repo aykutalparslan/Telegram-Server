@@ -27,6 +27,9 @@ public class DeleteAccount extends TLObject {
 
     public String reason;
 
+    public DeleteAccount() {
+    }
+
     public DeleteAccount(String reason){
         this.reason = reason;
     }

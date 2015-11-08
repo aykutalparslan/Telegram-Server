@@ -37,7 +37,9 @@ public class msg_container extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        messages = (TLVector<message>) buffer.readTLObject(APIContext.getInstance());
+        TLVector<message> t = new TLVector<>();
+        t.setDestClass(message.class);
+        messages = (TLVector<message>) buffer.readBareTLType(APIContext.getInstance(), t);
     }
 
     @Override

@@ -27,6 +27,10 @@ public class SaveAppLog extends TLObject {
 
     public TLVector<TLInputAppEvent> events;
 
+    public SaveAppLog() {
+        this.events = new TLVector<>();
+    }
+
     public SaveAppLog(TLVector<TLInputAppEvent> events){
         this.events = events;
     }

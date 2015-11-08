@@ -27,6 +27,9 @@ public class MessageMediaPhoto extends TLMessageMedia {
 
     public TLPhoto photo;
 
+    public MessageMediaPhoto() {
+    }
+
     public MessageMediaPhoto(TLPhoto photo){
         this.photo = photo;
     }

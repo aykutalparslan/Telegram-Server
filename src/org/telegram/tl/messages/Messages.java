@@ -29,6 +29,12 @@ public class Messages extends TLMessages {
     public TLVector<TLChat> chats;
     public TLVector<TLUser> users;
 
+    public Messages() {
+        this.messages = new TLVector<>();
+        this.chats = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public Messages(TLVector<TLMessage> messages, TLVector<TLChat> chats, TLVector<TLUser> users){
         this.messages = messages;
         this.chats = chats;

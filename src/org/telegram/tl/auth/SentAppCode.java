@@ -30,6 +30,9 @@ public class SentAppCode extends TLSentCode {
     public int send_call_timeout;
     public boolean is_password;
 
+    public SentAppCode() {
+    }
+
     public SentAppCode(boolean phone_registered, String phone_code_hash, int send_call_timeout, boolean is_password){
         this.phone_registered = phone_registered;
         this.phone_code_hash = phone_code_hash;

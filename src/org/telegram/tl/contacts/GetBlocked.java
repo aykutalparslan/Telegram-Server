@@ -28,6 +28,9 @@ public class GetBlocked extends TLObject {
     public int offset;
     public int limit;
 
+    public GetBlocked() {
+    }
+
     public GetBlocked(int offset, int limit){
         this.offset = offset;
         this.limit = limit;

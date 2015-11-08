@@ -27,6 +27,9 @@ public class ForeignLinkRequested extends TLForeignLink {
 
     public boolean has_phone;
 
+    public ForeignLinkRequested() {
+    }
+
     public ForeignLinkRequested(boolean has_phone){
         this.has_phone = has_phone;
     }

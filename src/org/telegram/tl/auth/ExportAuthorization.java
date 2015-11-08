@@ -27,6 +27,9 @@ public class ExportAuthorization extends TLObject {
 
     public int dc_id;
 
+    public ExportAuthorization() {
+    }
+
     public ExportAuthorization(int dc_id){
         this.dc_id = dc_id;
     }

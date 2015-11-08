@@ -29,6 +29,12 @@ public class ImportedContacts extends TLImportedContacts {
     public TLVector<Long> retry_contacts;
     public TLVector<TLUser> users;
 
+    public ImportedContacts() {
+        this.imported = new TLVector<>();
+        this.retry_contacts = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public ImportedContacts(TLVector<TLImportedContact> imported, TLVector<Long> retry_contacts, TLVector<TLUser> users){
         this.imported = imported;
         this.retry_contacts = retry_contacts;

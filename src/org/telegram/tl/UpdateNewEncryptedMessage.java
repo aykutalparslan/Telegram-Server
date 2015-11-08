@@ -28,6 +28,9 @@ public class UpdateNewEncryptedMessage extends TLUpdate {
     public TLEncryptedMessage message;
     public int qts;
 
+    public UpdateNewEncryptedMessage() {
+    }
+
     public UpdateNewEncryptedMessage(TLEncryptedMessage message, int qts){
         this.message = message;
         this.qts = qts;

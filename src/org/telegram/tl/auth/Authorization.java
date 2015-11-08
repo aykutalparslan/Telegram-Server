@@ -28,6 +28,9 @@ public class Authorization extends TLAuthorization {
     public int expires;
     public TLUser user;
 
+    public Authorization() {
+    }
+
     public Authorization(int expires, TLUser user){
         this.expires = expires;
         this.user = user;

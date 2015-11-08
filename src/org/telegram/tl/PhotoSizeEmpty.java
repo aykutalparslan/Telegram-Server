@@ -27,6 +27,9 @@ public class PhotoSizeEmpty extends TLPhotoSize {
 
     public String type;
 
+    public PhotoSizeEmpty() {
+    }
+
     public PhotoSizeEmpty(String type){
         this.type = type;
     }

@@ -28,6 +28,9 @@ public class InputEncryptedChat extends TLInputEncryptedChat {
     public int chat_id;
     public long access_hash;
 
+    public InputEncryptedChat() {
+    }
+
     public InputEncryptedChat(int chat_id, long access_hash){
         this.chat_id = chat_id;
         this.access_hash = access_hash;

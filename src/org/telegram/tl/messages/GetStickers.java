@@ -28,6 +28,9 @@ public class GetStickers extends TLObject {
     public String emoticon;
     public String hash;
 
+    public GetStickers() {
+    }
+
     public GetStickers(String emoticon, String hash){
         this.emoticon = emoticon;
         this.hash = hash;

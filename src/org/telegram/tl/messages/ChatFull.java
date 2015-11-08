@@ -29,6 +29,11 @@ public class ChatFull extends TLChatFull {
     public TLVector<TLChat> chats;
     public TLVector<TLUser> users;
 
+    public ChatFull() {
+        this.chats = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public ChatFull(TLChatFull full_chat, TLVector<TLChat> chats, TLVector<TLUser> users){
         this.full_chat = full_chat;
         this.chats = chats;

@@ -27,6 +27,10 @@ public class GetMessages extends TLObject {
 
     public TLVector<Integer> id;
 
+    public GetMessages() {
+        this.id = new TLVector<>();
+    }
+
     public GetMessages(TLVector<Integer> id){
         this.id = id;
     }

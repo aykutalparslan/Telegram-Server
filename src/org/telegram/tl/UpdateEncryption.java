@@ -28,6 +28,9 @@ public class UpdateEncryption extends TLUpdate {
     public TLEncryptedChat chat;
     public int date;
 
+    public UpdateEncryption() {
+    }
+
     public UpdateEncryption(TLEncryptedChat chat, int date){
         this.chat = chat;
         this.date = date;

@@ -30,6 +30,9 @@ public class UploadProfilePhoto extends TLObject {
     public TLInputGeoPoint geo_point;
     public TLInputPhotoCrop crop;
 
+    public UploadProfilePhoto() {
+    }
+
     public UploadProfilePhoto(TLInputFile file, String caption, TLInputGeoPoint geo_point, TLInputPhotoCrop crop){
         this.file = file;
         this.caption = caption;

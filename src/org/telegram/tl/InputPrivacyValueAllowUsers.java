@@ -27,6 +27,10 @@ public class InputPrivacyValueAllowUsers extends TLInputPrivacyRule {
 
     public TLVector<TLInputUser> users;
 
+    public InputPrivacyValueAllowUsers() {
+        this.users = new TLVector<>();
+    }
+
     public InputPrivacyValueAllowUsers(TLVector<TLInputUser> users){
         this.users = users;
     }

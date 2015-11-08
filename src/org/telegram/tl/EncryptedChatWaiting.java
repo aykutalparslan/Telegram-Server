@@ -31,6 +31,9 @@ public class EncryptedChatWaiting extends TLEncryptedChat {
     public int admin_id;
     public int participant_id;
 
+    public EncryptedChatWaiting() {
+    }
+
     public EncryptedChatWaiting(int id, long access_hash, int date, int admin_id, int participant_id){
         this.id = id;
         this.access_hash = access_hash;

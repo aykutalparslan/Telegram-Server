@@ -27,6 +27,9 @@ public class MessageMediaDocument extends TLMessageMedia {
 
     public TLDocument document;
 
+    public MessageMediaDocument() {
+    }
+
     public MessageMediaDocument(TLDocument document){
         this.document = document;
     }

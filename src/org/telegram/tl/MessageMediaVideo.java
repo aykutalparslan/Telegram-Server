@@ -27,6 +27,9 @@ public class MessageMediaVideo extends TLMessageMedia {
 
     public TLVideo video;
 
+    public MessageMediaVideo() {
+    }
+
     public MessageMediaVideo(TLVideo video){
         this.video = video;
     }

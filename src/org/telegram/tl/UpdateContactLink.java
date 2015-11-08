@@ -31,6 +31,9 @@ public class UpdateContactLink extends TLUpdate {
     public TLMyLink my_link;
     public TLForeignLink foreign_link;
 
+    public UpdateContactLink() {
+    }
+
     public UpdateContactLink(int user_id, TLMyLink my_link, TLForeignLink foreign_link){
         this.user_id = user_id;
         this.my_link = my_link;

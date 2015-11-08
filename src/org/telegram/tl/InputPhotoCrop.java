@@ -29,6 +29,9 @@ public class InputPhotoCrop extends TLInputPhotoCrop {
     public double crop_top;
     public double crop_width;
 
+    public InputPhotoCrop() {
+    }
+
     public InputPhotoCrop(double crop_left, double crop_top, double crop_width){
         this.crop_left = crop_left;
         this.crop_top = crop_top;

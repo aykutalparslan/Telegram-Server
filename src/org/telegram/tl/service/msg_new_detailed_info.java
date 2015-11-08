@@ -29,6 +29,10 @@ public class msg_new_detailed_info extends TLObject {
     public int bytes;
     public int status;
 
+    public msg_new_detailed_info() {
+
+    }
+
     public msg_new_detailed_info(long answer_msg_id, int bytes, int status){
         this.answer_msg_id = answer_msg_id;
         this.bytes = bytes;

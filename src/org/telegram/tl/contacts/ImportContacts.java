@@ -28,6 +28,10 @@ public class ImportContacts extends TLObject {
     public TLVector<TLInputContact> contacts;
     public boolean replace;
 
+    public ImportContacts() {
+        this.contacts = new TLVector<>();
+    }
+
     public ImportContacts(TLVector<TLInputContact> contacts, boolean replace){
         this.contacts = contacts;
         this.replace = replace;

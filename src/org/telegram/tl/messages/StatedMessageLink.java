@@ -33,6 +33,12 @@ public class StatedMessageLink extends TLStatedMessage {
     public int pts;
     public int seq;
 
+    public StatedMessageLink() {
+        this.chats = new TLVector<>();
+        this.users = new TLVector<>();
+        this.links = new TLVector<>();
+    }
+
     public StatedMessageLink(TLMessage message, TLVector<TLChat> chats, TLVector<TLUser> users, TLVector<TLLink> links, int pts, int seq){
         this.message = message;
         this.chats = chats;

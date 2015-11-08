@@ -30,6 +30,9 @@ public class UpdateServiceNotification extends TLUpdate {
     public TLMessageMedia media;
     public boolean popup;
 
+    public UpdateServiceNotification() {
+    }
+
     public UpdateServiceNotification(String type, String message, TLMessageMedia media, boolean popup){
         this.type = type;
         this.message = message;

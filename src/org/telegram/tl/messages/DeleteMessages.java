@@ -27,6 +27,10 @@ public class DeleteMessages extends TLObject {
 
     public TLVector<Integer> id;
 
+    public DeleteMessages() {
+        this.id = new TLVector<>();
+    }
+
     public DeleteMessages(TLVector<Integer> id){
         this.id = id;
     }

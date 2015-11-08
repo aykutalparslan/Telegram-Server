@@ -28,6 +28,11 @@ public class Blocked extends TLBlocked {
     public TLVector<TLContactBlocked> blocked;
     public TLVector<TLUser> users;
 
+    public Blocked() {
+        this.blocked = new TLVector<>();
+        this.users = new TLVector<>();
+    }
+
     public Blocked(TLVector<TLContactBlocked> blocked, TLVector<TLUser> users){
         this.blocked = blocked;
         this.users = users;

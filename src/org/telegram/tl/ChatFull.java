@@ -30,6 +30,9 @@ public class ChatFull extends TLChatFull {
     public TLPhoto chat_photo;
     public TLPeerNotifySettings notify_settings;
 
+    public ChatFull() {
+    }
+
     public ChatFull(int id, TLChatParticipants participants, TLPhoto chat_photo, TLPeerNotifySettings notify_settings){
         this.id = id;
         this.participants = participants;

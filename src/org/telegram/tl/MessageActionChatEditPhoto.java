@@ -27,6 +27,9 @@ public class MessageActionChatEditPhoto extends TLMessageAction {
 
     public TLPhoto photo;
 
+    public MessageActionChatEditPhoto() {
+    }
+
     public MessageActionChatEditPhoto(TLPhoto photo){
         this.photo = photo;
     }

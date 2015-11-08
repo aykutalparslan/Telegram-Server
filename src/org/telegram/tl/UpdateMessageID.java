@@ -28,6 +28,9 @@ public class UpdateMessageID extends TLUpdate {
     public int id;
     public long random_id;
 
+    public UpdateMessageID() {
+    }
+
     public UpdateMessageID(int id, long random_id){
         this.id = id;
         this.random_id = random_id;

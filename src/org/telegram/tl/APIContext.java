@@ -50,6 +50,8 @@ public class APIContext {
     private HashMap<Integer, Class> schema;
 
     private APIContext(){
+        addToSchema(TLVector.class);
+        addToSchema(message.class);
         addToSchema(msgs_ack.class);
         addToSchema(client_DH_inner_data.class);
         addToSchema(dh_gen_fail.class);

@@ -28,6 +28,9 @@ public class CheckedPhone extends TLCheckedPhone {
     public boolean phone_registered;
     public boolean phone_invited;
 
+    public CheckedPhone() {
+    }
+
     public CheckedPhone(boolean phone_registered, boolean phone_invited){
         this.phone_registered = phone_registered;
         this.phone_invited = phone_invited;

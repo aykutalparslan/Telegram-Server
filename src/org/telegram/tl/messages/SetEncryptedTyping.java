@@ -28,6 +28,9 @@ public class SetEncryptedTyping extends TLObject {
     public TLInputEncryptedChat peer;
     public boolean typing;
 
+    public SetEncryptedTyping() {
+    }
+
     public SetEncryptedTyping(TLInputEncryptedChat peer, boolean typing){
         this.peer = peer;
         this.typing = typing;

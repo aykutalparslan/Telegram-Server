@@ -32,6 +32,9 @@ public class EncryptedChatRequested extends TLEncryptedChat {
     public int participant_id;
     public byte[] g_a;
 
+    public EncryptedChatRequested() {
+    }
+
     public EncryptedChatRequested(int id, long access_hash, int date, int admin_id, int participant_id, byte[] g_a){
         this.id = id;
         this.access_hash = access_hash;

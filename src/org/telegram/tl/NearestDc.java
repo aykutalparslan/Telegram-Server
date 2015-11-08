@@ -29,6 +29,9 @@ public class NearestDc extends TLNearestDc {
     public int this_dc;
     public int nearest_dc;
 
+    public NearestDc() {
+    }
+
     public NearestDc(String country, int this_dc, int nearest_dc){
         this.country = country;
         this.this_dc = this_dc;

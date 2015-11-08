@@ -27,6 +27,10 @@ public class msg_copy extends TLObject {
 
     public message orig_message;
 
+    public msg_copy() {
+
+    }
+
     public msg_copy(message orig_message){
         this.orig_message = orig_message;
     }

@@ -19,6 +19,7 @@
 package org.telegram.tl;
 
 import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.tl.service.message;
 
 import java.util.*;
 
@@ -31,6 +32,10 @@ public class TLVector<T> extends TLObject implements List<T> {
 
     private ArrayList<T> items = new ArrayList<T>();
     private Class destClass = TLObject.class;
+
+    public void setDestClass(Class c) {
+        destClass = c;
+    }
 
     @Override
     public ProtocolBuffer serialize() {
@@ -69,6 +74,7 @@ public class TLVector<T> extends TLObject implements List<T> {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
+
         int count = buffer.readInt();
         for (int i = 0; i < count; i++) {
             if (destClass == Integer.class) {
@@ -77,6 +83,8 @@ public class TLVector<T> extends TLObject implements List<T> {
                 items.add((T) (Long) buffer.readLong());
             } else if (destClass == String.class) {
                 items.add((T) buffer.readString());
+            } else if (destClass == message.class) {
+                items.add((T) buffer.readBareTLType(APIContext.getInstance(), new message()));
             } else {
                 items.add((T) APIContext.getInstance().deserialize(buffer));
             }

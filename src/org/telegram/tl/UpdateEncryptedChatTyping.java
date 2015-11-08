@@ -27,6 +27,9 @@ public class UpdateEncryptedChatTyping extends TLUpdate {
 
     public int chat_id;
 
+    public UpdateEncryptedChatTyping() {
+    }
+
     public UpdateEncryptedChatTyping(int chat_id){
         this.chat_id = chat_id;
     }

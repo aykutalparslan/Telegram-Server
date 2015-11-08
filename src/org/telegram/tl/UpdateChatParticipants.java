@@ -27,6 +27,9 @@ public class UpdateChatParticipants extends TLUpdate {
 
     public TLChatParticipants participants;
 
+    public UpdateChatParticipants() {
+    }
+
     public UpdateChatParticipants(TLChatParticipants participants){
         this.participants = participants;
     }

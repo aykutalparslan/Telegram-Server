@@ -28,6 +28,9 @@ public class InputChatUploadedPhoto extends TLInputChatPhoto {
     public TLInputFile file;
     public TLInputPhotoCrop crop;
 
+    public InputChatUploadedPhoto() {
+    }
+
     public InputChatUploadedPhoto(TLInputFile file, TLInputPhotoCrop crop){
         this.file = file;
         this.crop = crop;

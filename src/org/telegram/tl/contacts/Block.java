@@ -27,6 +27,9 @@ public class Block extends TLObject {
 
     public TLInputUser id;
 
+    public Block() {
+    }
+
     public Block(TLInputUser id){
         this.id = id;
     }

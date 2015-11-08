@@ -30,6 +30,9 @@ public class UpdateUserName extends TLUpdate {
     public String last_name;
     public String username;
 
+    public UpdateUserName() {
+    }
+
     public UpdateUserName(int user_id, String first_name, String last_name, String username){
         this.user_id = user_id;
         this.first_name = first_name;

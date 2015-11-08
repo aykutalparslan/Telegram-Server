@@ -29,6 +29,9 @@ public class InputMediaContact extends TLInputMedia {
     public String first_name;
     public String last_name;
 
+    public InputMediaContact() {
+    }
+
     public InputMediaContact(String phone_number, String first_name, String last_name){
         this.phone_number = phone_number;
         this.first_name = first_name;

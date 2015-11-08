@@ -29,6 +29,9 @@ public class InputEncryptedFileBigUploaded extends TLInputEncryptedFile {
     public int parts;
     public int key_fingerprint;
 
+    public InputEncryptedFileBigUploaded() {
+    }
+
     public InputEncryptedFileBigUploaded(long id, int parts, int key_fingerprint){
         this.id = id;
         this.parts = parts;

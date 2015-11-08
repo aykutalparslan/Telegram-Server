@@ -28,6 +28,10 @@ public class rpc_error extends TLObject {
     public int error_code;
     public String error_message;
 
+    public rpc_error() {
+
+    }
+
     public rpc_error(int error_code, String error_message){
         this.error_code = error_code;
         this.error_message = error_message;

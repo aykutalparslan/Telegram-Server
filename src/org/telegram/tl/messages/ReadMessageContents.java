@@ -27,6 +27,10 @@ public class ReadMessageContents extends TLObject {
 
     public TLVector<Integer> id;
 
+    public ReadMessageContents() {
+        this.id = new TLVector<>();
+    }
+
     public ReadMessageContents(TLVector<Integer> id){
         this.id = id;
     }

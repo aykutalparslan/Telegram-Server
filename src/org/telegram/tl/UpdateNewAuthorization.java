@@ -30,6 +30,9 @@ public class UpdateNewAuthorization extends TLUpdate {
     public String device;
     public String location;
 
+    public UpdateNewAuthorization() {
+    }
+
     public UpdateNewAuthorization(long auth_key_id, int date, String device, String location){
         this.auth_key_id = auth_key_id;
         this.date = date;

@@ -34,6 +34,9 @@ public class UserFull extends TLUserFull {
     public String real_first_name;
     public String real_last_name;
 
+    public UserFull() {
+    }
+
     public UserFull(TLUser user, TLLink link, TLPhoto profile_photo, TLPeerNotifySettings notify_settings, boolean blocked, String real_first_name, String real_last_name){
         this.user = user;
         this.link = link;

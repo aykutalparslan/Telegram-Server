@@ -27,6 +27,9 @@ public class MessageMediaGeo extends TLMessageMedia {
 
     public TLGeoPoint geo;
 
+    public MessageMediaGeo() {
+    }
+
     public MessageMediaGeo(TLGeoPoint geo){
         this.geo = geo;
     }

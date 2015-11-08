@@ -27,6 +27,9 @@ public class NotifyPeer extends TLNotifyPeer {
 
     public TLPeer peer;
 
+    public NotifyPeer() {
+    }
+
     public NotifyPeer(TLPeer peer){
         this.peer = peer;
     }
