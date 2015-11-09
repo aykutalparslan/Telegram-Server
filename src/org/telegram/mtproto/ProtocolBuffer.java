@@ -21,10 +21,12 @@ package org.telegram.mtproto;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.TLObject;
 
+import java.io.Serializable;
+
 /**
  * Created by aykut on 21/09/15.
  */
-public class ProtocolBuffer {
+public class ProtocolBuffer implements Serializable {
     private byte[] _bytes;
     private int _readerIndex = 0;
     private int _writerIndex = 0;

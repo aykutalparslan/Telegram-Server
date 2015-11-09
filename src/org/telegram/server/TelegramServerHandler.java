@@ -21,10 +21,7 @@ package org.telegram.server;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import org.omg.PortableInterceptor.INACTIVE;
-import org.telegram.api.AuthKeyStore;
-import org.telegram.api.ServerSaltStore;
-import org.telegram.api.TLContext;
-import org.telegram.api.TLMethod;
+import org.telegram.api.*;
 import org.telegram.mtproto.MTProtoAuth;
 import org.telegram.mtproto.MessageKeyData;
 import org.telegram.mtproto.ProtocolBuffer;
@@ -40,7 +37,6 @@ import org.telegram.tl.service.*;
  * Created by aykut on 28/09/15.
  */
 public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
-    private MTProtoAuth auth;
     private long lastOutgoingMessageId;
     private TLContext tlContext = new TLContext();
     private int seq_no = 0;
@@ -48,7 +44,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-        auth = new MTProtoAuth();
+
     }
 
     @Override
@@ -66,15 +62,28 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             data.readInt();
             TLObject message = APIContext.getInstance().deserialize(data);
 
+            MTProtoAuth auth2 = null;
+
+            if (message instanceof req_pq) {
+                auth2 = ProtoAuthStore.getInstance().getProtoAuth(((req_pq) message).nonce);
+            } else if (message instanceof req_DH_params) {
+                auth2 = ProtoAuthStore.getInstance().getProtoAuth(((req_DH_params) message).nonce);
+            } else if (message instanceof set_client_DH_params) {
+                auth2 = ProtoAuthStore.getInstance().getProtoAuth(((set_client_DH_params) message).nonce);
+            }
+
             if(message instanceof req_pq){
-                ctx.writeAndFlush(auth.msgs_ack(messageId));
-                ctx.writeAndFlush(auth.resPQ((req_pq)message));
+                ctx.writeAndFlush(auth2.msgs_ack(messageId));
+                ctx.writeAndFlush(auth2.resPQ((req_pq) message));
+                ProtoAuthStore.getInstance().updateProtoAuth(((req_pq) message).nonce, auth2);
             } else if (message instanceof req_DH_params){
-                ctx.writeAndFlush(auth.msgs_ack(messageId));
-                ctx.writeAndFlush(auth.server_DH_params((req_DH_params)message));
+                ctx.writeAndFlush(auth2.msgs_ack(messageId));
+                ctx.writeAndFlush(auth2.server_DH_params((req_DH_params) message));
+                ProtoAuthStore.getInstance().updateProtoAuth(((req_DH_params) message).nonce, auth2);
             } else if (message instanceof set_client_DH_params){
-                ctx.writeAndFlush(auth.msgs_ack(messageId));
-                ctx.writeAndFlush(auth.set_client_DH_params((set_client_DH_params) message));
+                ctx.writeAndFlush(auth2.msgs_ack(messageId));
+                ctx.writeAndFlush(auth2.set_client_DH_params((set_client_DH_params) message));
+                ProtoAuthStore.getInstance().removeProtoAuth(((set_client_DH_params) message).nonce);
             }
         } else {
             if(getTlContext().getAuthKeyId() == 0){

@@ -18,38 +18,43 @@
 
 package org.telegram.api;
 
-import org.telegram.data.DatabaseConnection;
 import org.telegram.data.HazelcastConnection;
+import org.telegram.mtproto.MTProtoAuth;
 
-import java.util.HashMap;
-import java.util.List;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * Created by aykut on 06/11/15.
+ * Created by aykut on 09/11/15.
  */
-public class AuthKeyStore {
-    private ConcurrentMap<Long, byte[]> authKeysShared = HazelcastConnection.getInstance().getMap("telegram_auth_keys");
+public class ProtoAuthStore {
+    private ConcurrentMap<byte[], MTProtoAuth> protoAuthShared = HazelcastConnection.getInstance().getMap("telegram_proto_auth");
+    private static ProtoAuthStore _instance;
 
-    private static AuthKeyStore _instance;
-
-    private AuthKeyStore() {
+    private ProtoAuthStore() {
 
     }
 
-    public static AuthKeyStore getInstance() {
+    public static ProtoAuthStore getInstance() {
         if (_instance == null) {
-            _instance = new AuthKeyStore();
+            _instance = new ProtoAuthStore();
         }
         return _instance;
     }
 
-    public byte[] getAuthKey(long authKeyId) {
-        byte[] authKey = authKeysShared.get(authKeyId);
-        if (authKey == null || authKey.length == 0) {
-            authKey = DatabaseConnection.getInstance().getAuthKey(authKeyId);
-            authKeysShared.put(authKeyId, authKey);
+    public MTProtoAuth getProtoAuth(byte[] nonce) {
+        MTProtoAuth auth = protoAuthShared.get(nonce);
+        if (auth == null) {
+            auth = new MTProtoAuth();
+            protoAuthShared.putIfAbsent(nonce, auth);
         }
-        return authKey;
+        return auth;
+    }
+
+    public void updateProtoAuth(byte[] nonce, MTProtoAuth auth) {
+        protoAuthShared.replace(nonce, auth);
+    }
+
+    public void removeProtoAuth(byte[] nonce) {
+        protoAuthShared.remove(nonce);
     }
 }

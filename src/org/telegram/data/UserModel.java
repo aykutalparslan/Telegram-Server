@@ -18,10 +18,12 @@
 
 package org.telegram.data;
 
+import java.io.Serializable;
+
 /**
  * Created by aykut on 09/11/15.
  */
-public class UserModel {
+public class UserModel implements Serializable {
     public int user_id;
     public String first_name;
     public String last_name;

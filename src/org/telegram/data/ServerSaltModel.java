@@ -18,10 +18,12 @@
 
 package org.telegram.data;
 
+import java.io.Serializable;
+
 /**
  * Created by aykut on 04/11/15.
  */
-public class ServerSaltModel {
+public class ServerSaltModel implements Serializable {
     public long salt;
     public long validSince;
 }

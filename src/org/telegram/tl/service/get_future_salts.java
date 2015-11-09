@@ -18,7 +18,7 @@
 
 package org.telegram.tl.service;
 
-import org.telegram.api.Service;
+import org.telegram.api.ServerSaltStore;
 import org.telegram.api.TLContext;
 import org.telegram.api.TLMethod;
 import org.telegram.data.ServerSaltModel;
@@ -63,7 +63,7 @@ public class get_future_salts extends TLObject implements TLMethod{
 
     @Override
     public TLObject execute(TLContext context,long messageId, long reqMessageId) {
-        ServerSaltModel[] saltsArr = Service.getServerSalts(context.getAuthKeyId(), num);
+        ServerSaltModel[] saltsArr = ServerSaltStore.getInstance().getServerSalts(context.getAuthKeyId(), 64);
 
         TLVector<future_salt> salts = new TLVector<>();
         for (int i = 0; i < saltsArr.length; i++) {

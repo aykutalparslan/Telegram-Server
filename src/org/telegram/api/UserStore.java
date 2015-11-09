@@ -31,8 +31,7 @@ import java.util.concurrent.ConcurrentMap;
  * Created by aykut on 09/11/15.
  */
 public class UserStore {
-    private HashMap<String, UserModel> users = new HashMap<>();
-    //private ConcurrentMap<String, UserModel> usersShared = HazelcastConnection.getInstance().getMap("telegram_users");
+    private ConcurrentMap<String, UserModel> usersShared = HazelcastConnection.getInstance().getMap("telegram_users");
 
     private static UserStore _instance;
 
@@ -48,11 +47,11 @@ public class UserStore {
     }
 
     public UserModel getUser(String phone) {
-        UserModel user = users.get(phone);
+        UserModel user = usersShared.get(phone);
         if (user == null) {
             user = DatabaseConnection.getInstance().getUser(phone);
             if (user != null) {
-                users.put(phone, user);
+                usersShared.put(phone, user);
             }
         }
         return user;

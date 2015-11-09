@@ -26,6 +26,7 @@ import org.telegram.tl.TLObject;
 import org.telegram.tl.pq.*;
 import org.telegram.tl.service.msgs_ack;
 
+import java.io.Serializable;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -36,7 +37,7 @@ import java.util.Random;
 /**
  * Created by aykut on 27/09/15.
  */
-public class MTProtoAuth {
+public class MTProtoAuth implements Serializable {
     public static KeyPair RSAKeyPair;
 
     private byte[] authNonce;

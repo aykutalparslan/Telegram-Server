@@ -19,17 +19,20 @@
 package org.telegram.api;
 
 import org.telegram.data.DatabaseConnection;
+import org.telegram.data.HazelcastConnection;
 import org.telegram.data.ServerSaltModel;
 import org.telegram.mtproto.ServerSalt;
+import org.telegram.mtproto.Utilities;
 
+import java.security.SecureRandom;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * Created by aykut on 06/11/15.
  */
 public class ServerSaltStore {
-
-    private HashMap<Long, ServerSaltModel[]> serverSalts = new HashMap<>();
+    private ConcurrentMap<Long, ServerSaltModel[]> serverSaltsShared = HazelcastConnection.getInstance().getMap("telegram_server_salts");
 
     private static ServerSaltStore _instance;
 
@@ -45,11 +48,64 @@ public class ServerSaltStore {
     }
 
     public long getServerSalt(long authKeyId) {
-        ServerSaltModel[] salts = serverSalts.get(authKeyId);
+        ServerSaltModel[] salts = serverSaltsShared.get(authKeyId);
         if (salts == null || salts.length == 0) {
             salts = DatabaseConnection.getInstance().getserverSalts(authKeyId, 64);
-            serverSalts.put(authKeyId, salts);
+            serverSaltsShared.put(authKeyId, salts);
         }
-        return salts[0].salt;
+        long salt = 0;
+        for (int i = 0; i < salts.length; i++) {
+            if (salts[i].validSince + 86400000L > System.currentTimeMillis()) {
+                salt = salts[i].salt;
+            }
+        }
+        if (salt == 0) {
+            salts = DatabaseConnection.getInstance().getserverSalts(authKeyId, 64);
+            serverSaltsShared.put(authKeyId, salts);
+            for (int i = 0; i < salts.length; i++) {
+                if (salts[i].validSince + 86400000L > System.currentTimeMillis()) {
+                    salt = salts[i].salt;
+                }
+            }
+        }
+        if (salt == 0) {
+            byte[] serverSaltBytes = new byte[8];
+            long time_salt = System.currentTimeMillis();
+            SecureRandom srnd = new SecureRandom();
+            for (int i = 0; i < 64; i++) {
+                srnd.nextBytes(serverSaltBytes);
+                DatabaseConnection.getInstance().saveServerSalt(authKeyId, time_salt + ((i + 1) * 86400000L), Utilities.bytesToLong(serverSaltBytes), (i + 1) * 86400);
+            }
+            salts = DatabaseConnection.getInstance().getserverSalts(authKeyId, 64);
+            serverSaltsShared.put(authKeyId, salts);
+            for (int i = 0; i < salts.length; i++) {
+                if (salts[i].validSince + 86400000L > System.currentTimeMillis()) {
+                    salt = salts[i].salt;
+                }
+            }
+        }
+
+        return salt;
+    }
+
+    public ServerSaltModel[] getServerSalts(long authKeyId, int count) {
+        ServerSaltModel[] salts = serverSaltsShared.get(authKeyId);
+        if (salts == null || salts.length == 0) {
+            salts = DatabaseConnection.getInstance().getserverSalts(authKeyId, 64);
+            serverSaltsShared.put(authKeyId, salts);
+        }
+        if (salts == null || salts.length == 00) {
+            byte[] serverSaltBytes = new byte[8];
+            long time_salt = System.currentTimeMillis();
+            SecureRandom srnd = new SecureRandom();
+            for (int i = 0; i < 64; i++) {
+                srnd.nextBytes(serverSaltBytes);
+                DatabaseConnection.getInstance().saveServerSalt(authKeyId, time_salt + ((i + 1) * 86400000L), Utilities.bytesToLong(serverSaltBytes), (i + 1) * 86400);
+            }
+            salts = DatabaseConnection.getInstance().getserverSalts(authKeyId, 64);
+            serverSaltsShared.put(authKeyId, salts);
+        }
+
+        return salts;
     }
 }
