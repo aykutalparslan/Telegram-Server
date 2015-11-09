@@ -28,5 +28,6 @@
     <orderEntry type="library" exported="" name="Gradle: io.netty:netty-codec:4.0.27.Final" level="project" />
     <orderEntry type="library" exported="" name="Gradle: org.slf4j:slf4j-api:1.7.5" level="project" />
     <orderEntry type="library" exported="" name="Gradle: io.netty:netty-common:4.0.27.Final" level="project" />
+    <orderEntry type="library" exported="" name="Gradle: com.hazelcast:hazelcast:3.5.3" level="project" />
   </component>
 </module>

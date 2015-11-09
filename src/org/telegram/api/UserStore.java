@@ -18,40 +18,49 @@
 
 package org.telegram.api;
 
+import com.hazelcast.core.Hazelcast;
+import com.hazelcast.core.HazelcastInstance;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.HazelcastConnection;
+import org.telegram.data.UserModel;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * Created by aykut on 06/11/15.
+ * Created by aykut on 09/11/15.
  */
-public class AuthKeyStore {
+public class UserStore {
+    private HashMap<String, UserModel> users = new HashMap<>();
+    //private ConcurrentMap<String, UserModel> usersShared = HazelcastConnection.getInstance().getMap("telegram_users");
 
-    //private HashMap<Long, byte[]> authKeys = new HashMap<>();
-    private ConcurrentMap<Long, byte[]> authKeysShared = HazelcastConnection.getInstance().getMap("telegram_auth_keys");
+    private static UserStore _instance;
 
-    private static AuthKeyStore _instance;
-
-    private AuthKeyStore() {
+    private UserStore() {
 
     }
 
-    public static AuthKeyStore getInstance() {
+    public static UserStore getInstance() {
         if (_instance == null) {
-            _instance = new AuthKeyStore();
+            _instance = new UserStore();
         }
         return _instance;
     }
 
-    public byte[] getAuthKey(long authKeyId) {
-        byte[] authKey = authKeysShared.get(authKeyId);
-        if (authKey == null || authKey.length == 0) {
-            authKey = DatabaseConnection.getInstance().getAuthKey(authKeyId);
-            authKeysShared.put(authKeyId, authKey);
+    public UserModel getUser(String phone) {
+        UserModel user = users.get(phone);
+        if (user == null) {
+            user = DatabaseConnection.getInstance().getUser(phone);
+            if (user != null) {
+                users.put(phone, user);
+            }
         }
-        return authKey;
+        return user;
+    }
+
+    public UserModel putUser(UserModel userModel) {
+        DatabaseConnection.getInstance().saveUser(userModel.user_id, userModel.first_name,
+                userModel.last_name, userModel.username, userModel.access_hash, userModel.phone);
+        return getUser(userModel.phone);
     }
 }

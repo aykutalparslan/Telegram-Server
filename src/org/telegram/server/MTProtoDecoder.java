@@ -56,12 +56,12 @@ public class MTProtoDecoder  extends ByteToMessageDecoder {
             ByteBuffer wrapped = ByteBuffer.wrap(lenBytes);
             int len = wrapped.getInt();
             currentPacketLength = len * 4;
+        }
 
-            if (in.readableBytes() < currentPacketLength) {
-                in.capacity(in.capacity() * 2);
-                in.resetReaderIndex();
-                return;
-            }
+        if (in.readableBytes() < currentPacketLength) {
+            in.capacity(in.capacity() * 2);
+            in.resetReaderIndex();
+            return;
         }
 
         ProtocolBuffer received = new ProtocolBuffer(currentPacketLength);

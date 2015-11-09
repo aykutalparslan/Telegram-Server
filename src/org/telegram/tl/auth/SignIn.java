@@ -18,10 +18,16 @@
 
 package org.telegram.tl.auth;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
+import org.telegram.api.UserStore;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.mtproto.Utilities;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
-public class SignIn extends TLObject {
+public class SignIn extends TLObject implements TLMethod {
 
     public static final int ID = -1126886015;
 
@@ -62,5 +68,17 @@ public class SignIn extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        UserModel userModel = UserStore.getInstance().getUser(phone_number);
+        if (userModel != null) {
+            return new Authorization(Integer.MAX_VALUE, new UserSelf(userModel.user_id, userModel.first_name, userModel.last_name, userModel.username, phone_number, new UserProfilePhotoEmpty(),
+                    new UserStatusEmpty(), true));
+        } else {
+            return new rpc_error(400, "PHONE_NUMBER_UNOCCUPIED");
+        }
+
     }
 }

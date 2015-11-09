@@ -54,6 +54,6 @@ public class GetNearestDc extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        return new NearestDc("en_US", ServerConfig.SERVER_ID, ServerConfig.SERVER_ID);
+        return new NearestDc("US", ServerConfig.SERVER_ID, ServerConfig.SERVER_ID);
     }
 }

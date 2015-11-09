@@ -18,10 +18,12 @@
 
 package org.telegram.tl.auth;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class SendInvites extends TLObject {
+public class SendInvites extends TLObject implements TLMethod {
 
     public static final int ID = 1998331287;
 
@@ -59,5 +61,10 @@ public class SendInvites extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new BoolTrue();
     }
 }

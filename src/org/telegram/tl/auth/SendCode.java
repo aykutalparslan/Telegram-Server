@@ -18,10 +18,14 @@
 
 package org.telegram.tl.auth;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
+import org.telegram.api.UserStore;
 import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.mtproto.Utilities;
 import org.telegram.tl.*;
 
-public class SendCode extends TLObject {
+public class SendCode extends TLObject implements TLMethod {
 
     public static final int ID = 1988976461;
 
@@ -70,5 +74,14 @@ public class SendCode extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (UserStore.getInstance().getUser(phone_number) == null) {
+            return new SentCode(false, "EFEFEFEFEFEFEFEFEF", 120, false);
+        } else {
+            return new SentCode(true, "EFEFEFEFEFEFEFEFEF", 120, false);
+        }
     }
 }

@@ -27,6 +27,7 @@ import java.security.spec.*;
 import java.util.ArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.CRC32;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -421,5 +422,11 @@ public class Utilities {
             return "";
         }
 
+    }
+
+    public static int getCRC32(String value) {
+        CRC32 crc = new CRC32();
+        crc.update(value.getBytes());
+        return (int) (crc.getValue());
     }
 }

@@ -11,10 +11,9 @@ You should have received a copy of the license in this archive (see LICENSE).
 This product contains The Netty Project
 
   * LICENSE:
-    * license/LICENSE.netty.txt (Apache License Version 2.0)
+    * Apache License Version 2.0
   * HOMEPAGE:
-    * http://gee.cs.oswego.edu/cgi-bin/viewcvs.cgi/jsr166/
-    * http://viewvc.jboss.org/cgi-bin/viewvc.cgi/jbosscache/experimental/jsr166/
+    * http://netty.io
 
 This product contains a modified portion of Nikolai Kudashov's 'Telegram for Android v. 2.x.x.'
  which can be obtained at:
@@ -40,3 +39,21 @@ This product contains Bouncy Castle
     * The MIT License (MIT)
   * HOMEPAGE:
     * https://www.bouncycastle.org/
+
+
+This product contains DataStax Java Driver for Apache Cassandra
+ which can be obtained at:
+
+  * LICENSE:
+    * Apache License Version 2.0
+  * HOMEPAGE:
+    * https://github.com/datastax/java-driver
+
+
+This product includes software developed by the Hazelcast Project (http://www.hazelcast.com).
+ which can be obtained at:
+
+  * LICENSE:
+    * The MIT License (MIT)
+  * HOMEPAGE:
+    * http://hazelcast.org/

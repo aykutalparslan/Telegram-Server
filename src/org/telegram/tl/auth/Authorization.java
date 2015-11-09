@@ -23,22 +23,19 @@ import org.telegram.tl.*;
 
 public class Authorization extends TLAuthorization {
 
-    public static final int ID = -155815004;
+    public static final int ID = 0xff036af1;
 
-    public int expires;
     public TLUser user;
 
     public Authorization() {
     }
 
     public Authorization(int expires, TLUser user){
-        this.expires = expires;
         this.user = user;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        expires = buffer.readInt();
         user = (TLUser) buffer.readTLObject(APIContext.getInstance());
     }
 
@@ -52,7 +49,6 @@ public class Authorization extends TLAuthorization {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
-        buff.writeInt(expires);
         buff.writeTLObject(user);
     }
 

@@ -18,10 +18,13 @@
 
 package org.telegram.tl.auth;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
+import org.telegram.api.UserStore;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class CheckPhone extends TLObject {
+public class CheckPhone extends TLObject implements TLMethod {
 
     public static final int ID = 1877286395;
 
@@ -54,5 +57,14 @@ public class CheckPhone extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (UserStore.getInstance().getUser(phone_number) == null) {
+            return new CheckedPhone(false, false);
+        } else {
+            return new CheckedPhone(true, false);
+        }
     }
 }

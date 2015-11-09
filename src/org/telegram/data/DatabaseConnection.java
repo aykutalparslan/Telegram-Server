@@ -46,23 +46,32 @@ public class DatabaseConnection {
     }
 
     public void createSchema() {
+        //session.execute("DROP TABLE telegram.auth_keys;");
         //session.execute("DROP TABLE telegram.sessions;");
         //session.execute("DROP TABLE telegram.server_salts;");
+        //session.execute("DROP TABLE telegram.users;");
         //session.execute("DROP KEYSPACE telegram;");
 
         session.execute("CREATE KEYSPACE IF NOT EXISTS telegram WITH replication " +
                 "= {'class':'SimpleStrategy', 'replication_factor':1};");
         session.execute(
-                "CREATE TABLE IF NOT EXISTS telegram.sessions (" +
-                        "auth_key_id bigint PRIMARY KEY," +
+                "CREATE TABLE IF NOT EXISTS telegram.auth_keys (" +
+                        "auth_key_id bigint," +
                         "auth_key blob," +
-                        ");");
+                        "PRIMARY KEY (auth_key_id));");
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.server_salts (" +
                         "auth_key_id bigint," +
                         "valid_since timestamp," +
                         "server_salt bigint," +
                         "PRIMARY KEY (auth_key_id, valid_since));");
+        session.execute(
+                "CREATE TABLE IF NOT EXISTS telegram.sessions (" +
+                        "auth_key_id bigint," +
+                        "session_id bigint," +
+                        "last_activity timestamp," +
+                        "layer int," +
+                        "PRIMARY KEY (auth_key_id, session_id));");
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.users (" +
                         "user_id int," +
@@ -71,7 +80,7 @@ public class DatabaseConnection {
                         "username text," +
                         "access_hash bigint," +
                         "phone text," +
-                        "PRIMARY KEY (phone));");
+                        "PRIMARY KEY (phone, username));");
     }
 
     public void saveUser(int user_id, String first_name, String last_name, String username, long access_hash, String phone) {
@@ -84,8 +93,25 @@ public class DatabaseConnection {
                 phone);
     }
 
+    public UserModel getUser(String phone) {
+        ResultSet results = session.execute("SELECT * FROM telegram.users WHERE phone = ?;",
+                phone);
+
+        UserModel userModel = null;
+        for (Row row : results) {
+            userModel = new UserModel();
+            userModel.user_id = row.getInt("user_id");
+            userModel.first_name = row.getString("first_name");
+            userModel.last_name = row.getString("last_name");
+            userModel.username = row.getString("username");
+            userModel.access_hash = row.getLong("access_hash");
+            userModel.phone = row.getString("phone");
+        }
+        return userModel;
+    }
+
     public void saveAuthKey(long auth_key_id, byte[] auth_key){
-        session.execute("INSERT INTO telegram.sessions (auth_key_id, auth_key) VALUES (?,?);",
+        session.execute("INSERT INTO telegram.auth_keys (auth_key_id, auth_key) VALUES (?,?);",
                 auth_key_id,
                 ByteBuffer.wrap(auth_key));
     }
@@ -98,7 +124,7 @@ public class DatabaseConnection {
     }
 
     public byte[] getAuthKey(long auth_key_id){
-        ResultSet results =  session.execute("SELECT * FROM telegram.sessions WHERE auth_key_id = ?;",
+        ResultSet results = session.execute("SELECT * FROM telegram.auth_keys WHERE auth_key_id = ?;",
                 auth_key_id);
 
         byte[] bytes = null;

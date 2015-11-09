@@ -18,10 +18,15 @@
 
 package org.telegram.tl.auth;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
+import org.telegram.api.UserStore;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.mtproto.Utilities;
 import org.telegram.tl.*;
 
-public class SignUp extends TLObject {
+public class SignUp extends TLObject implements TLMethod {
 
     public static final int ID = 453408308;
 
@@ -70,5 +75,18 @@ public class SignUp extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        UserModel userModel = new UserModel();
+        userModel.phone = phone_number;
+        userModel.first_name = first_name;
+        userModel.last_name = last_name;
+        userModel.user_id = Utilities.getCRC32(phone_number);
+        userModel.username = last_name + "." + first_name;
+        UserStore.getInstance().putUser(userModel);
+        return new Authorization(Integer.MAX_VALUE, new UserSelf(userModel.user_id, first_name, last_name, userModel.username, phone_number, new UserProfilePhotoEmpty(),
+                new UserStatusEmpty(), true));
     }
 }

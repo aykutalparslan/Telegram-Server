@@ -15,6 +15,7 @@ dependencies {
     compile 'io.netty:netty-all:4.0.31.Final'
     compile 'org.bouncycastle:bcprov-jdk15on:1.52'
     compile 'com.datastax.cassandra:cassandra-driver-core:2.2.0-rc3'
+    compile "com.hazelcast:hazelcast:3.5.3"
 }
 
 idea {
