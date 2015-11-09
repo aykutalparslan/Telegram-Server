@@ -18,10 +18,13 @@
 
 package org.telegram.tl.help;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.server.ServerConfig;
 import org.telegram.tl.*;
 
-public class GetNearestDc extends TLObject {
+public class GetNearestDc extends TLObject implements TLMethod {
 
     public static final int ID = 531836966;
 
@@ -47,5 +50,10 @@ public class GetNearestDc extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new NearestDc("en_US", ServerConfig.SERVER_ID, ServerConfig.SERVER_ID);
     }
 }

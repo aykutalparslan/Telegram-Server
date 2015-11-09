@@ -52,6 +52,7 @@ public class ProtocolBuffer {
      * @param value
      */
     public void writeByte(byte value) {
+        expand(1);
         _bytes[_writerIndex] = value;
         _writerIndex ++;
         set_limit();
@@ -62,6 +63,7 @@ public class ProtocolBuffer {
      * @param value
      */
     public void writeByte(int value) {
+        expand(1);
         _bytes[_writerIndex] = (byte)value;
         _writerIndex ++;
         set_limit();
@@ -72,6 +74,7 @@ public class ProtocolBuffer {
      * @param value
      */
     public void writeInt(int value) {
+        expand(4);
         _bytes[_writerIndex] = (byte) (value & 0xff);
         _bytes[_writerIndex + 1] = (byte) ((value >> 8) & 0xff);
         _bytes[_writerIndex + 2] = (byte) ((value >> 16) & 0xff);
@@ -86,6 +89,7 @@ public class ProtocolBuffer {
      * @param value
      */
     public void writeLong(long value) {
+        expand(8);
         _bytes[_writerIndex] = (byte) (value & 0xff);
         _bytes[_writerIndex + 1] = (byte) ((value >> 8) & 0xff);
         _bytes[_writerIndex + 2] = (byte) ((value >> 16) & 0xff);
@@ -200,14 +204,7 @@ public class ProtocolBuffer {
      * @param count
      */
     public void write(byte[] arr, int offset, int count) {
-        if (_bytes == null) {
-            _bytes = new byte[count];
-            _writerIndex = 0;
-        } else if((_bytes.length - _writerIndex) < count){
-            byte[] tmp = new byte[_bytes.length + count];
-            System.arraycopy(_bytes, 0, tmp, 0, _bytes.length);
-            _bytes = tmp;
-        }
+        expand(arr.length);
 
         System.arraycopy(arr, offset, _bytes, _writerIndex, count);
         _writerIndex += count;
@@ -219,18 +216,22 @@ public class ProtocolBuffer {
      * @param arr
      */
     public void write(byte[] arr) {
-        if (_bytes == null) {
-            _bytes = new byte[arr.length];
-            _writerIndex = 0;
-        } else if((_bytes.length - _writerIndex) < arr.length){
-            byte[] tmp = new byte[_bytes.length + arr.length];
-            System.arraycopy(_bytes, 0, tmp, 0, _bytes.length);
-            _bytes = tmp;
-        }
+        expand(arr.length);
 
         System.arraycopy(arr, 0, _bytes, _writerIndex, arr.length);
         _writerIndex += arr.length;
         set_limit();
+    }
+
+    private void expand(int length) {
+        if (_bytes == null) {
+            _bytes = new byte[length];
+            _writerIndex = 0;
+        } else if ((_bytes.length - _writerIndex) < length) {
+            byte[] tmp = new byte[_bytes.length + length];
+            System.arraycopy(_bytes, 0, tmp, 0, _bytes.length);
+            _bytes = tmp;
+        }
     }
 
     public void skipBytes(int count) {
@@ -351,6 +352,10 @@ public class ProtocolBuffer {
         byte[] tmp = new byte[_limit];
         System.arraycopy(_bytes, 0, tmp, 0, _limit);
         return tmp;
+    }
+
+    public byte[] getSHA1() {
+        return Utilities.computeSHA1(_bytes, 0, _limit);
     }
 
     private void set_limit(){

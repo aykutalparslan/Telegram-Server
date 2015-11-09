@@ -63,6 +63,25 @@ public class DatabaseConnection {
                         "valid_since timestamp," +
                         "server_salt bigint," +
                         "PRIMARY KEY (auth_key_id, valid_since));");
+        session.execute(
+                "CREATE TABLE IF NOT EXISTS telegram.users (" +
+                        "user_id int," +
+                        "first_name text," +
+                        "last_name text," +
+                        "username text," +
+                        "access_hash bigint," +
+                        "phone text," +
+                        "PRIMARY KEY (phone));");
+    }
+
+    public void saveUser(int user_id, String first_name, String last_name, String username, long access_hash, String phone) {
+        session.execute("INSERT INTO telegram.users (user_id, first_name, last_name, username, access_hash, phone) VALUES (?,?,?,?,?,?);",
+                user_id,
+                first_name,
+                last_name,
+                username,
+                access_hash,
+                phone);
     }
 
     public void saveAuthKey(long auth_key_id, byte[] auth_key){

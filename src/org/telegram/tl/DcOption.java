@@ -23,27 +23,27 @@ import org.telegram.tl.*;
 
 public class DcOption extends TLDcOption {
 
-    public static final int ID = 784507964;
+    public static final int ID = 0x5d8c6cc;
 
+    public int flags;
     public int id;
-    public String hostname;
     public String ip_address;
     public int port;
 
     public DcOption() {
     }
 
-    public DcOption(int id, String hostname, String ip_address, int port){
+    public DcOption(int flags, int id, String ip_address, int port) {
+        this.flags = flags;
         this.id = id;
-        this.hostname = hostname;
         this.ip_address = ip_address;
         this.port = port;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
+        flags = buffer.readInt();
         id = buffer.readInt();
-        hostname = buffer.readString();
         ip_address = buffer.readString();
         port = buffer.readInt();
     }
@@ -58,8 +58,8 @@ public class DcOption extends TLDcOption {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
+        buff.writeInt(flags);
         buff.writeInt(id);
-        buff.writeString(hostname);
         buff.writeString(ip_address);
         buff.writeInt(port);
     }

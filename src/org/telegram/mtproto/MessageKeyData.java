@@ -53,7 +53,7 @@ public class MessageKeyData {
         return computeSHA1(convertme, 0, convertme.length);
     }
 
-    public static MessageKeyData generateMessageKeyData(byte[] authKey, byte[] messageKey, boolean incoming) {
+    public static MessageKeyData generateMessageKeyData(byte[] authKey, byte[] messageKey, boolean outgoing) {
         MessageKeyData keyData = new MessageKeyData();
         if (authKey == null || authKey.length == 0) {
             keyData.aesIv = null;
@@ -61,7 +61,7 @@ public class MessageKeyData {
             return keyData;
         }
 
-        int x = incoming ? 8 : 0;
+        int x = outgoing ? 8 : 0;
 
         ProtocolBuffer data = new ProtocolBuffer(64);
         data.write(messageKey);

@@ -16,28 +16,14 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.api;
+package org.telegram.server;
 
 /**
- * Created by aykut on 04/11/15.
+ * Created by aykut on 08/11/15.
  */
-public class TLContext {
-    private long authKeyId = 0;
-    public void setAuthKeyId(long authKeyId){
-        this.authKeyId = authKeyId;
-    }
-    public long getAuthKeyId(){
-        return authKeyId;
-    }
-
-
-    private long sessionId = 0;
-
-    public long getSessionId() {
-        return sessionId;
-    }
-
-    public void setSessionId(long sessionId) {
-        this.sessionId = sessionId;
-    }
+public class ServerConfig {
+    public static final int SERVER_ID = 1;
+    public static final String SERVER_HOSTNAME = "10.0.2.2";
+    public static final String SERVER_IP = "10.0.2.2";
+    public static final int SERVER_PORT = 11235;
 }

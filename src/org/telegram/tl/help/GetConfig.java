@@ -18,10 +18,14 @@
 
 package org.telegram.tl.help;
 
+import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy;
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.server.ServerConfig;
 import org.telegram.tl.*;
 
-public class GetConfig extends TLObject {
+public class GetConfig extends TLObject implements TLMethod {
 
     public static final int ID = -990308245;
 
@@ -47,5 +51,17 @@ public class GetConfig extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        DcOption dcOption = new DcOption(0, ServerConfig.SERVER_ID, ServerConfig.SERVER_IP, ServerConfig.SERVER_PORT);
+        TLVector<TLDcOption> dcOptions = new TLVector<>();
+        dcOptions.add(dcOption);
+
+        TLVector<TLDisabledFeature> disabledFeatures = new TLVector<>();
+
+        return new Config((int) (System.currentTimeMillis() / 1000L), (int) (System.currentTimeMillis() / 1000L) + 860000,
+                false, 1, dcOptions, 200, 100, 100, 120000, 5000, 30000, 300000, 30000, 1500, 10, 60000, 2, disabledFeatures);
     }
 }
