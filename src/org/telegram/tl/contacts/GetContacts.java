@@ -20,6 +20,8 @@ package org.telegram.tl.contacts;
 
 import org.telegram.api.TLContext;
 import org.telegram.api.TLMethod;
+import org.telegram.data.DatabaseConnection;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
@@ -60,6 +62,18 @@ public class GetContacts extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        return null;
+        UserModel[] usersAll = DatabaseConnection.getInstance().getUsers();
+        TLVector<TLContact> contacts = new TLVector<>();
+        TLVector<TLUser> users = new TLVector<>();
+
+        for (UserModel u : usersAll) {
+            contacts.add(new Contact(u.user_id, true));
+        }
+
+        for (UserModel u : usersAll) {
+            users.add(new UserContact(u.user_id, u.first_name, u.last_name, u.username, u.access_hash, u.phone, new UserProfilePhotoEmpty(), new UserStatusEmpty()));
+        }
+
+        return new Contacts(contacts, users);
     }
 }

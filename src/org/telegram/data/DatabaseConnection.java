@@ -142,6 +142,25 @@ public class DatabaseConnection {
         return userModel;
     }
 
+    public UserModel[] getUsers() {
+        ResultSet results = session.execute("SELECT * FROM telegram.users limit 100;");
+
+        UserModel users[] = new UserModel[results.getAvailableWithoutFetching()];
+        int i = 0;
+        for (Row row : results) {
+            UserModel userModel = new UserModel();
+            userModel.user_id = row.getInt("user_id");
+            userModel.first_name = row.getString("first_name");
+            userModel.last_name = row.getString("last_name");
+            userModel.username = row.getString("username");
+            userModel.access_hash = row.getLong("access_hash");
+            userModel.phone = row.getString("phone");
+            users[i] = userModel;
+            i++;
+        }
+        return users;
+    }
+
 
     public void saveAuthKey(long auth_key_id, byte[] auth_key){
         session.execute("INSERT INTO telegram.auth_keys (auth_key_id, auth_key) VALUES (?,?);",

@@ -135,6 +135,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             rpc_result result = new rpc_result(messageId, response);
             if (response != null) {
                 ctx.writeAndFlush(encryptRpc(result, getMessageSeqNo(true)));
+                System.out.println(response.toString());
             }
         }
     }
