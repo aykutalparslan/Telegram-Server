@@ -60,6 +60,15 @@ public class UserStore {
     public UserModel putUser(UserModel userModel) {
         DatabaseConnection.getInstance().saveUser(userModel.user_id, userModel.first_name,
                 userModel.last_name, userModel.username, userModel.access_hash, userModel.phone);
+
+        return getUser(userModel.phone);
+    }
+
+    public UserModel replaceUser(UserModel userModel) {
+        DatabaseConnection.getInstance().updateUser(userModel.first_name,
+                userModel.last_name, userModel.username, userModel.access_hash, userModel.phone);
+        usersShared.replace(userModel.phone, userModel);
+
         return getUser(userModel.phone);
     }
 }

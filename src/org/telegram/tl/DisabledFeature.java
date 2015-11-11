@@ -23,7 +23,7 @@ import org.telegram.tl.*;
 
 public class DisabledFeature extends TLDisabledFeature {
 
-    public static final int ID = -1369215196;
+    public static final int ID = 0xae636f24;
 
     public String feature;
     public String description;

@@ -18,10 +18,12 @@
 
 package org.telegram.tl.account;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class UpdateStatus extends TLObject {
+public class UpdateStatus extends TLObject implements TLMethod {
 
     public static final int ID = 1713919532;
 
@@ -54,5 +56,10 @@ public class UpdateStatus extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new BoolTrue();
     }
 }

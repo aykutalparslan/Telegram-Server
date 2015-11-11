@@ -18,10 +18,12 @@
 
 package org.telegram.tl.updates;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class GetState extends TLObject {
+public class GetState extends TLObject implements TLMethod {
 
     public static final int ID = -304838614;
 
@@ -47,5 +49,10 @@ public class GetState extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new State(1, 0, (int) (System.currentTimeMillis() / 1000L), 1, 0);
     }
 }

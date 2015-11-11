@@ -18,9 +18,11 @@
 
 package org.telegram.tl.auth;
 
+import org.telegram.api.SessionStore;
 import org.telegram.api.TLContext;
 import org.telegram.api.TLMethod;
 import org.telegram.api.UserStore;
+import org.telegram.data.SessionModel;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.mtproto.Utilities;
@@ -86,6 +88,14 @@ public class SignUp extends TLObject implements TLMethod {
         userModel.user_id = Utilities.getCRC32(phone_number);
         userModel.username = last_name + "." + first_name;
         UserStore.getInstance().putUser(userModel);
+
+        SessionModel sessionModel = new SessionModel();
+        sessionModel.auth_key_id = context.getAuthKeyId();
+        sessionModel.session_id = context.getSessionId();
+        sessionModel.layer = 0;
+        sessionModel.phone = phone_number;
+        SessionStore.getInstance().putSession(sessionModel);
+
         return new Authorization(Integer.MAX_VALUE, new UserSelf(userModel.user_id, first_name, last_name, userModel.username, phone_number, new UserProfilePhotoEmpty(),
                 new UserStatusEmpty(), true));
     }

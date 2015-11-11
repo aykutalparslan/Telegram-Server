@@ -40,6 +40,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
     private long lastOutgoingMessageId;
     private TLContext tlContext = new TLContext();
     private int seq_no = 0;
+    private boolean session_created = false;
 
 
     @Override
@@ -64,30 +65,25 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
 
             MTProtoAuth auth2 = null;
 
-            if (message instanceof req_pq) {
-                auth2 = ProtoAuthStore.getInstance().getProtoAuth(((req_pq) message).nonce);
-            } else if (message instanceof req_DH_params) {
-                auth2 = ProtoAuthStore.getInstance().getProtoAuth(((req_DH_params) message).nonce);
-            } else if (message instanceof set_client_DH_params) {
-                auth2 = ProtoAuthStore.getInstance().getProtoAuth(((set_client_DH_params) message).nonce);
-            }
-
             if(message instanceof req_pq){
+                auth2 = ProtoAuthStore.getInstance().getProtoAuth(((req_pq) message).nonce);
                 ctx.writeAndFlush(auth2.msgs_ack(messageId));
                 ctx.writeAndFlush(auth2.resPQ((req_pq) message));
                 ProtoAuthStore.getInstance().updateProtoAuth(((req_pq) message).nonce, auth2);
             } else if (message instanceof req_DH_params){
+                auth2 = ProtoAuthStore.getInstance().getProtoAuth(((req_DH_params) message).nonce);
                 ctx.writeAndFlush(auth2.msgs_ack(messageId));
                 ctx.writeAndFlush(auth2.server_DH_params((req_DH_params) message));
                 ProtoAuthStore.getInstance().updateProtoAuth(((req_DH_params) message).nonce, auth2);
             } else if (message instanceof set_client_DH_params){
+                auth2 = ProtoAuthStore.getInstance().getProtoAuth(((set_client_DH_params) message).nonce);
                 ctx.writeAndFlush(auth2.msgs_ack(messageId));
                 ctx.writeAndFlush(auth2.set_client_DH_params((set_client_DH_params) message));
                 ProtoAuthStore.getInstance().removeProtoAuth(((set_client_DH_params) message).nonce);
             }
         } else {
-            if(getTlContext().getAuthKeyId() == 0){
-                getTlContext().setAuthKeyId(keyId);
+            if (tlContext.getAuthKeyId() == 0) {
+                tlContext.setAuthKeyId(keyId);
             }
             byte[] message_key = data.read(16);
             byte[] encrypted_bytes = data.read(data.length() - (8 + 16));
@@ -102,6 +98,14 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
 
             tlContext.setSessionId(session_id);
 
+            if (SessionStore.getInstance().getSession(session_id) == null && !session_created) {
+                tlContext.setSessionId(session_id);
+                new_session_created newSessionCreated = new new_session_created(message_id, session_id, ServerSaltStore.getInstance().getServerSalt(tlContext.getAuthKeyId()));
+                ctx.writeAndFlush(encryptRpc(newSessionCreated, getMessageSeqNo(true)));
+                session_created = true;
+            }
+
+
             TLObject rpc = APIContext.getInstance().deserialize(buff);
 
             processRPC(ctx, rpc, message_id);
@@ -109,7 +113,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void processRPC(ChannelHandlerContext ctx, TLObject rpc, long messageId) {
-        if (!(rpc instanceof Ping) || !(rpc instanceof ping_delay_disconnect) || !(rpc instanceof msgs_ack)) {
+        if (!(rpc instanceof Ping) && !(rpc instanceof ping_delay_disconnect) && !(rpc instanceof msgs_ack)) {
             TLVector<Long> msg_ids = new TLVector<>();
             msg_ids.add(messageId);
             msgs_ack ack = new msgs_ack(msg_ids);

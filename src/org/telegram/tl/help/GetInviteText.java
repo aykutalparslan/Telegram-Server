@@ -18,10 +18,12 @@
 
 package org.telegram.tl.help;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class GetInviteText extends TLObject {
+public class GetInviteText extends TLObject implements TLMethod {
 
     public static final int ID = -1532407418;
 
@@ -54,5 +56,10 @@ public class GetInviteText extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new InviteText("Start using Telegram.");
     }
 }

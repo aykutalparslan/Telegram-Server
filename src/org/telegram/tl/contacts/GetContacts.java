@@ -18,10 +18,12 @@
 
 package org.telegram.tl.contacts;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class GetContacts extends TLObject {
+public class GetContacts extends TLObject implements TLMethod {
 
     public static final int ID = 583445000;
 
@@ -54,5 +56,10 @@ public class GetContacts extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return null;
     }
 }

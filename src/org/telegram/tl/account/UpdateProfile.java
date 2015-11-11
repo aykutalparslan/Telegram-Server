@@ -18,10 +18,16 @@
 
 package org.telegram.tl.account;
 
+import org.telegram.api.SessionStore;
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
+import org.telegram.api.UserStore;
+import org.telegram.data.SessionModel;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class UpdateProfile extends TLObject {
+public class UpdateProfile extends TLObject implements TLMethod {
 
     public static final int ID = -259486360;
 
@@ -58,5 +64,16 @@ public class UpdateProfile extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        SessionModel sm = SessionStore.getInstance().getSession(context.getSessionId());
+        UserModel userModel = UserStore.getInstance().getUser(sm.phone);
+        userModel.first_name = first_name;
+        userModel.last_name = last_name;
+        UserStore.getInstance().replaceUser(userModel);
+        return new UserSelf(userModel.user_id, userModel.first_name, userModel.last_name,
+                userModel.username, userModel.phone, new UserProfilePhotoEmpty(), new UserStatusEmpty(), false);
     }
 }

@@ -18,10 +18,12 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class GetDialogs extends TLObject {
+public class GetDialogs extends TLObject implements TLMethod {
 
     public static final int ID = -321970698;
 
@@ -62,5 +64,10 @@ public class GetDialogs extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new Dialogs(new TLVector<TLDialog>(), new TLVector<TLMessage>(), new TLVector<TLChat>(), new TLVector<TLUser>());
     }
 }
