@@ -101,7 +101,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             if (SessionStore.getInstance().getSession(session_id) == null && !session_created) {
                 tlContext.setSessionId(session_id);
                 new_session_created newSessionCreated = new new_session_created(message_id, session_id, ServerSaltStore.getInstance().getServerSalt(tlContext.getAuthKeyId()));
-                ctx.writeAndFlush(encryptRpc(newSessionCreated, getMessageSeqNo(true)));
+                ctx.writeAndFlush(encryptRpc(newSessionCreated, getMessageSeqNo(true), generateMessageId(false)));
                 session_created = true;
             }
 
@@ -117,7 +117,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             TLVector<Long> msg_ids = new TLVector<>();
             msg_ids.add(messageId);
             msgs_ack ack = new msgs_ack(msg_ids);
-            ctx.writeAndFlush(encryptRpc(ack, getMessageSeqNo(true)));
+            ctx.writeAndFlush(encryptRpc(ack, getMessageSeqNo(true), generateMessageId(false)));
 
             System.out.println("TLObject:" + rpc.toString());
         }
@@ -133,10 +133,10 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         }
 
         if (rpc instanceof TLMethod) {
-            TLObject response = ((TLMethod) rpc).execute(getTlContext(), generateMessageId(), messageId);
+            TLObject response = ((TLMethod) rpc).execute(getTlContext(), generateMessageId(false), messageId);
             rpc_result result = new rpc_result(messageId, response);
             if (response != null) {
-                ctx.writeAndFlush(encryptRpc(result, getMessageSeqNo(true)));
+                ctx.writeAndFlush(encryptRpc(result, getMessageSeqNo(true), generateMessageId(true)));
                 System.out.println("TLMethod: " + response.toString());
             }
         }
@@ -150,8 +150,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         return buff;
     }
 
-    private ProtocolBuffer encryptRpc(TLObject rpc, int seqNo) {
-        long messageId = generateMessageId();
+    private ProtocolBuffer encryptRpc(TLObject rpc, int seqNo, long messageId) {
         ProtocolBuffer messageBody = rpc.serialize();
         int messageSeqNo = seqNo;
 
@@ -198,13 +197,19 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         return value * 2 + (increment ? 1 : 0);
     }
 
-    long generateMessageId() {
+    long generateMessageId(boolean rpc_response) {
         long messageId = (long) ((((double) System.currentTimeMillis()) * 4294967296.0) / 1000.0);
         if (messageId <= lastOutgoingMessageId) {
             messageId = lastOutgoingMessageId + 1;
         }
-        while (messageId % 4 != 0) {
-            messageId++;
+        if (rpc_response) {
+            while (messageId % 4 != 1) {
+                messageId++;
+            }
+        } else {
+            while (messageId % 4 != 3) {
+                messageId++;
+            }
         }
 
         lastOutgoingMessageId = messageId;
