@@ -18,10 +18,15 @@
 
 package org.telegram.tl.users;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
+import org.telegram.api.UserStore;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.contacts.*;
 
-public class GetFullUser extends TLObject {
+public class GetFullUser extends TLObject implements TLMethod {
 
     public static final int ID = -902781519;
 
@@ -54,5 +59,20 @@ public class GetFullUser extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        int user_id = 0;
+        if (this.id instanceof InputUserContact) {
+            user_id = ((InputUserContact) this.id).user_id;
+        } else if (this.id instanceof InputUserForeign) {
+            user_id = ((InputUserForeign) this.id).user_id;
+        }
+        UserModel um = UserStore.getInstance().getUser(user_id);
+        UserContact uc = new UserContact(um.user_id, um.first_name, um.last_name, um.username,
+                um.access_hash, um.phone, new UserProfilePhotoEmpty(), new UserStatusEmpty());
+        return new UserFull(uc, new Link(new MyLinkContact(), new ForeignLinkMutual(), uc),
+                new PhotoEmpty(), new PeerNotifySettingsEmpty(), false, uc.first_name, uc.last_name);
     }
 }

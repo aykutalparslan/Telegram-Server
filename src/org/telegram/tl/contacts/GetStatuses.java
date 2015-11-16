@@ -18,10 +18,14 @@
 
 package org.telegram.tl.contacts;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
+import org.telegram.data.DatabaseConnection;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class GetStatuses extends TLObject {
+public class GetStatuses extends TLObject implements TLMethod {
 
     public static final int ID = -995929106;
 
@@ -47,5 +51,17 @@ public class GetStatuses extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        UserModel[] usersAll = DatabaseConnection.getInstance().getUsers();
+        TLVector<ContactStatus> statuses = new TLVector<>();
+
+        for (UserModel u : usersAll) {
+            statuses.add(new ContactStatus(u.user_id, new UserStatusEmpty()));
+        }
+
+        return statuses;
     }
 }

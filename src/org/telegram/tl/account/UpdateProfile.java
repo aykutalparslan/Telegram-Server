@@ -25,6 +25,7 @@ import org.telegram.api.UserStore;
 import org.telegram.data.SessionModel;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.mtproto.Utilities;
 import org.telegram.tl.*;
 
 public class UpdateProfile extends TLObject implements TLMethod {

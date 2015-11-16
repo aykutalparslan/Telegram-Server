@@ -18,25 +18,31 @@
 
 package org.telegram.api;
 
-import com.hazelcast.core.Hazelcast;
-import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.core.IAtomicLong;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.HazelcastConnection;
 import org.telegram.data.UserModel;
-
-import java.util.HashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
  * Created by aykut on 09/11/15.
  */
 public class UserStore {
-    private ConcurrentMap<String, UserModel> usersShared = HazelcastConnection.getInstance().getMap("telegram_users");
+    private ConcurrentMap<Integer, UserModel> usersShared;
+    private ConcurrentMap<String, Integer> userPhoneToId;
+    private ConcurrentMap<String, Integer> usernameToId;
+    private DatabaseConnection db;
+    IAtomicLong userId;
 
     private static UserStore _instance;
 
     private UserStore() {
-
+        db = DatabaseConnection.getInstance();
+        usersShared = HazelcastConnection.getInstance().getMap("telegram_users");
+        userPhoneToId = HazelcastConnection.getInstance().getMap("telegram_users_p2i");
+        usernameToId = HazelcastConnection.getInstance().getMap("telegram_users_n2i");
+        userId = HazelcastConnection.getInstance().getAtomicLong("user_id");
+        userId.compareAndSet(0, db.getLastUserId());
     }
 
     public static UserStore getInstance() {
@@ -46,29 +52,52 @@ public class UserStore {
         return _instance;
     }
 
-    public UserModel getUser(String phone) {
-        UserModel user = usersShared.get(phone);
+    public UserModel getUser(int user_id) {
+        UserModel user = usersShared.get(user_id);
         if (user == null) {
-            user = DatabaseConnection.getInstance().getUser(phone);
+            user = db.getUser(user_id);
             if (user != null) {
-                usersShared.put(phone, user);
+                usersShared.putIfAbsent(user_id, user);
+                userPhoneToId.putIfAbsent(user.phone, user_id);
+                usernameToId.putIfAbsent(user.username, user_id);
             }
         }
         return user;
     }
 
-    public UserModel putUser(UserModel userModel) {
-        DatabaseConnection.getInstance().saveUser(userModel.user_id, userModel.first_name,
+    public UserModel getUser(String phone) {
+        Integer user_id = userPhoneToId.get(phone);
+        if (user_id == null || user_id == 0) {
+            UserModel user = db.getUser(phone);
+            usersShared.putIfAbsent(user.user_id, user);
+            userPhoneToId.putIfAbsent(user.phone, user.user_id);
+            usernameToId.putIfAbsent(user.username, user.user_id);
+            user_id = user.user_id;
+
+        }
+        UserModel user = usersShared.get(user_id);
+        if (user == null) {
+            user = db.getUser(user_id);
+            if (user != null) {
+                usersShared.put(user_id, user);
+            }
+        }
+        return user;
+    }
+
+    public UserModel createUser(UserModel userModel) {
+        userModel.user_id = (int) userId.incrementAndGet();
+        db.saveUser(userModel.user_id, userModel.first_name,
                 userModel.last_name, userModel.username, userModel.access_hash, userModel.phone);
 
-        return getUser(userModel.phone);
+        return getUser(userModel.user_id);
     }
 
     public UserModel replaceUser(UserModel userModel) {
-        DatabaseConnection.getInstance().updateUser(userModel.first_name,
-                userModel.last_name, userModel.username, userModel.access_hash, userModel.phone);
-        usersShared.replace(userModel.phone, userModel);
+        db.updateUser(userModel.user_id, userModel.first_name,
+                userModel.last_name, userModel.username, userModel.access_hash);
+        usersShared.replace(userModel.user_id, userModel);
 
-        return getUser(userModel.phone);
+        return getUser(userModel.user_id);
     }
 }

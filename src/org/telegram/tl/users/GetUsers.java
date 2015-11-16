@@ -18,10 +18,14 @@
 
 package org.telegram.tl.users;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
+import org.telegram.api.UserStore;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class GetUsers extends TLObject {
+public class GetUsers extends TLObject implements TLMethod {
 
     public static final int ID = 227648840;
 
@@ -55,5 +59,24 @@ public class GetUsers extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        TLVector<TLUser> users = new TLVector<>();
+        for (TLInputUser u : this.id) {
+            if (u instanceof InputUserContact) {
+                UserModel um = UserStore.getInstance().getUser(((InputUserContact) u).user_id);
+                UserContact uc = new UserContact(um.user_id, um.first_name, um.last_name, um.username,
+                        um.access_hash, um.phone, new UserProfilePhotoEmpty(), new UserStatusEmpty());
+                users.add(uc);
+            } else if (u instanceof InputUserForeign) {
+                UserModel um = UserStore.getInstance().getUser(((InputUserForeign) u).user_id);
+                UserContact uc = new UserContact(um.user_id, um.first_name, um.last_name, um.username,
+                        um.access_hash, um.phone, new UserProfilePhotoEmpty(), new UserStatusEmpty());
+                users.add(uc);
+            }
+        }
+        return users;
     }
 }

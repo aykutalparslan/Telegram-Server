@@ -118,6 +118,8 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             msg_ids.add(messageId);
             msgs_ack ack = new msgs_ack(msg_ids);
             ctx.writeAndFlush(encryptRpc(ack, getMessageSeqNo(true)));
+
+            System.out.println("TLObject:" + rpc.toString());
         }
 
         if (rpc instanceof InvokeWithLayer) {
@@ -135,7 +137,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             rpc_result result = new rpc_result(messageId, response);
             if (response != null) {
                 ctx.writeAndFlush(encryptRpc(result, getMessageSeqNo(true)));
-                System.out.println(response.toString());
+                System.out.println("TLMethod: " + response.toString());
             }
         }
     }

@@ -18,10 +18,17 @@
 
 package org.telegram.tl.account;
 
+import org.telegram.api.SessionStore;
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
+import org.telegram.api.UserStore;
+import org.telegram.data.SessionModel;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.mtproto.Utilities;
 import org.telegram.tl.*;
 
-public class UpdateUsername extends TLObject {
+public class UpdateUsername extends TLObject implements TLMethod {
 
     public static final int ID = 1040964988;
 
@@ -54,5 +61,14 @@ public class UpdateUsername extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        SessionModel sm = SessionStore.getInstance().getSession(context.getSessionId());
+        UserModel um = UserStore.getInstance().getUser(sm.phone);
+        um.username = this.username;
+        UserStore.getInstance().replaceUser(um);
+        return um.toUserSelf();
     }
 }

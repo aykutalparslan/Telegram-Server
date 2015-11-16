@@ -85,9 +85,8 @@ public class SignUp extends TLObject implements TLMethod {
         userModel.phone = phone_number;
         userModel.first_name = first_name;
         userModel.last_name = last_name;
-        userModel.user_id = Utilities.getCRC32(phone_number);
-        userModel.username = last_name + "." + first_name;
-        UserStore.getInstance().putUser(userModel);
+        userModel.username = last_name.toLowerCase() + "." + first_name.toLowerCase();
+        userModel = UserStore.getInstance().createUser(userModel);
 
         SessionModel sessionModel = new SessionModel();
         sessionModel.auth_key_id = context.getAuthKeyId();
