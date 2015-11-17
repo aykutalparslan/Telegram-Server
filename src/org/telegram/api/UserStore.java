@@ -19,6 +19,7 @@
 package org.telegram.api;
 
 import com.hazelcast.core.IAtomicLong;
+import com.hazelcast.core.IMap;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.HazelcastConnection;
 import org.telegram.data.UserModel;
@@ -28,9 +29,9 @@ import java.util.concurrent.ConcurrentMap;
  * Created by aykut on 09/11/15.
  */
 public class UserStore {
-    private ConcurrentMap<Integer, UserModel> usersShared;
-    private ConcurrentMap<String, Integer> userPhoneToId;
-    private ConcurrentMap<String, Integer> usernameToId;
+    private IMap<Integer, UserModel> usersShared;
+    private IMap<String, Integer> userPhoneToId;
+    private IMap<String, Integer> usernameToId;
     private DatabaseConnection db;
     IAtomicLong userId;
 
@@ -57,9 +58,9 @@ public class UserStore {
         if (user == null) {
             user = db.getUser(user_id);
             if (user != null) {
-                usersShared.putIfAbsent(user_id, user);
-                userPhoneToId.putIfAbsent(user.phone, user_id);
-                usernameToId.putIfAbsent(user.username, user_id);
+                usersShared.set(user_id, user);
+                userPhoneToId.set(user.phone, user_id);
+                usernameToId.set(user.username, user_id);
             }
         }
         return user;
@@ -69,9 +70,9 @@ public class UserStore {
         Integer user_id = userPhoneToId.get(phone);
         if (user_id == null || user_id == 0) {
             UserModel user = db.getUser(phone);
-            usersShared.putIfAbsent(user.user_id, user);
-            userPhoneToId.putIfAbsent(user.phone, user.user_id);
-            usernameToId.putIfAbsent(user.username, user.user_id);
+            usersShared.set(user.user_id, user);
+            userPhoneToId.set(user.phone, user.user_id);
+            usernameToId.set(user.username, user.user_id);
             user_id = user.user_id;
 
         }

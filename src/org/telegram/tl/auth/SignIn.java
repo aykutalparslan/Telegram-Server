@@ -18,12 +18,11 @@
 
 package org.telegram.tl.auth;
 
-import org.telegram.api.TLContext;
-import org.telegram.api.TLMethod;
-import org.telegram.api.UserStore;
+import org.telegram.api.*;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.mtproto.Utilities;
+import org.telegram.server.ServerConfig;
 import org.telegram.tl.*;
 import org.telegram.tl.service.rpc_error;
 
@@ -74,6 +73,15 @@ public class SignIn extends TLObject implements TLMethod {
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
         UserModel userModel = UserStore.getInstance().getUser(phone_number);
         if (userModel != null) {
+            ActiveSession session = new ActiveSession();
+            session.auth_key_id = context.getAuthKeyId();
+            session.session_id = context.getSessionId();
+            session.phone = phone_number;
+            session.server = ServerConfig.SERVER_HOSTNAME;
+            session.user_id = userModel.user_id;
+            session.username = userModel.username;
+            Router.getInstance().addActiveSession(session);
+
             UserStatusOffline offline = new UserStatusOffline((int) (System.currentTimeMillis() / 1000L) - 120);
             return new Authorization(Integer.MAX_VALUE, new UserSelf(userModel.user_id, userModel.first_name, userModel.last_name, userModel.username, phone_number, new UserProfilePhotoEmpty(),
                     offline, true));

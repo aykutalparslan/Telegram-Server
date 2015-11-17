@@ -80,7 +80,12 @@ public class DatabaseConnection {
                         "phone text," +
                         "auth_key_id bigint," +
                         "layer int," +
-                        "PRIMARY KEY (user_id, session_id));");
+                        "PRIMARY KEY (session_id));");
+        session.execute(
+                "CREATE MATERIALIZED VIEW telegram.sessions_by_user AS " +
+                        "SELECT * FROM telegram.sessions " +
+                        "WHERE user_id IS NOT NULL " +
+                        "PRIMARY KEY (user_id));");
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.users (" +
                         "user_id int," +

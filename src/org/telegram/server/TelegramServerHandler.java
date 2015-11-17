@@ -18,6 +18,7 @@
 
 package org.telegram.server;
 
+import com.sun.tools.internal.xjc.reader.xmlschema.bindinfo.BIConversion;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import org.omg.PortableInterceptor.INACTIVE;
@@ -28,6 +29,8 @@ import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.mtproto.Utilities;
 import org.telegram.mtproto.secure.CryptoUtils;
 import org.telegram.tl.*;
+import org.telegram.tl.auth.Authorization;
+import org.telegram.tl.auth.SignIn;
 import org.telegram.tl.pq.req_DH_params;
 import org.telegram.tl.pq.req_pq;
 import org.telegram.tl.pq.set_client_DH_params;
@@ -138,6 +141,11 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             if (response != null) {
                 ctx.writeAndFlush(encryptRpc(result, getMessageSeqNo(true), generateMessageId(true)));
                 System.out.println("TLMethod: " + response.toString());
+
+                if (rpc instanceof SignIn && response instanceof Authorization) {
+                    //SignIn
+                    System.out.println("SignIn");
+                }
             }
         }
     }

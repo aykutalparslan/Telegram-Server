@@ -18,18 +18,16 @@
 
 package org.telegram.api;
 
+import com.hazelcast.core.IMap;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.HazelcastConnection;
 import org.telegram.data.SessionModel;
-import org.telegram.data.UserModel;
-
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * Created by aykut on 09/11/15.
  */
 public class SessionStore {
-    private ConcurrentMap<Long, SessionModel> sessionsShared = HazelcastConnection.getInstance().getMap("telegram_sessions");
+    private IMap<Long, SessionModel> sessionsShared = HazelcastConnection.getInstance().getMap("telegram_sessions");
 
     private static SessionStore _instance;
 
@@ -49,13 +47,13 @@ public class SessionStore {
         if (session == null) {
             session = DatabaseConnection.getInstance().getSession(session_id);
             if (session != null) {
-                sessionsShared.putIfAbsent(session_id, session);
+                sessionsShared.set(session_id, session);
             }
         }
         return session;
     }
 
-    public SessionModel putSession(SessionModel sessionModel) {
+    public SessionModel createSession(SessionModel sessionModel) {
         DatabaseConnection.getInstance().saveSession(sessionModel.auth_key_id, sessionModel.session_id, sessionModel.layer, sessionModel.phone);
 
         return getSession(sessionModel.session_id);
