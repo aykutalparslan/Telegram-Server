@@ -68,19 +68,22 @@ public class UserStore {
 
     public UserModel getUser(String phone) {
         Integer user_id = userPhoneToId.get(phone);
+        UserModel user = null;
         if (user_id == null || user_id == 0) {
-            UserModel user = db.getUser(phone);
-            usersShared.set(user.user_id, user);
-            userPhoneToId.set(user.phone, user.user_id);
-            usernameToId.set(user.username, user.user_id);
-            user_id = user.user_id;
-
-        }
-        UserModel user = usersShared.get(user_id);
-        if (user == null) {
-            user = db.getUser(user_id);
+            user = db.getUser(phone);
             if (user != null) {
-                usersShared.put(user_id, user);
+                usersShared.set(user.user_id, user);
+                userPhoneToId.set(user.phone, user.user_id);
+                usernameToId.set(user.username, user.user_id);
+                user_id = user.user_id;
+            }
+        } else {
+            user = usersShared.get(user_id);
+            if (user == null) {
+                user = db.getUser(user_id);
+                if (user != null) {
+                    usersShared.put(user_id, user);
+                }
             }
         }
         return user;

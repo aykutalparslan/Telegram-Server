@@ -82,10 +82,10 @@ public class DatabaseConnection {
                         "layer int," +
                         "PRIMARY KEY (session_id));");
         session.execute(
-                "CREATE MATERIALIZED VIEW telegram.sessions_by_user AS " +
+                "CREATE MATERIALIZED VIEW IF NOT EXISTS telegram.sessions_by_user AS " +
                         "SELECT * FROM telegram.sessions " +
-                        "WHERE user_id IS NOT NULL " +
-                        "PRIMARY KEY (user_id));");
+                        "WHERE user_id IS NOT NULL AND session_id IS NOT NULL " +
+                        "PRIMARY KEY (user_id, session_id);");
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.users (" +
                         "user_id int," +
@@ -96,15 +96,15 @@ public class DatabaseConnection {
                         "phone text," +
                         "PRIMARY KEY (user_id));");
         session.execute(
-                "CREATE MATERIALIZED VIEW telegram.users_by_phone AS " +
+                "CREATE MATERIALIZED VIEW IF NOT EXISTS telegram.users_by_phone AS " +
                         "SELECT * FROM telegram.users " +
-                        "WHERE phone IS NOT NULL " +
-                        "PRIMARY KEY (phone));");
+                        "WHERE phone IS NOT NULL AND user_id IS NOT NULL " +
+                        "PRIMARY KEY (phone, user_id);");
         session.execute(
-                "CREATE MATERIALIZED VIEW telegram.users_by_username AS " +
+                "CREATE MATERIALIZED VIEW IF NOT EXISTS telegram.users_by_username AS " +
                         "SELECT * FROM telegram.users " +
-                        "WHERE username IS NOT NULL " +
-                        "PRIMARY KEY (username));");
+                        "WHERE username IS NOT NULL AND user_id IS NOT NULL " +
+                        "PRIMARY KEY (username, user_id);");
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.session_queue (" +
                         "session_id bigint," +
@@ -156,7 +156,7 @@ public class DatabaseConnection {
                 "CREATE TABLE IF NOT EXISTS telegram.chat_users (" +
                         "chat_id int," +
                         "user_id int," +
-                        "access_hash long," +
+                        "access_hash bigint," +
                         "fwd_limit int," +
                         "PRIMARY KEY (chat_id, user_id));");
         session.execute(
@@ -187,7 +187,7 @@ public class DatabaseConnection {
                         "file_id bigint," +
                         "part_num int," +
                         "bytes blob," +
-                        "PRIMARY KEY ((file_id, part_id), part_num) WITH CLUSTERING ORDER BY (part_num ASC);");
+                        "PRIMARY KEY ((file_id, part_id), part_num)) WITH CLUSTERING ORDER BY (part_num ASC);");
     }
 
     public void saveSession(long auth_key_id, long session_id, int layer, String phone) {

@@ -99,7 +99,10 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             int seqNo = buff.readInt();
             int len = buff.readInt();
 
-            tlContext.setSessionId(session_id);
+            if (tlContext.getSessionId() == 0) {
+                tlContext.setSessionId(session_id);
+                Router.getInstance().addChannelHandler(tlContext, ctx);//add channel handler context reference
+            }
 
             if (SessionStore.getInstance().getSession(session_id) == null && !session_created) {
                 tlContext.setSessionId(session_id);
@@ -144,7 +147,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
                 System.out.println("TLMethod: " + response.toString());
 
                 if (rpc instanceof SignIn && response instanceof Authorization) {
-                    Router.getInstance().addChannelHandler(tlContext, ctx);//add channel handler context reference
+
                     System.out.println("SignIn");
                 }
             }
