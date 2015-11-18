@@ -120,7 +120,8 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             TLVector<Long> msg_ids = new TLVector<>();
             msg_ids.add(messageId);
             msgs_ack ack = new msgs_ack(msg_ids);
-            ctx.writeAndFlush(encryptRpc(ack, getMessageSeqNo(true), generateMessageId(false)));
+
+            Router.getInstance().Route(tlContext, ack, generateMessageId(false), getMessageSeqNo(true));
 
             System.out.println("TLObject:" + rpc.toString());
         }
@@ -139,11 +140,11 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             TLObject response = ((TLMethod) rpc).execute(getTlContext(), generateMessageId(false), messageId);
             rpc_result result = new rpc_result(messageId, response);
             if (response != null) {
-                ctx.writeAndFlush(encryptRpc(result, getMessageSeqNo(true), generateMessageId(true)));
+                Router.getInstance().Route(tlContext, result, generateMessageId(false), getMessageSeqNo(true));
                 System.out.println("TLMethod: " + response.toString());
 
                 if (rpc instanceof SignIn && response instanceof Authorization) {
-                    //SignIn
+                    Router.getInstance().addChannelHandler(tlContext, ctx);
                     System.out.println("SignIn");
                 }
             }

@@ -20,13 +20,25 @@ package org.telegram.api;
 
 import com.hazelcast.core.IMap;
 import com.hazelcast.query.SqlPredicate;
+import io.netty.channel.ChannelHandlerContext;
 import org.telegram.data.HazelcastConnection;
+import org.telegram.mtproto.MessageKeyData;
+import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.mtproto.Utilities;
+import org.telegram.mtproto.secure.CryptoUtils;
+import org.telegram.server.ServerConfig;
+import org.telegram.tl.TLChat;
+import org.telegram.tl.TLObject;
+
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * Created by aykut on 17/11/15.
  */
 public class Router {
     IMap<Long, ActiveSession> activeSessions;
+    ConcurrentHashMap<Long, ChannelHandlerContext> channelHandlers = new ConcurrentHashMap<>();
 
     private static Router _instance;
 
@@ -52,11 +64,62 @@ public class Router {
         activeSessions.set(session.session_id, session);
     }
 
+    public void addChannelHandler(TLContext context, ChannelHandlerContext ctx) {
+        channelHandlers.put(context.getSessionId(), ctx);
+    }
+
     public ActiveSession getActiveSession(long session_id) {
         return activeSessions.get(session_id);
     }
 
     public void removeActiveSession(long session_id) {
         activeSessions.delete(session_id);
+    }
+
+    public void Route(TLContext context, TLObject msg, long msg_id, int seq_no) {
+        ActiveSession sess = activeSessions.get(context.getSessionId());
+        if (sess != null && sess.server == ServerConfig.SERVER_HOSTNAME) { //local session
+            ChannelHandlerContext ctx = channelHandlers.get(context.getSessionId());
+            ctx.writeAndFlush(encryptRpc(msg, seq_no, msg_id, sess));
+        }
+    }
+
+    private ProtocolBuffer encryptRpc(TLObject rpc, int seqNo, long messageId, ActiveSession session) {
+        ProtocolBuffer messageBody = rpc.serialize();
+        int messageSeqNo = seqNo;
+
+        int len = 8 + 8 + 8 + 4 + 4 + messageBody.length();
+        int extraLen = 0;
+        while ((len + extraLen) % 16 != 0) {
+            extraLen++;
+        }
+
+        ProtocolBuffer buffer = new ProtocolBuffer(len + extraLen);
+        buffer.writeLong(ServerSaltStore.getInstance().getServerSalt(session.auth_key_id));
+        buffer.writeLong(session.session_id);
+        buffer.writeLong(messageId);
+        buffer.writeInt(messageSeqNo);
+        buffer.writeInt(messageBody.length());
+        buffer.write(messageBody.getBytes());
+
+        byte[] messageKeyFull = buffer.getSHA1();
+        byte[] messageKey = new byte[16];
+        System.arraycopy(messageKeyFull, messageKeyFull.length - 16, messageKey, 0, 16);
+        MessageKeyData keyData = MessageKeyData.generateMessageKeyData(AuthKeyStore.getInstance().getAuthKey(session.auth_key_id), messageKey, true);
+
+        byte[] b = new byte[extraLen];
+        Utilities.random.nextBytes(b);
+        buffer.write(b);
+
+        byte[] dataForEncryption = buffer.getBytes();
+
+        byte[] encryptedData = CryptoUtils.AES256IGEEncrypt(dataForEncryption, keyData.aesIv, keyData.aesKey);
+
+        ProtocolBuffer data = new ProtocolBuffer(8 + messageKey.length + encryptedData.length);
+        data.writeLong(session.auth_key_id);
+        data.write(messageKey);
+        data.write(encryptedData);
+
+        return data;
     }
 }
