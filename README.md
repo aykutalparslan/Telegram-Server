@@ -1,5 +1,7 @@
 # Telegram Server
 
+[![Travis](https://travis-ci.org/aykutalparslan/Telegram-Server.svg)](https://travis-ci.org/aykutalparslan/Telegram-Server)
+
 Telegram Server is an open source, server side implementation of [Telegram API].
 
 This project is currently being developed and only a small number of API calls work as this code is released at the beginning of the development. Some of the working parts are:
