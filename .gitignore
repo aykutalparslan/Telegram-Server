@@ -2,10 +2,9 @@
 *.iml
 *.ipr
 *.iws
-.idea/
+/.idea
+
 
 #Gradle
-.gradletasknamecache
-.gradle/
+/gradle
 build/
-bin/
