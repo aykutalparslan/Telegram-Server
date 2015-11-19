@@ -24,6 +24,7 @@ import io.netty.handler.codec.ByteToMessageDecoder;
 import org.telegram.mtproto.ProtocolBuffer;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.List;
 
 /**
@@ -40,6 +41,9 @@ public class MTProtoDecoder  extends ByteToMessageDecoder {
 
         byte fByte = in.readByte();
         if((byte) 0xef == fByte){
+            if (in.readableBytes() < 1) {
+                return;
+            }
             fByte = in.readByte();
         }
         if (fByte != 0x7f) {
