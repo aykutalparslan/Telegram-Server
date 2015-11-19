@@ -101,7 +101,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
 
             if (tlContext.getSessionId() == 0) {
                 tlContext.setSessionId(session_id);
-                Router.getInstance().addChannelHandler(tlContext, ctx);//add channel handler context reference
+                //Router.getInstance().addChannelHandler(tlContext, ctx);//add channel handler context reference
             }
 
             if (SessionStore.getInstance().getSession(session_id) == null && !session_created) {
@@ -124,7 +124,8 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             msg_ids.add(messageId);
             msgs_ack ack = new msgs_ack(msg_ids);
 
-            Router.getInstance().Route(tlContext, ack, generateMessageId(false), getMessageSeqNo(true));
+            //Router.getInstance().Route(tlContext, ack, generateMessageId(false), getMessageSeqNo(true));
+            ctx.writeAndFlush(encryptRpc(ack, getMessageSeqNo(false), generateMessageId(false)));
             if (rpc != null) {
                 System.out.println("TLObject:" + rpc.toString());
             }
@@ -144,7 +145,8 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             TLObject response = ((TLMethod) rpc).execute(getTlContext(), generateMessageId(false), messageId);
             rpc_result result = new rpc_result(messageId, response);
             if (response != null) {
-                Router.getInstance().Route(tlContext, result, generateMessageId(false), getMessageSeqNo(true));
+                //Router.getInstance().Route(tlContext, result, generateMessageId(false), getMessageSeqNo(true));
+                ctx.writeAndFlush(encryptRpc(result, getMessageSeqNo(true), generateMessageId(true)));
                 System.out.println("TLMethod: " + response.toString());
 
                 if (rpc instanceof SignIn && response instanceof Authorization) {
