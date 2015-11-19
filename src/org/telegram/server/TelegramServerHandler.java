@@ -125,8 +125,9 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             msgs_ack ack = new msgs_ack(msg_ids);
 
             Router.getInstance().Route(tlContext, ack, generateMessageId(false), getMessageSeqNo(true));
-
-            System.out.println("TLObject:" + rpc.toString());
+            if (rpc != null) {
+                System.out.println("TLObject:" + rpc.toString());
+            }
         }
 
         if (rpc instanceof InvokeWithLayer) {
