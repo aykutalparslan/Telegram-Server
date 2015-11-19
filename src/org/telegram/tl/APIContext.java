@@ -484,6 +484,7 @@ public class APIContext {
         addToSchema(msgs_state_req.class);
         addToSchema(get_future_salts.class);
         addToSchema(bad_msg_notification.class);
+        addToSchema(InputPeerUser.class);
     }
 
     public <T extends TLObject> void addToSchema(Class<T> type) {
