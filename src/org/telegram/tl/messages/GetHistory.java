@@ -18,10 +18,14 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class GetHistory extends TLObject {
+import javax.jws.soap.SOAPBinding;
+
+public class GetHistory extends TLObject implements TLMethod {
 
     public static final int ID = -1834885329;
 
@@ -66,5 +70,14 @@ public class GetHistory extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        TLVector<TLMessage> messages = new TLVector<>();
+        TLVector<TLChat> chats = new TLVector<>();
+        TLVector<TLUser> users = new TLVector<>();
+
+        return new Messages(messages, chats, users);
     }
 }
