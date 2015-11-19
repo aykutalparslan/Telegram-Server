@@ -18,17 +18,18 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class ReadHistory extends TLObject {
+public class ReadHistory extends TLObject implements TLMethod {
 
-    public static final int ID = -287800122;
+    public static final int ID = 0xB04F2510;
 
     public TLInputPeer peer;
     public int max_id;
     public int offset;
-    public boolean read_contents;
 
     public ReadHistory() {
     }
@@ -37,7 +38,6 @@ public class ReadHistory extends TLObject {
         this.peer = peer;
         this.max_id = max_id;
         this.offset = offset;
-        this.read_contents = read_contents;
     }
 
     @Override
@@ -45,7 +45,6 @@ public class ReadHistory extends TLObject {
         peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         max_id = buffer.readInt();
         offset = buffer.readInt();
-        read_contents = buffer.readBool();
     }
 
     @Override
@@ -61,10 +60,14 @@ public class ReadHistory extends TLObject {
         buff.writeTLObject(peer);
         buff.writeInt(max_id);
         buff.writeInt(offset);
-        buff.writeBool(read_contents);
     }
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new AffectedHistory(1, 1, 0);
     }
 }
