@@ -99,18 +99,14 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             int seqNo = buff.readInt();
             int len = buff.readInt();
 
-            if (tlContext.getSessionId() == 0) {
-                tlContext.setSessionId(session_id);
-                //Router.getInstance().addChannelHandler(tlContext, ctx);//add channel handler context reference
-            }
+            tlContext.setSessionId(session_id);
+            //Router.getInstance().addChannelHandler(tlContext, ctx);//add channel handler context reference
+            if (!session_created) {
 
-            if (SessionStore.getInstance().getSession(session_id) == null && !session_created) {
-                tlContext.setSessionId(session_id);
                 new_session_created newSessionCreated = new new_session_created(message_id, session_id, ServerSaltStore.getInstance().getServerSalt(tlContext.getAuthKeyId()));
                 ctx.writeAndFlush(encryptRpc(newSessionCreated, getMessageSeqNo(true), generateMessageId(false)));
                 session_created = true;
             }
-
 
             TLObject rpc = APIContext.getInstance().deserialize(buff);
 
@@ -128,6 +124,8 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             ctx.writeAndFlush(encryptRpc(ack, getMessageSeqNo(false), generateMessageId(false)));
             if (rpc != null) {
                 System.out.println("TLObject:" + rpc.toString());
+            } else {
+                System.out.println("null rpc");
             }
         }
 
@@ -139,6 +137,8 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             for (message m : ((msg_container) rpc).messages) {
                 processRPC(ctx, m.body, m.msg_id);
             }
+        } else if (rpc instanceof InvokeAfterMsg) {
+            processRPC(ctx, ((InvokeAfterMsg) rpc).query, ((InvokeAfterMsg) rpc).msg_id);
         }
 
         if (rpc instanceof TLMethod) {

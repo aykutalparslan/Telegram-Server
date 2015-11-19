@@ -485,6 +485,22 @@ public class APIContext {
         addToSchema(get_future_salts.class);
         addToSchema(bad_msg_notification.class);
         addToSchema(InputPeerUser.class);
+        addToSchema(KeyboardButton.class);
+        addToSchema(KeyboardButtonRow.class);
+        addToSchema(ReplyKeyboardForceReply.class);
+        addToSchema(ReplyKeyboardHide.class);
+        addToSchema(ReplyKeyboardMarkup.class);
+        addToSchema(MessageEntityBold.class);
+        addToSchema(MessageEntityBotCommand.class);
+        addToSchema(MessageEntityCode.class);
+        addToSchema(MessageEntityEmail.class);
+        addToSchema(MessageEntityHashtag.class);
+        addToSchema(MessageEntityItalic.class);
+        addToSchema(MessageEntityMention.class);
+        addToSchema(MessageEntityPre.class);
+        addToSchema(MessageEntityTextUrl.class);
+        addToSchema(MessageEntityUnknown.class);
+        addToSchema(MessageEntityUrl.class);
     }
 
     public <T extends TLObject> void addToSchema(Class<T> type) {
@@ -511,7 +527,14 @@ public class APIContext {
             }
             req.deserialize(buffer);
             return req;
+        } else {
+            System.out.println(hex(constructor));
         }
         return null;
+    }
+
+    public static String hex(int n) {
+        // call toUpperCase() if that's required
+        return String.format("0x%8s", Integer.toHexString(n)).replace(' ', '0');
     }
 }

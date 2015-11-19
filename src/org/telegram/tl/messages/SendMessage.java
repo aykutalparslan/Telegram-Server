@@ -18,31 +18,53 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class SendMessage extends TLObject {
+import java.util.ArrayList;
 
-    public static final int ID = 1289620139;
+public class SendMessage extends TLObject implements TLMethod {
 
+    public static final int ID = 0xdf12390;
+
+    public int flags;
     public TLInputPeer peer;
+    public int reply_to_msg_id;
     public String message;
     public long random_id;
+    public TLReplyMarkup reply_markup;
+    public TLVector<TLMessageEntity> entities = new TLVector<>();
 
     public SendMessage() {
     }
 
-    public SendMessage(TLInputPeer peer, String message, long random_id){
+    public SendMessage(int flags, TLInputPeer peer, int reply_to_msg_id, String message, long random_id, TLReplyMarkup reply_markup, TLVector<TLMessageEntity> entities) {
+        this.flags = flags;
         this.peer = peer;
+        this.reply_to_msg_id = reply_to_msg_id;
         this.message = message;
         this.random_id = random_id;
+        this.reply_markup = reply_markup;
+        this.entities = entities;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
+        flags = buffer.readInt();
         peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        if ((flags & 1) != 0) {
+            reply_to_msg_id = buffer.readInt();
+        }
         message = buffer.readString();
         random_id = buffer.readLong();
+        if ((flags & 4) != 0) {
+            reply_markup = (TLReplyMarkup) buffer.readTLObject(APIContext.getInstance());
+        }
+        if ((flags & 8) != 0) {
+            entities = (TLVector<TLMessageEntity>) buffer.readTLObject(APIContext.getInstance());
+        }
     }
 
     @Override
@@ -55,12 +77,27 @@ public class SendMessage extends TLObject {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
+        buff.writeInt(flags);
         buff.writeTLObject(peer);
+        if ((flags & 1) != 0) {
+            buff.writeInt(reply_to_msg_id);
+        }
         buff.writeString(message);
         buff.writeLong(random_id);
+        if ((flags & 4) != 0) {
+            buff.writeTLObject(reply_markup);
+        }
+        if ((flags & 8) != 0) {
+            buff.writeTLObject(entities);
+        }
     }
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new SentMessage(1, (int) (System.currentTimeMillis() / 1000L), 1, 1);
     }
 }
