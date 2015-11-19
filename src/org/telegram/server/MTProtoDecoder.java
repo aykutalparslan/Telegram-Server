@@ -46,8 +46,12 @@ public class MTProtoDecoder  extends ByteToMessageDecoder {
             }
             fByte = in.readByte();
         }
-        if (fByte != 0x7f) {
-            currentPacketLength = ((int) fByte) * 4;
+        if (fByte != 0x7f && fByte != -1) {
+            if (fByte < 0) {
+                currentPacketLength = ((int) fByte + 128) * 4;
+            } else {
+                currentPacketLength = (int) fByte * 4;
+            }
         } else {
             if (in.readableBytes() < 3) {
                 in.resetReaderIndex();
