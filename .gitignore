@@ -2,9 +2,9 @@
 *.iml
 *.ipr
 *.iws
-/.idea
+.idea
 
 
 #Gradle
-/gradle
+gradle
 build/
