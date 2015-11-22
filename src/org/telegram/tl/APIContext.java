@@ -234,7 +234,6 @@ public class APIContext {
         addToSchema(MessageMediaVideo.class);
         addToSchema(MessageMediaGeo.class);
         addToSchema(MessageMediaContact.class);
-        addToSchema(MessageMediaUnsupportedOld.class);
         addToSchema(MessageMediaDocument.class);
         addToSchema(MessageMediaAudio.class);
         addToSchema(EncryptedFileEmpty.class);
