@@ -16,47 +16,27 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.tl.messages;
+package org.telegram.tl;
 
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-import java.util.ArrayList;
+public class MessageMediaUnsupportedOld extends TLMessageMedia {
 
-public class SentMessage extends TLSentMessage {
+    public static final int ID = 694364726;
 
-    public static final int ID = 0x8a99d8e0;
+    public byte[] bytes;
 
-    public int id;
-    public int date;
-    public TLMessageMedia media;
-    public TLVector<TLMessageEntity> entities = new TLVector<>();
-    public int pts;
-    public int pts_count;
-    public int seq;
-
-    public SentMessage() {
+    public MessageMediaUnsupportedOld() {
     }
 
-    public SentMessage(int id, int date, TLMessageMedia media, TLVector<TLMessageEntity> entities, int pts, int pts_count, int seq) {
-        this.id = id;
-        this.date = date;
-        this.media = media;
-        this.entities = entities;
-        this.pts = pts;
-        this.pts_count = pts_count;
-        this.seq = seq;
+    public MessageMediaUnsupportedOld(byte[] bytes) {
+        this.bytes = bytes;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        id = buffer.readInt();
-        date = buffer.readInt();
-        media = (TLMessageMedia) buffer.readTLObject(APIContext.getInstance());
-        entities = (TLVector<TLMessageEntity>) buffer.readTLObject(APIContext.getInstance());
-        pts = buffer.readInt();
-        pts_count = buffer.readInt();
-        seq = buffer.readInt();
+        bytes = buffer.readBytes();
     }
 
     @Override
@@ -69,13 +49,7 @@ public class SentMessage extends TLSentMessage {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
-        buff.writeInt(id);
-        buff.writeInt(date);
-        buff.writeTLObject(media);
-        buff.writeTLObject(entities);
-        buff.writeInt(pts);
-        buff.writeInt(pts_count);
-        buff.writeInt(seq);
+        buff.writeBytes(bytes);
     }
 
     public int getConstructor() {

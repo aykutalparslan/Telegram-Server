@@ -24,6 +24,7 @@ import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
 import java.util.ArrayList;
+import java.util.Random;
 
 public class SendMessage extends TLObject implements TLMethod {
 
@@ -98,6 +99,7 @@ public class SendMessage extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        return new SentMessage(1, (int) (System.currentTimeMillis() / 1000L), 1, 1);
+        Random rnd = new Random();
+        return new SentMessage(rnd.nextInt(), (int) (System.currentTimeMillis() / 1000L), new MessageMediaEmpty(), new TLVector<TLMessageEntity>(), 1, 1, 1);
     }
 }

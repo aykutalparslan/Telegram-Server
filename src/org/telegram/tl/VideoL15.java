@@ -3,13 +3,15 @@ package org.telegram.tl;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class Video extends TLVideo {
+public class VideoL15 extends TLVideo {
 
-    public static final int ID = 0xf72887d3;
+    public static final int ID = 0x388fa391;
 
     public long id;
     public long access_hash;
+    public int user_id;
     public int date;
+    public String caption;
     public int duration;
     public String mime_type;
     public int size;
@@ -18,13 +20,15 @@ public class Video extends TLVideo {
     public int w;
     public int h;
 
-    public Video() {
+    public VideoL15() {
     }
 
-    public Video(long id, long access_hash, int date, int duration, String mime_type, int size, TLPhotoSize thumb, int dc_id, int w, int h) {
+    public VideoL15(long id, long access_hash, int user_id, int date, String caption, int duration, String mime_type, int size, TLPhotoSize thumb, int dc_id, int w, int h) {
         this.id = id;
         this.access_hash = access_hash;
+        this.user_id = user_id;
         this.date = date;
+        this.caption = caption;
         this.duration = duration;
         this.mime_type = mime_type;
         this.size = size;
@@ -38,7 +42,9 @@ public class Video extends TLVideo {
     public void deserialize(ProtocolBuffer buffer) {
         id = buffer.readLong();
         access_hash = buffer.readLong();
+        user_id = buffer.readInt();
         date = buffer.readInt();
+        caption = buffer.readString();
         duration = buffer.readInt();
         mime_type = buffer.readString();
         size = buffer.readInt();
@@ -60,7 +66,9 @@ public class Video extends TLVideo {
         buff.writeInt(getConstructor());
         buff.writeLong(id);
         buff.writeLong(access_hash);
+        buff.writeInt(user_id);
         buff.writeInt(date);
+        buff.writeString(caption);
         buff.writeInt(duration);
         buff.writeString(mime_type);
         buff.writeInt(size);

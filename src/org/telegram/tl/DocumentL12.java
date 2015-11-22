@@ -3,49 +3,46 @@ package org.telegram.tl;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class Video extends TLVideo {
+public class DocumentL12 extends TLDocument {
 
-    public static final int ID = 0xf72887d3;
+    public static final int ID = 0x9efc6326;
 
     public long id;
     public long access_hash;
+    public int user_id;
     public int date;
-    public int duration;
+    public String file_name;
     public String mime_type;
     public int size;
     public TLPhotoSize thumb;
     public int dc_id;
-    public int w;
-    public int h;
 
-    public Video() {
+    public DocumentL12() {
     }
 
-    public Video(long id, long access_hash, int date, int duration, String mime_type, int size, TLPhotoSize thumb, int dc_id, int w, int h) {
+    public DocumentL12(long id, long access_hash, int user_id, int date, String file_name, String mime_type, int size, TLPhotoSize thumb, int dc_id) {
         this.id = id;
         this.access_hash = access_hash;
+        this.user_id = user_id;
         this.date = date;
-        this.duration = duration;
+        this.file_name = file_name;
         this.mime_type = mime_type;
         this.size = size;
         this.thumb = thumb;
         this.dc_id = dc_id;
-        this.w = w;
-        this.h = h;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         id = buffer.readLong();
         access_hash = buffer.readLong();
+        user_id = buffer.readInt();
         date = buffer.readInt();
-        duration = buffer.readInt();
+        file_name = buffer.readString();
         mime_type = buffer.readString();
         size = buffer.readInt();
         thumb = (TLPhotoSize) buffer.readTLObject(APIContext.getInstance());
         dc_id = buffer.readInt();
-        w = buffer.readInt();
-        h = buffer.readInt();
     }
 
     @Override
@@ -60,14 +57,13 @@ public class Video extends TLVideo {
         buff.writeInt(getConstructor());
         buff.writeLong(id);
         buff.writeLong(access_hash);
+        buff.writeInt(user_id);
         buff.writeInt(date);
-        buff.writeInt(duration);
+        buff.writeString(file_name);
         buff.writeString(mime_type);
         buff.writeInt(size);
         buff.writeTLObject(thumb);
         buff.writeInt(dc_id);
-        buff.writeInt(w);
-        buff.writeInt(h);
     }
 
     public int getConstructor() {

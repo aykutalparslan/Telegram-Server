@@ -234,7 +234,7 @@ public class APIContext {
         addToSchema(MessageMediaVideo.class);
         addToSchema(MessageMediaGeo.class);
         addToSchema(MessageMediaContact.class);
-        addToSchema(MessageMediaUnsupported.class);
+        addToSchema(MessageMediaUnsupportedOld.class);
         addToSchema(MessageMediaDocument.class);
         addToSchema(MessageMediaAudio.class);
         addToSchema(EncryptedFileEmpty.class);
@@ -501,6 +501,24 @@ public class APIContext {
         addToSchema(MessageEntityTextUrl.class);
         addToSchema(MessageEntityUnknown.class);
         addToSchema(MessageEntityUrl.class);
+        addToSchema(DocumentL12.class);
+        addToSchema(MessageMediaVideoL12.class);
+        addToSchema(MessageMediaVenue.class);
+        addToSchema(VideoL15.class);
+        addToSchema(VideoL28.class);
+        addToSchema(VideoL12.class);
+        addToSchema(AudioL15.class);
+        addToSchema(MessageMediaVideo.class);
+        addToSchema(MessageMediaDocument.class);
+        addToSchema(AudioL12.class);
+        addToSchema(PhotoL12.class);
+        addToSchema(MessageMediaWebPage.class);
+        addToSchema(MessageMediaUnsupported.class);
+        addToSchema(MessageMediaPhotoL12.class);
+        addToSchema(PhotoL28.class);
+        addToSchema(MessageMediaPhoto.class);
+        addToSchema(MessageMediaAudio.class);
+        addToSchema(MessageMediaUnsupportedL12.class);
     }
 
     public <T extends TLObject> void addToSchema(Class<T> type) {

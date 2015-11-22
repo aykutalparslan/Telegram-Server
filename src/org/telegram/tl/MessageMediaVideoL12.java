@@ -3,16 +3,22 @@ package org.telegram.tl;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class MessageMediaUnsupported extends TLMessageMedia {
+public class MessageMediaVideoL12 extends TLMessageMedia {
 
-    public static final int ID = 0x9f84f49e;
+    public static final int ID = 0xa2d24290;
 
+    public TLVideo video;
 
-    public MessageMediaUnsupported() {
+    public MessageMediaVideoL12() {
+    }
+
+    public MessageMediaVideoL12(TLVideo video) {
+        this.video = video;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
+        video = (TLVideo) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
@@ -25,6 +31,7 @@ public class MessageMediaUnsupported extends TLMessageMedia {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
+        buff.writeTLObject(video);
     }
 
     public int getConstructor() {
