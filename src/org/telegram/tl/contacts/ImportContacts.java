@@ -18,10 +18,12 @@
 
 package org.telegram.tl.contacts;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class ImportContacts extends TLObject {
+public class ImportContacts extends TLObject implements TLMethod {
 
     public static final int ID = -634342611;
 
@@ -59,5 +61,10 @@ public class ImportContacts extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new ImportedContacts(new TLVector<TLImportedContact>(), new TLVector<Long>(), new TLVector<TLUser>());
     }
 }
