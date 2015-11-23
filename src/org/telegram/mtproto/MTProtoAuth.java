@@ -19,6 +19,7 @@
 package org.telegram.mtproto;
 
 import org.bouncycastle.crypto.params.DHParameters;
+import org.bouncycastle.util.encoders.Base64;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.mtproto.secure.CryptoUtils;
 import org.telegram.tl.APIContext;
@@ -156,18 +157,16 @@ public class MTProtoAuth implements Serializable {
         server_dh_inner_data.g = gs[rnd.nextInt(5)];
         g = BigInteger.valueOf(server_dh_inner_data.g);
 
-        SecureRandom srnd = new SecureRandom();
-        //String prime = "C7 1C AE B9 C6 B1 C9 04 8E 6C 52 2F 70 F1 3F 73 98 0D 40 23 8E 3E 21 C1 49 34 D0 37 56 3D 93 0F 48 19 8A 0A A7 C1 40 58 22 94 93 D2 25 30 F4 DB FA 33 6F 6E 0A C9 25 13 95 43 AE D4 4C CE 7C 37 20 FD 51 F6 94 58 70 5A C6 8C D4 FE 6B 6B 13 AB DC 97 46 51 29 69 32 84 54 F1 8F AF 8C 59 5F 64 24 77 FE 96 BB 2A 94 1D 5B CD 1D 4A C8 CC 49 88 07 08 FA 9B 37 8E 3C 4F 3A 90 60 BE E6 7C F9 A4 A4 A6 95 81 10 51 90 7E 16 27 53 B5 6B 0F 6B 41 0D BA 74 D8 A8 4B 2A 14 B3 14 4E 0E F1 28 47 54 FD 17 ED 95 0D 59 65 B4 B9 DD 46 58 2D B1 17 8D 16 9C 6B C4 65 B0 D6 FF 9C A3 92 8F EF 5B 9A E4 E4 18 FC 15 E8 3E BE A0 F8 7F A9 FF 5E ED 70 05 0D ED 28 49 F4 7B F9 59 D9 56 85 0C E9 29 85 1F 0D 81 15 F6 35 B1 05 EE 2E 4E 15 D0 4B 24 54 BF 6F 4F AD F0 34 B1 04 03 11 9C D8 E3 B9 2F CC 5B";
-        //String prime_hex = prime.replace(" ", "");
+        server_dh_inner_data.dh_prime = Utilities.hexToBytes("C71CAEB9C6B1C9048E6C522F70F13F73980D40238E3E21C14934D037563D930F48198A0AA7C14058229493D22530F4DBFA336F6E0AC925139543AED44CCE7C3720FD51F69458705AC68CD4FE6B6B13ABDC9746512969328454F18FAF8C595F642477FE96BB2A941D5BCD1D4AC8CC49880708FA9B378E3C4F3A9060BEE67CF9A4A4A695811051907E162753B56B0F6B410DBA74D8A84B2A14B3144E0EF1284754FD17ED950D5965B4B9DD46582DB1178D169C6BC465B0D6FF9CA3928FEF5B9AE4E418FC15E83EBEA0F87FA9FF5EED70050DED2849F47BF959D956850CE929851F0D8115F635B105EE2E4E15D04B2454BF6F4FADF034B10403119CD8E3B92FCC5B");
 
-        dh_prime = BigInteger.probablePrime(2048, srnd);
+        /*dh_prime = new BigInteger(1, primeBytes);
         byte[] dh_primeBytes = dh_prime.toByteArray();
         if(dh_primeBytes[0] == 0 && dh_primeBytes.length == 257){
             server_dh_inner_data.dh_prime = subStr(dh_primeBytes, 1, 256);
         } else {
             server_dh_inner_data.dh_prime = dh_primeBytes;
-        }
-
+        }*/
+        SecureRandom srnd = new SecureRandom();
         do {
             a = new BigInteger(2048, srnd);
         } while (a.compareTo(dh_prime) >= 0);
