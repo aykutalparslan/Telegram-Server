@@ -135,6 +135,7 @@ public class DatabaseConnection {
                         "phone text," +
                         "first_name text," +
                         "last_name text," +
+                        "is_registered boolean," +
                         "PRIMARY KEY (user_id, contact_id));");
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.blocked_contacts (" +
@@ -211,6 +212,16 @@ public class DatabaseConnection {
             sessionModel.phone = row.getString("phone");
         }
         return sessionModel;
+    }
+
+    public void saveContact(int user_id, long contact_id, String phone, String first_name, String last_name, boolean is_registered) {
+        session.execute("INSERT INTO telegram.contacts (user_id, contact_id, phone, first_name, last_name, is_registered) VALUES (?,?,?,?,?,?);",
+                user_id,
+                contact_id,
+                phone,
+                first_name,
+                last_name,
+                is_registered);
     }
 
     public void saveUser(int user_id, String first_name, String last_name, String username, long access_hash, String phone) {

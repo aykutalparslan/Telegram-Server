@@ -18,8 +18,13 @@
 
 package org.telegram.tl.contacts;
 
+import org.telegram.api.SessionStore;
 import org.telegram.api.TLContext;
 import org.telegram.api.TLMethod;
+import org.telegram.api.UserStore;
+import org.telegram.data.DatabaseConnection;
+import org.telegram.data.SessionModel;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
@@ -65,6 +70,32 @@ public class ImportContacts extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        return new ImportedContacts(new TLVector<TLImportedContact>(), new TLVector<Long>(), new TLVector<TLUser>());
+        TLVector<TLImportedContact> imported = new TLVector<>();
+        TLVector<TLUser> users = new TLVector<>();
+        SessionModel sm = SessionStore.getInstance().getSession(context.getSessionId());
+        if (sm != null) {
+            UserModel um = UserStore.getInstance().getUser(sm.phone);
+            if (um != null) {
+                for (TLInputContact c : contacts) {
+                    UserModel cu = UserStore.getInstance().getUser(((InputPhoneContact) c).phone);
+                    if (cu != null) {
+                        DatabaseConnection.getInstance().saveContact(um.user_id, 0,
+                                ((InputPhoneContact) c).phone,
+                                ((InputPhoneContact) c).first_name,
+                                ((InputPhoneContact) c).last_name, true);
+                        ImportedContact ic = new ImportedContact(cu.user_id, ((InputPhoneContact) c).client_id);
+                        imported.add(ic);
+                        users.add(cu.toUserContact());
+                    } else {
+                        DatabaseConnection.getInstance().saveContact(um.user_id, 0,
+                                ((InputPhoneContact) c).phone,
+                                ((InputPhoneContact) c).first_name,
+                                ((InputPhoneContact) c).last_name, true);
+                    }
+                }
+            }
+        }
+
+        return new ImportedContacts(imported, new TLVector<Long>(), users);
     }
 }
