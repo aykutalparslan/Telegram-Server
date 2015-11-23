@@ -1,4 +1,4 @@
-# Telegram Server
+# Telegram Server (Unofficial)
 
 [![Travis](https://travis-ci.org/aykutalparslan/Telegram-Server.svg)](https://travis-ci.org/aykutalparslan/Telegram-Server)
 
