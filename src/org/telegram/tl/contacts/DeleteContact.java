@@ -18,10 +18,18 @@
 
 package org.telegram.tl.contacts;
 
+import org.telegram.api.SessionStore;
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
+import org.telegram.api.UserStore;
+import org.telegram.data.DatabaseConnection;
+import org.telegram.data.SessionModel;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
-public class DeleteContact extends TLObject {
+public class DeleteContact extends TLObject implements TLMethod {
 
     public static final int ID = -1902823612;
 
@@ -54,5 +62,21 @@ public class DeleteContact extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (id instanceof InputUserContact) {
+            SessionModel sm = SessionStore.getInstance().getSession(context.getSessionId());
+            if (sm != null) {
+                UserModel um = UserStore.getInstance().getUser(sm.phone);
+                if (um != null) {
+                    UserModel umc = UserStore.getInstance().getUser(((InputUserContact) id).user_id);
+                    DatabaseConnection.getInstance().deleteContact(um.user_id, umc.phone);
+                }
+            }
+
+        }
+        return new rpc_error(500, "INTERNAL_SERVER_ERROR");
     }
 }

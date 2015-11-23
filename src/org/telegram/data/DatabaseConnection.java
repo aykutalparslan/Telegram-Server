@@ -224,6 +224,12 @@ public class DatabaseConnection {
                 is_registered);
     }
 
+    public void deleteContact(int user_id, String phone) {
+        session.execute("DELETE FROM telegram.contacts WHERE  user_id = ? AND phone = ?;",
+                user_id,
+                phone);
+    }
+
     public void saveUser(int user_id, String first_name, String last_name, String username, long access_hash, String phone) {
         session.execute("INSERT INTO telegram.users (user_id, first_name, last_name, username, access_hash, phone) VALUES (?,?,?,?,?,?);",
                 user_id,
