@@ -22,6 +22,15 @@ package org.telegram.api;
  * Created by aykut on 04/11/15.
  */
 public class TLContext {
+    public boolean isAuthorized() {
+        return authorized;
+    }
+
+    public void setAuthorized(boolean authorized) {
+        this.authorized = authorized;
+    }
+
+    private boolean authorized;
     private long authKeyId = 0;
     public void setAuthKeyId(long authKeyId){
         this.authKeyId = authKeyId;
@@ -40,4 +49,24 @@ public class TLContext {
     public void setSessionId(long sessionId) {
         this.sessionId = sessionId;
     }
+
+    public int getUserId() {
+        return userId;
+    }
+
+    public void setUserId(int userId) {
+        this.userId = userId;
+    }
+
+    private int userId;
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
+    private String phone;
 }

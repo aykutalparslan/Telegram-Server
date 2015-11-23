@@ -150,7 +150,9 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
                 System.out.println("TLMethod: " + response.toString());
 
                 if (rpc instanceof SignIn && response instanceof Authorization) {
-
+                    tlContext.setUserId(((UserSelf) ((Authorization) response).user).id);
+                    tlContext.setPhone(((UserSelf) ((Authorization) response).user).phone);
+                    tlContext.setAuthorized(true);
                     System.out.println("SignIn");
                 }
             }
