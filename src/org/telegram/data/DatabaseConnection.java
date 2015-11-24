@@ -230,6 +230,23 @@ public class DatabaseConnection {
                 phone);
     }
 
+    public ContactModel[] getContacts(int user_id) {
+        ResultSet results = session.execute("SELECT * FROM telegram.contacts WHERE user_id = ?;", user_id);
+
+        ContactModel contacts[] = new ContactModel[results.getAvailableWithoutFetching()];
+        int i = 0;
+        for (Row row : results) {
+            ContactModel contactModel = new ContactModel();
+            contactModel.contact_id = row.getLong("contact_id");
+            contactModel.phone = row.getString("phone");
+            contactModel.first_name = row.getString("first_name");
+            contactModel.last_name = row.getString("last_name");
+            contacts[i] = contactModel;
+            i++;
+        }
+        return contacts;
+    }
+
     public void saveUser(int user_id, String first_name, String last_name, String username, long access_hash, String phone) {
         session.execute("INSERT INTO telegram.users (user_id, first_name, last_name, username, access_hash, phone) VALUES (?,?,?,?,?,?);",
                 user_id,
