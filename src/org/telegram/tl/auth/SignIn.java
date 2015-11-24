@@ -19,6 +19,7 @@
 package org.telegram.tl.auth;
 
 import org.telegram.api.*;
+import org.telegram.data.SessionModel;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.mtproto.Utilities;
@@ -73,6 +74,16 @@ public class SignIn extends TLObject implements TLMethod {
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
         UserModel userModel = UserStore.getInstance().getUser(phone_number);
         if (userModel != null) {
+            SessionModel sm = SessionStore.getInstance().getSession(context.getSessionId());
+            if (sm == null) {
+                SessionModel sessionModel = new SessionModel();
+                sessionModel.auth_key_id = context.getAuthKeyId();
+                sessionModel.session_id = context.getSessionId();
+                sessionModel.layer = 0;
+                sessionModel.phone = phone_number;
+                SessionStore.getInstance().createSession(sessionModel);
+            }
+
             ActiveSession session = new ActiveSession();
             session.auth_key_id = context.getAuthKeyId();
             session.session_id = context.getSessionId();
@@ -81,6 +92,7 @@ public class SignIn extends TLObject implements TLMethod {
             session.user_id = userModel.user_id;
             session.username = userModel.username;
             Router.getInstance().addActiveSession(session);
+
 
             UserStatusOnline online = new UserStatusOnline(120);
             UserStore.getInstance().updateUserStatus(userModel.user_id, online);

@@ -25,19 +25,19 @@ public class gzip_packed extends TLObject {
 
     public static final int ID = 0x3072cfa1;
 
-    public String packed_data;
+    public byte[] packed_data;
 
     public gzip_packed() {
 
     }
 
-    public gzip_packed(String packed_data){
+    public gzip_packed(byte[] packed_data) {
         this.packed_data = packed_data;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        packed_data = buffer.readString();
+        packed_data = buffer.readBytes();
     }
 
     @Override
@@ -50,7 +50,28 @@ public class gzip_packed extends TLObject {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
-        buff.writeString(packed_data);
+        buff.writeBytes(packed_data);
+    }
+
+    public byte[] getUncompressed() {
+        try {
+            java.util.zip.Inflater inf = new java.util.zip.Inflater();
+            java.io.ByteArrayInputStream bytein = new java.io.ByteArrayInputStream(packed_data);
+            java.util.zip.GZIPInputStream gzin = new java.util.zip.GZIPInputStream(bytein);
+            java.io.ByteArrayOutputStream byteout = new java.io.ByteArrayOutputStream();
+
+            int res = 0;
+            byte buf[] = new byte[1024];
+            while (res >= 0) {
+                res = gzin.read(buf, 0, buf.length);
+                if (res > 0) {
+                    byteout.write(buf, 0, res);
+                }
+            }
+            return byteout.toByteArray();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public int getConstructor() {

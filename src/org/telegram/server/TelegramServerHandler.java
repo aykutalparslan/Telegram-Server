@@ -66,6 +66,12 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             data.readInt();
             TLObject message = APIContext.getInstance().deserialize(data);
 
+            if (message != null) {
+                System.out.println("TLObject:" + message.toString());
+            } else {
+                System.out.println("null message");
+            }
+
             MTProtoAuth auth2 = null;
 
             if(message instanceof req_pq){
@@ -139,6 +145,10 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             }
         } else if (rpc instanceof InvokeAfterMsg) {
             processRPC(ctx, ((InvokeAfterMsg) rpc).query, ((InvokeAfterMsg) rpc).msg_id);
+        } else if (rpc instanceof gzip_packed) {
+            ProtocolBuffer data = new ProtocolBuffer(((gzip_packed) rpc).getUncompressed());
+            TLObject gzip_rpc = APIContext.getInstance().deserialize(data);
+            processRPC(ctx, gzip_rpc, messageId);
         }
 
         if (rpc instanceof TLMethod) {

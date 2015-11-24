@@ -18,11 +18,21 @@
 
 package org.telegram.api;
 
+import org.telegram.data.SessionModel;
+import org.telegram.data.UserModel;
+
 /**
  * Created by aykut on 04/11/15.
  */
 public class TLContext {
     public boolean isAuthorized() {
+        if (!authorized) {//temporary fix
+            SessionModel sm = SessionStore.getInstance().getSession(sessionId);
+            UserModel um = UserStore.getInstance().getUser(sm.phone);
+            authorized = true;
+            setPhone(um.phone);
+            setUserId(um.user_id);
+        }
         return authorized;
     }
 
