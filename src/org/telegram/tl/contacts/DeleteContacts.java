@@ -18,10 +18,16 @@
 
 package org.telegram.tl.contacts;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
+import org.telegram.api.UserStore;
+import org.telegram.data.DatabaseConnection;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
-public class DeleteContacts extends TLObject {
+public class DeleteContacts extends TLObject implements TLMethod {
 
     public static final int ID = 1504393374;
 
@@ -55,5 +61,19 @@ public class DeleteContacts extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (!context.isAuthorized()) {
+            return new rpc_error(401, "UNAUTHORIZED");
+        }
+        for (TLInputUser u : id) {
+            if (u instanceof InputUserContact) {
+                UserModel umc = UserStore.getInstance().getUser(((InputUserContact) u).user_id);
+                DatabaseConnection.getInstance().deleteContact(context.getUserId(), umc.phone);
+            }
+        }
+        return new BoolTrue();
     }
 }
