@@ -23,6 +23,8 @@ import com.hazelcast.core.IMap;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.HazelcastConnection;
 import org.telegram.data.UserModel;
+import org.telegram.tl.TLUserStatus;
+
 import java.util.concurrent.ConcurrentMap;
 
 /**
@@ -103,5 +105,11 @@ public class UserStore {
         usersShared.replace(userModel.user_id, userModel);
 
         return getUser(userModel.user_id);
+    }
+
+    public void updateUserStatus(int user_id, TLUserStatus status) {
+        UserModel um = getUser(user_id);
+        um.status = status;
+        usersShared.replace(user_id, um);
     }
 }

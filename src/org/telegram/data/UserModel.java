@@ -18,10 +18,7 @@
 
 package org.telegram.data;
 
-import org.telegram.tl.UserContact;
-import org.telegram.tl.UserProfilePhotoEmpty;
-import org.telegram.tl.UserSelf;
-import org.telegram.tl.UserStatusEmpty;
+import org.telegram.tl.*;
 
 import java.io.Serializable;
 
@@ -35,12 +32,17 @@ public class UserModel implements Serializable {
     public String username;
     public long access_hash;
     public String phone;
+    public TLUserStatus status;
+
+    public UserModel() {
+        status = new UserStatusEmpty();
+    }
 
     public UserSelf toUserSelf() {
-        return new UserSelf(user_id, first_name, last_name, username, phone, new UserProfilePhotoEmpty(), new UserStatusEmpty(), false);
+        return new UserSelf(user_id, first_name, last_name, username, phone, new UserProfilePhotoEmpty(), status, false);
     }
 
     public UserContact toUserContact() {
-        return new UserContact(user_id, first_name, last_name, username, access_hash, phone, new UserProfilePhotoEmpty(), new UserStatusEmpty());
+        return new UserContact(user_id, first_name, last_name, username, access_hash, phone, new UserProfilePhotoEmpty(), status);
     }
 }

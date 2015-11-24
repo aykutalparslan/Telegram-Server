@@ -82,9 +82,10 @@ public class SignIn extends TLObject implements TLMethod {
             session.username = userModel.username;
             Router.getInstance().addActiveSession(session);
 
-            UserStatusOffline offline = new UserStatusOffline((int) (System.currentTimeMillis() / 1000L) - 120);
+            UserStatusOnline online = new UserStatusOnline(120);
+            UserStore.getInstance().updateUserStatus(userModel.user_id, online);
             return new Authorization(Integer.MAX_VALUE, new UserSelf(userModel.user_id, userModel.first_name, userModel.last_name, userModel.username, phone_number, new UserProfilePhotoEmpty(),
-                    offline, true));
+                    online, true));
         } else {
             return new rpc_error(400, "PHONE_NUMBER_UNOCCUPIED");
         }

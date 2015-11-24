@@ -20,6 +20,8 @@ package org.telegram.tl.account;
 
 import org.telegram.api.TLContext;
 import org.telegram.api.TLMethod;
+import org.telegram.api.UserStore;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
@@ -60,6 +62,12 @@ public class UpdateStatus extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (offline) {
+            UserStore.getInstance().updateUserStatus(context.getUserId(), new UserStatusOffline());
+        } else {
+            UserStore.getInstance().updateUserStatus(context.getUserId(), new UserStatusOnline());
+        }
+
         return new BoolTrue();
     }
 }
