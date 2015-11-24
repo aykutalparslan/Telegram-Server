@@ -26,6 +26,7 @@ import org.telegram.data.DatabaseConnection;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
 public class GetContacts extends TLObject implements TLMethod {
 
@@ -64,6 +65,9 @@ public class GetContacts extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (!context.isAuthorized()) {
+            return new rpc_error(401, "UNAUTHORIZED");
+        }
         ContactModel[] contactsAll = DatabaseConnection.getInstance().getContacts(context.getUserId());
         TLVector<TLContact> contacts = new TLVector<>();
         TLVector<TLUser> users = new TLVector<>();
