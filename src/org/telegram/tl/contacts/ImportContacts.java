@@ -28,6 +28,9 @@ import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
+import java.security.SecureRandom;
+import java.util.Random;
+
 public class ImportContacts extends TLObject implements TLMethod {
 
     public static final int ID = -634342611;
@@ -78,8 +81,9 @@ public class ImportContacts extends TLObject implements TLMethod {
             if (um != null) {
                 for (TLInputContact c : contacts) {
                     UserModel cu = UserStore.getInstance().getUser(((InputPhoneContact) c).phone);
+                    SecureRandom srnd = new SecureRandom();
                     if (cu != null) {
-                        DatabaseConnection.getInstance().saveContact(um.user_id, 0,
+                        DatabaseConnection.getInstance().saveContact(um.user_id, srnd.nextLong(),
                                 ((InputPhoneContact) c).phone,
                                 ((InputPhoneContact) c).first_name,
                                 ((InputPhoneContact) c).last_name, true);
@@ -87,7 +91,7 @@ public class ImportContacts extends TLObject implements TLMethod {
                         imported.add(ic);
                         users.add(cu.toUserContact());
                     } else {
-                        DatabaseConnection.getInstance().saveContact(um.user_id, 0,
+                        DatabaseConnection.getInstance().saveContact(um.user_id, srnd.nextLong(),
                                 ((InputPhoneContact) c).phone,
                                 ((InputPhoneContact) c).first_name,
                                 ((InputPhoneContact) c).last_name, true);
