@@ -108,7 +108,13 @@ public class UserStore {
     }
 
     public void updateUserStatus(int user_id, TLUserStatus status) {
+        if (user_id == 0) {
+            return;
+        }
         UserModel um = getUser(user_id);
+        if (um == null) {
+            return;
+        }
         um.status = status;
         usersShared.replace(user_id, um);
     }

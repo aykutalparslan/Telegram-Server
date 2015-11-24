@@ -21,7 +21,9 @@ package org.telegram.tl;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class UserStatusLastMonth extends TLUserStatus {
+import java.io.Serializable;
+
+public class UserStatusLastMonth extends TLUserStatus implements Serializable {
 
     public static final int ID = 2011940674;
 

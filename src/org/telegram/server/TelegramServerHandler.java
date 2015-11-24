@@ -41,14 +41,14 @@ import org.telegram.tl.service.*;
  */
 public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
     private long lastOutgoingMessageId;
-    private TLContext tlContext = new TLContext();
+    private TLContext tlContext;
     private int seq_no = 0;
     private boolean session_created = false;
 
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-
+        tlContext = new TLContext();
     }
 
     @Override
@@ -142,7 +142,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         }
 
         if (rpc instanceof TLMethod) {
-            TLObject response = ((TLMethod) rpc).execute(getTlContext(), generateMessageId(false), messageId);
+            TLObject response = ((TLMethod) rpc).execute(tlContext, generateMessageId(false), messageId);
             rpc_result result = new rpc_result(messageId, response);
             if (response != null) {
                 //Router.getInstance().Route(tlContext, result, generateMessageId(false), getMessageSeqNo(true));
