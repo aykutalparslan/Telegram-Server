@@ -80,19 +80,19 @@ public class ImportContacts extends TLObject implements TLMethod {
             UserModel um = UserStore.getInstance().getUser(sm.phone);
             if (um != null) {
                 for (TLInputContact c : contacts) {
-                    UserModel cu = UserStore.getInstance().getUser(((InputPhoneContact) c).phone);
-                    SecureRandom srnd = new SecureRandom();
+                    UserModel cu = UserStore.getInstance().getUser(((InputPhoneContact) c).phone.replace("+", ""));
+
                     if (cu != null) {
-                        DatabaseConnection.getInstance().saveContact(um.user_id, srnd.nextLong(),
-                                ((InputPhoneContact) c).phone,
+                        DatabaseConnection.getInstance().saveContact(um.user_id, ((InputPhoneContact) c).client_id,
+                                ((InputPhoneContact) c).phone.replace("+", ""),
                                 ((InputPhoneContact) c).first_name,
                                 ((InputPhoneContact) c).last_name, true);
                         ImportedContact ic = new ImportedContact(cu.user_id, ((InputPhoneContact) c).client_id);
                         imported.add(ic);
                         users.add(cu.toUserContact());
                     } else {
-                        DatabaseConnection.getInstance().saveContact(um.user_id, srnd.nextLong(),
-                                ((InputPhoneContact) c).phone,
+                        DatabaseConnection.getInstance().saveContact(um.user_id, ((InputPhoneContact) c).client_id,
+                                ((InputPhoneContact) c).phone.replace("+", ""),
                                 ((InputPhoneContact) c).first_name,
                                 ((InputPhoneContact) c).last_name, true);
                     }

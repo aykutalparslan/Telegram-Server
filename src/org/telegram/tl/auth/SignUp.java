@@ -77,12 +77,14 @@ public class SignUp extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        UserModel userModel = new UserModel();
-        userModel.phone = phone_number;
-        userModel.first_name = first_name;
-        userModel.last_name = last_name;
-        userModel.username = last_name.toLowerCase() + "." + first_name.toLowerCase();
-        userModel = UserStore.getInstance().createUser(userModel);
+        UserModel userModel = UserStore.getInstance().getUser(phone_number);
+        if (userModel == null) {
+            userModel.phone = phone_number;
+            userModel.first_name = first_name;
+            userModel.last_name = last_name;
+            userModel.username = last_name.toLowerCase() + "." + first_name.toLowerCase();
+            userModel = UserStore.getInstance().createUser(userModel);
+        }
 
         SessionModel sessionModel = new SessionModel();
         sessionModel.auth_key_id = context.getAuthKeyId();
