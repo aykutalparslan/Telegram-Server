@@ -20,10 +20,13 @@ package org.telegram.tl.contacts;
 
 import org.telegram.api.TLContext;
 import org.telegram.api.TLMethod;
+import org.telegram.api.UserStore;
+import org.telegram.data.ContactModel;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
 public class GetStatuses extends TLObject implements TLMethod {
 
@@ -55,11 +58,19 @@ public class GetStatuses extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        UserModel[] usersAll = DatabaseConnection.getInstance().getUsers();
+        if (!context.isAuthorized()) {
+            return new rpc_error(401, "UNAUTHORIZED");
+        }
+
+        ContactModel[] contactsAll = DatabaseConnection.getInstance().getContacts(context.getUserId());
+
         TLVector<ContactStatus> statuses = new TLVector<>();
 
-        for (UserModel u : usersAll) {
-            statuses.add(new ContactStatus(u.user_id, new UserStatusEmpty()));
+        for (ContactModel u : contactsAll) {
+            UserModel umc = UserStore.getInstance().getUser(u.phone);
+            if (umc != null) {
+                statuses.add(new ContactStatus(umc.user_id, umc.status));
+            }
         }
 
         return statuses;
