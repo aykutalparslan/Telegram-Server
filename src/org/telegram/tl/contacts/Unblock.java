@@ -18,10 +18,15 @@
 
 package org.telegram.tl.contacts;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
+import org.telegram.data.DatabaseConnection;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
-public class Unblock extends TLObject {
+public class Unblock extends TLObject implements TLMethod {
 
     public static final int ID = -448724803;
 
@@ -54,5 +59,24 @@ public class Unblock extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (!context.isAuthorized()) {
+            return new rpc_error(401, "UNAUTHORIZED");
+        }
+
+        if (id instanceof InputUserContact) {
+            UserModel um = DatabaseConnection.getInstance().getUser(((InputUserContact) id).user_id);
+            DatabaseConnection.getInstance().unblockContact(context.getUserId(), um.phone);
+        } else if (id instanceof InputUserForeign) {
+            UserModel um = DatabaseConnection.getInstance().getUser(((InputUserForeign) id).user_id);
+            DatabaseConnection.getInstance().unblockContact(context.getUserId(), um.phone);
+        } else {
+            return new BoolFalse();
+        }
+
+        return new BoolTrue();
     }
 }

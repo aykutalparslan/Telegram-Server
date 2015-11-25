@@ -140,9 +140,8 @@ public class DatabaseConnection {
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.blocked_contacts (" +
                         "user_id int," +
-                        "contact_id bigint," +
                         "phone text," +
-                        "PRIMARY KEY (user_id, contact_id));");
+                        "PRIMARY KEY (user_id, phone));");
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.chats (" +
                         "chat_id int," +
@@ -241,6 +240,32 @@ public class DatabaseConnection {
             contactModel.phone = row.getString("phone");
             contactModel.first_name = row.getString("first_name");
             contactModel.last_name = row.getString("last_name");
+            contacts[i] = contactModel;
+            i++;
+        }
+        return contacts;
+    }
+
+    public void blockContact(int user_id, String phone) {
+        session.execute("INSERT INTO telegram.blocked_contacts (user_id, phone) VALUES (?,?);",
+                user_id,
+                phone);
+    }
+
+    public void unblockContact(int user_id, String phone) {
+        session.execute("DELETE FROM telegram.blocked_contacts WHERE  user_id = ? AND phone = ?;",
+                user_id,
+                phone);
+    }
+
+    public ContactModel[] getBlockedContacts(int user_id, int offset, int limit) {
+        ResultSet results = session.execute("SELECT * FROM telegram.blocked_contacts WHERE user_id = ?;", user_id);
+
+        ContactModel contacts[] = new ContactModel[results.getAvailableWithoutFetching()];
+        int i = 0;
+        for (Row row : results) {
+            ContactModel contactModel = new ContactModel();
+            contactModel.phone = row.getString("phone");
             contacts[i] = contactModel;
             i++;
         }
