@@ -56,16 +56,12 @@ public class Router {
         return _instance;
     }
 
-    public ActiveSession[] getActiveSessions(String phone) {
-        return (ActiveSession[]) activeSessions.values(new SqlPredicate("phone = " + phone)).toArray();
-    }
-
     public void addActiveSession(ActiveSession session) {
         activeSessions.set(session.session_id, session);
     }
 
-    public void addChannelHandler(TLContext context, ChannelHandlerContext ctx) {
-        channelHandlers.put(context.getSessionId(), ctx);
+    public void addChannelHandler(long session_id, ChannelHandlerContext ctx) {
+        channelHandlers.put(session_id, ctx);
     }
 
     public ActiveSession getActiveSession(long session_id) {
@@ -76,12 +72,15 @@ public class Router {
         activeSessions.delete(session_id);
     }
 
-    public void Route(TLContext context, TLObject msg, long msg_id, int seq_no) {
-        ChannelHandlerContext ctx = channelHandlers.get(context.getSessionId());
-        ctx.writeAndFlush(encryptRpc(msg, seq_no, msg_id, context));
+    public void Route(int user_id, TLObject msg, long msg_id, int seq_no) {
+        for (Object sess : activeSessions.values(new SqlPredicate("user_id = " + user_id)).toArray()) {
+            //for now all sessions are on the same server
+            ChannelHandlerContext ctx = channelHandlers.get(((ActiveSession) sess).session_id);
+            ctx.writeAndFlush(encryptRpc(msg, seq_no, msg_id, ((ActiveSession) sess).session_id, ((ActiveSession) sess).auth_key_id));
+        }
     }
 
-    private ProtocolBuffer encryptRpc(TLObject rpc, int seqNo, long messageId, TLContext context) {
+    private ProtocolBuffer encryptRpc(TLObject rpc, int seqNo, long messageId, long session_id, long auth_key_id) {
         ProtocolBuffer messageBody = rpc.serialize();
         int messageSeqNo = seqNo;
 
@@ -92,8 +91,8 @@ public class Router {
         }
 
         ProtocolBuffer buffer = new ProtocolBuffer(len + extraLen);
-        buffer.writeLong(ServerSaltStore.getInstance().getServerSalt(context.getAuthKeyId()));
-        buffer.writeLong(context.getSessionId());
+        buffer.writeLong(ServerSaltStore.getInstance().getServerSalt(auth_key_id));
+        buffer.writeLong(session_id);
         buffer.writeLong(messageId);
         buffer.writeInt(messageSeqNo);
         buffer.writeInt(messageBody.length());
@@ -102,7 +101,7 @@ public class Router {
         byte[] messageKeyFull = buffer.getSHA1();
         byte[] messageKey = new byte[16];
         System.arraycopy(messageKeyFull, messageKeyFull.length - 16, messageKey, 0, 16);
-        MessageKeyData keyData = MessageKeyData.generateMessageKeyData(AuthKeyStore.getInstance().getAuthKey(context.getAuthKeyId()), messageKey, true);
+        MessageKeyData keyData = MessageKeyData.generateMessageKeyData(AuthKeyStore.getInstance().getAuthKey(auth_key_id), messageKey, true);
 
         byte[] b = new byte[extraLen];
         Utilities.random.nextBytes(b);
@@ -113,7 +112,7 @@ public class Router {
         byte[] encryptedData = CryptoUtils.AES256IGEEncrypt(dataForEncryption, keyData.aesIv, keyData.aesKey);
 
         ProtocolBuffer data = new ProtocolBuffer(8 + messageKey.length + encryptedData.length);
-        data.writeLong(context.getAuthKeyId());
+        data.writeLong(auth_key_id);
         data.write(messageKey);
         data.write(encryptedData);
 

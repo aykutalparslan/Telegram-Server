@@ -28,6 +28,9 @@ public class TLContext {
     public boolean isAuthorized() {
         if (!authorized) {//temporary fix
             SessionModel sm = SessionStore.getInstance().getSession(sessionId);
+            if (sm == null) {
+                return false;
+            }
             UserModel um = UserStore.getInstance().getUser(sm.phone);
             authorized = true;
             setPhone(um.phone);

@@ -23,6 +23,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import org.omg.PortableInterceptor.INACTIVE;
 import org.telegram.api.*;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.MTProtoAuth;
 import org.telegram.mtproto.MessageKeyData;
 import org.telegram.mtproto.ProtocolBuffer;
@@ -31,10 +32,14 @@ import org.telegram.mtproto.secure.CryptoUtils;
 import org.telegram.tl.*;
 import org.telegram.tl.auth.Authorization;
 import org.telegram.tl.auth.SignIn;
+import org.telegram.tl.messages.SendMessage;
+import org.telegram.tl.messages.SentMessage;
 import org.telegram.tl.pq.req_DH_params;
 import org.telegram.tl.pq.req_pq;
 import org.telegram.tl.pq.set_client_DH_params;
 import org.telegram.tl.service.*;
+
+import javax.jws.soap.SOAPBinding;
 
 /**
  * Created by aykut on 28/09/15.
@@ -106,8 +111,19 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             int len = buff.readInt();
 
             tlContext.setSessionId(session_id);
-            //Router.getInstance().addChannelHandler(tlContext, ctx);//add channel handler context reference
+
             if (!session_created) {
+                Router.getInstance().addChannelHandler(tlContext.getSessionId(), ctx);
+                if (tlContext.isAuthorized()) {
+                    ActiveSession session = new ActiveSession();
+                    session.auth_key_id = tlContext.getAuthKeyId();
+                    session.session_id = tlContext.getSessionId();
+                    session.phone = tlContext.getPhone();
+                    session.server = ServerConfig.SERVER_HOSTNAME;
+                    session.user_id = tlContext.getUserId();
+                    session.username = "";
+                    Router.getInstance().addActiveSession(session);
+                }
 
                 new_session_created newSessionCreated = new new_session_created(message_id, session_id, ServerSaltStore.getInstance().getServerSalt(tlContext.getAuthKeyId()));
                 ctx.writeAndFlush(encryptRpc(newSessionCreated, getMessageSeqNo(true), generateMessageId(false)));
@@ -126,7 +142,6 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             msg_ids.add(messageId);
             msgs_ack ack = new msgs_ack(msg_ids);
 
-            //Router.getInstance().Route(tlContext, ack, generateMessageId(false), getMessageSeqNo(true));
             ctx.writeAndFlush(encryptRpc(ack, getMessageSeqNo(false), generateMessageId(false)));
             if (rpc != null) {
                 System.out.println("TLObject:" + rpc.toString());
@@ -155,8 +170,11 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             TLObject response = ((TLMethod) rpc).execute(tlContext, generateMessageId(false), messageId);
             rpc_result result = new rpc_result(messageId, response);
             if (response != null) {
-                //Router.getInstance().Route(tlContext, result, generateMessageId(false), getMessageSeqNo(true));
-                ctx.writeAndFlush(encryptRpc(result, getMessageSeqNo(true), generateMessageId(true)));
+                if (tlContext.isAuthorized()) {
+                    Router.getInstance().Route(tlContext.getUserId(), result, generateMessageId(false), getMessageSeqNo(true));
+                } else {
+                    ctx.writeAndFlush(encryptRpc(result, getMessageSeqNo(true), generateMessageId(true)));
+                }
                 System.out.println("TLMethod: " + response.toString());
 
                 if (rpc instanceof SignIn && response instanceof Authorization) {
@@ -164,6 +182,15 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
                     tlContext.setPhone(((UserSelf) ((Authorization) response).user).phone);
                     tlContext.setAuthorized(true);
                     System.out.println("SignIn");
+                }
+
+                if (rpc instanceof SendMessage && response instanceof SentMessage) {
+                    if (((SendMessage) rpc).peer instanceof InputPeerUser) {
+                        tlContext.isAuthorized();
+                        UpdateShortMessage message = new UpdateShortMessage(((SentMessage) response).id,
+                                tlContext.getUserId(), ((SendMessage) rpc).message, ((SentMessage) response).pts, ((SentMessage) response).date, ((SentMessage) response).seq);
+                        Router.getInstance().Route(((InputPeerUser) ((SendMessage) rpc).peer).user_id, message, generateMessageId(true), getMessageSeqNo(true));
+                    }
                 }
             }
         }
