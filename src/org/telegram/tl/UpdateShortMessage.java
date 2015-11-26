@@ -23,35 +23,61 @@ import org.telegram.tl.*;
 
 public class UpdateShortMessage extends TLUpdates {
 
-    public static final int ID = -738961532;
+    public static final int ID = 0x3f32d858;
 
+    public int flags;
     public int id;
-    public int from_id;
+    public int user_id;
     public String message;
     public int pts;
+    public int pts_count;
     public int date;
-    public int seq;
+    public int fwd_from_id;
+    public int fwd_date;
+    public int reply_to_msg_id;
+    public TLVector<TLMessageEntity> entities = new TLVector<>();
+
 
     public UpdateShortMessage() {
     }
 
-    public UpdateShortMessage(int id, int from_id, String message, int pts, int date, int seq){
+    public UpdateShortMessage(int flags, int id, int user_id, String message, int pts, int pts_count,
+                              int date, int fwd_from_id, int fwd_date, int reply_to_msg_id,
+                              TLVector<TLMessageEntity> entities) {
+        this.flags = flags;
         this.id = id;
-        this.from_id = from_id;
+        this.user_id = user_id;
         this.message = message;
         this.pts = pts;
+        this.pts_count = pts_count;
         this.date = date;
-        this.seq = seq;
+        this.fwd_from_id = fwd_from_id;
+        this.fwd_date = fwd_date;
+        this.reply_to_msg_id = reply_to_msg_id;
+        this.entities = entities;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
+        flags = buffer.readInt();
         id = buffer.readInt();
-        from_id = buffer.readInt();
+        user_id = buffer.readInt();
         message = buffer.readString();
         pts = buffer.readInt();
+        pts_count = buffer.readInt();
         date = buffer.readInt();
-        seq = buffer.readInt();
+        if ((flags & 4) != 0) {
+            fwd_from_id = buffer.readInt();
+        }
+        if ((flags & 4) != 0) {
+            fwd_date = buffer.readInt();
+        }
+        if ((flags & 8) != 0) {
+            reply_to_msg_id = buffer.readInt();
+        }
+        if ((flags & 128) != 0) {
+            entities = (TLVector<TLMessageEntity>) buffer.readTLObject(APIContext.getInstance());
+        }
     }
 
     @Override
@@ -64,12 +90,25 @@ public class UpdateShortMessage extends TLUpdates {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
+        buff.writeInt(flags);
         buff.writeInt(id);
-        buff.writeInt(from_id);
+        buff.writeInt(user_id);
         buff.writeString(message);
         buff.writeInt(pts);
+        buff.writeInt(pts_count);
         buff.writeInt(date);
-        buff.writeInt(seq);
+        if ((flags & 4) != 0) {
+            buff.writeInt(fwd_from_id);
+        }
+        if ((flags & 4) != 0) {
+            buff.writeInt(fwd_date);
+        }
+        if ((flags & 8) != 0) {
+            buff.writeInt(reply_to_msg_id);
+        }
+        if ((flags & 128) != 0) {
+            buff.writeTLObject(entities);
+        }
     }
 
     public int getConstructor() {

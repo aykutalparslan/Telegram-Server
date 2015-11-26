@@ -186,10 +186,13 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
 
                 if (rpc instanceof SendMessage && response instanceof SentMessage) {
                     if (((SendMessage) rpc).peer instanceof InputPeerUser) {
-                        tlContext.isAuthorized();
-                        UpdateShortMessage message = new UpdateShortMessage(((SentMessage) response).id,
-                                tlContext.getUserId(), ((SendMessage) rpc).message, ((SentMessage) response).pts, ((SentMessage) response).date, ((SentMessage) response).seq);
-                        Router.getInstance().Route(((InputPeerUser) ((SendMessage) rpc).peer).user_id, message, generateMessageId(true), getMessageSeqNo(true));
+                        if (tlContext.isAuthorized()) {
+                            UpdateShortMessage message = new UpdateShortMessage(0, ((SentMessage) response).id,
+                                    tlContext.getUserId(), ((SendMessage) rpc).message, 2, 1,
+                                    ((SentMessage) response).date, 0, 0, 0, ((SendMessage) rpc).entities);
+
+                            Router.getInstance().Route(((InputPeerUser) ((SendMessage) rpc).peer).user_id, message, generateMessageId(true), getMessageSeqNo(true));
+                        }
                     }
                 }
             }

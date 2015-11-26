@@ -18,6 +18,7 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.api.Router;
 import org.telegram.api.TLContext;
 import org.telegram.api.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
@@ -99,7 +100,6 @@ public class SendMessage extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-
         Random rnd = new Random();
         return new SentMessage(rnd.nextInt(), (int) (System.currentTimeMillis() / 1000L), new MessageMediaEmpty(), new TLVector<TLMessageEntity>(), 1, 1, 1);
     }
