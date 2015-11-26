@@ -27,6 +27,7 @@ import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.mtproto.Utilities;
 import org.telegram.mtproto.secure.CryptoUtils;
 import org.telegram.server.ServerConfig;
+import org.telegram.server.TelegramServerHandler;
 import org.telegram.tl.TLChat;
 import org.telegram.tl.TLObject;
 
@@ -72,11 +73,12 @@ public class Router {
         activeSessions.delete(session_id);
     }
 
-    public void Route(int user_id, TLObject msg, long msg_id, int seq_no) {
+    public void Route(int user_id, TLObject msg, boolean rpc_response) {
         for (Object sess : activeSessions.values(new SqlPredicate("user_id = " + user_id)).toArray()) {
             //for now all sessions are on the same server
             ChannelHandlerContext ctx = channelHandlers.get(((ActiveSession) sess).session_id);
-            ctx.writeAndFlush(encryptRpc(msg, seq_no, msg_id, ((ActiveSession) sess).session_id, ((ActiveSession) sess).auth_key_id));
+            ctx.writeAndFlush(encryptRpc(msg, ((TelegramServerHandler) ctx.handler()).getMessageSeqNo(true), ((TelegramServerHandler) ctx.handler()).generateMessageId(rpc_response),
+                    ((ActiveSession) sess).session_id, ((ActiveSession) sess).auth_key_id));
         }
     }
 

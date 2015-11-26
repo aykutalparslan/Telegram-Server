@@ -171,7 +171,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             rpc_result result = new rpc_result(messageId, response);
             if (response != null) {
                 if (tlContext.isAuthorized()) {
-                    Router.getInstance().Route(tlContext.getUserId(), result, generateMessageId(false), getMessageSeqNo(true));
+                    Router.getInstance().Route(tlContext.getUserId(), result, true);
                 } else {
                     ctx.writeAndFlush(encryptRpc(result, getMessageSeqNo(true), generateMessageId(true)));
                 }
@@ -191,7 +191,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
                                     tlContext.getUserId(), ((SendMessage) rpc).message, 2, 1,
                                     ((SentMessage) response).date, 0, 0, 0, ((SendMessage) rpc).entities);
 
-                            Router.getInstance().Route(((InputPeerUser) ((SendMessage) rpc).peer).user_id, message, generateMessageId(true), getMessageSeqNo(true));
+                            Router.getInstance().Route(((InputPeerUser) ((SendMessage) rpc).peer).user_id, message, false);
                         }
                     }
                 }
@@ -254,7 +254,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         return value * 2 + (increment ? 1 : 0);
     }
 
-    long generateMessageId(boolean rpc_response) {
+    public long generateMessageId(boolean rpc_response) {
         long messageId = (long) ((((double) System.currentTimeMillis()) * 4294967296.0) / 1000.0);
         if (messageId <= lastOutgoingMessageId) {
             messageId = lastOutgoingMessageId + 1;
