@@ -40,6 +40,7 @@ import org.telegram.tl.pq.set_client_DH_params;
 import org.telegram.tl.service.*;
 
 import javax.jws.soap.SOAPBinding;
+import java.util.ArrayList;
 
 /**
  * Created by aykut on 28/09/15.
@@ -113,18 +114,6 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             tlContext.setSessionId(session_id);
 
             if (!session_created) {
-                Router.getInstance().addChannelHandler(tlContext.getSessionId(), ctx);
-                if (tlContext.isAuthorized()) {
-                    ActiveSession session = new ActiveSession();
-                    session.auth_key_id = tlContext.getAuthKeyId();
-                    session.session_id = tlContext.getSessionId();
-                    session.phone = tlContext.getPhone();
-                    session.server = ServerConfig.SERVER_HOSTNAME;
-                    session.user_id = tlContext.getUserId();
-                    session.username = "";
-                    Router.getInstance().addActiveSession(session);
-                }
-
                 new_session_created newSessionCreated = new new_session_created(message_id, session_id, ServerSaltStore.getInstance().getServerSalt(tlContext.getAuthKeyId()));
                 ctx.writeAndFlush(encryptRpc(newSessionCreated, getMessageSeqNo(true), generateMessageId(false)));
                 session_created = true;
@@ -166,15 +155,29 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             processRPC(ctx, gzip_rpc, messageId);
         }
 
+        if (rpc instanceof Ping || rpc instanceof ping_delay_disconnect) {
+            if (tlContext.isAuthorized()) {
+                ActiveSession session = new ActiveSession();
+                session.auth_key_id = tlContext.getAuthKeyId();
+                session.session_id = tlContext.getSessionId();
+                session.phone = tlContext.getPhone();
+                session.server = ServerConfig.SERVER_HOSTNAME;
+                session.user_id = tlContext.getUserId();
+                session.username = "";
+                Router.getInstance().addActiveSession(session);
+
+                Router.getInstance().addChannelHandler(tlContext.getSessionId(), ctx);
+
+                System.out.println("user is active: " + tlContext.getPhone());
+            }
+        }
+
         if (rpc instanceof TLMethod) {
             TLObject response = ((TLMethod) rpc).execute(tlContext, generateMessageId(false), messageId);
             rpc_result result = new rpc_result(messageId, response);
             if (response != null) {
-                if (tlContext.isAuthorized()) {
-                    Router.getInstance().Route(tlContext.getUserId(), result, true);
-                } else {
-                    ctx.writeAndFlush(encryptRpc(result, getMessageSeqNo(true), generateMessageId(true)));
-                }
+                ctx.writeAndFlush(encryptRpc(result, getMessageSeqNo(true), generateMessageId(true)));
+
                 System.out.println("TLMethod: " + response.toString());
 
                 if (rpc instanceof SignIn && response instanceof Authorization) {
@@ -182,18 +185,6 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
                     tlContext.setPhone(((UserSelf) ((Authorization) response).user).phone);
                     tlContext.setAuthorized(true);
                     System.out.println("SignIn");
-                }
-
-                if (rpc instanceof SendMessage && response instanceof SentMessage) {
-                    if (((SendMessage) rpc).peer instanceof InputPeerUser) {
-                        if (tlContext.isAuthorized()) {
-                            UpdateShortMessage message = new UpdateShortMessage(0, ((SentMessage) response).id,
-                                    tlContext.getUserId(), ((SendMessage) rpc).message, 2, 1,
-                                    ((SentMessage) response).date, 0, 0, 0, ((SendMessage) rpc).entities);
-
-                            Router.getInstance().Route(((InputPeerUser) ((SendMessage) rpc).peer).user_id, message, false);
-                        }
-                    }
                 }
             }
         }

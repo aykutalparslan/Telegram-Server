@@ -21,6 +21,8 @@ package org.telegram.tl;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
+import java.io.Serializable;
+
 public class UpdateShortMessage extends TLUpdates {
 
     public static final int ID = 0x3f32d858;

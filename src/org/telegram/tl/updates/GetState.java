@@ -53,6 +53,6 @@ public class GetState extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        return new State(1, 0, (int) (System.currentTimeMillis() / 1000L), 1, 0);
+        return new State(0, 0, (int) (System.currentTimeMillis() / 1000L), 1, 0);
     }
 }

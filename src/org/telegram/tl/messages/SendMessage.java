@@ -21,6 +21,7 @@ package org.telegram.tl.messages;
 import org.telegram.api.Router;
 import org.telegram.api.TLContext;
 import org.telegram.api.TLMethod;
+import org.telegram.api.UpdatesQueue;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
@@ -100,7 +101,30 @@ public class SendMessage extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        int date = (int) (System.currentTimeMillis() / 1000L);
         Random rnd = new Random();
-        return new SentMessage(rnd.nextInt(), (int) (System.currentTimeMillis() / 1000L), new MessageMediaEmpty(), new TLVector<TLMessageEntity>(), 1, 1, 1);
+        int msg_id = rnd.nextInt();
+        int pts = 0;
+        if (context.isAuthorized()) {
+            int toUserId = ((InputPeerUser) peer).user_id;
+
+            ArrayList<TLUpdates> updates = UpdatesQueue.getInstance().updatesIncoming.get(toUserId);
+            ArrayList<TLUpdates> updatesSelf = UpdatesQueue.getInstance().updatesIncoming.get(context.getUserId());
+            if (updatesSelf != null) {
+                pts = updatesSelf.size();
+            }
+            if (updates == null) {
+                updates = new ArrayList<>();
+            }
+            UpdateShortMessage msg = new UpdateShortMessage(0, msg_id,
+                    context.getUserId(), this.message, updates.size() + 1, 1,
+                    date, 0, 0, 0, this.entities);
+            updates.add(msg);
+            UpdatesQueue.getInstance().updatesIncoming.set(toUserId, updates);
+
+            Router.getInstance().Route(toUserId, msg, false);
+        }
+
+        return new SentMessage(msg_id, date, new MessageMediaEmpty(), new TLVector<TLMessageEntity>(), pts, 0, pts);
     }
 }

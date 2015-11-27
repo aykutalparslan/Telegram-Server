@@ -129,6 +129,18 @@ public class DatabaseConnection {
                         "action blob," +
                         "PRIMARY KEY (user_id, dialog_id, message_id));");
         session.execute(
+                "CREATE TABLE IF NOT EXISTS telegram.incoming_messages (" +
+                        "user_id int," +
+                        "message_id int," +
+                        "message text," +
+                        "flags int," +
+                        "date int," +
+                        "fwd_from_id int," +
+                        "fwd_date int," +
+                        "reply_to_msg_id int," +
+                        "entities blob," +
+                        "PRIMARY KEY (user_id, message_id));");
+        session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.contacts (" +
                         "user_id int," +
                         "contact_id bigint," +

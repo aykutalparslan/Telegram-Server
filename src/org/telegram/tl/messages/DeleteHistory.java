@@ -18,10 +18,12 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class DeleteHistory extends TLObject {
+public class DeleteHistory extends TLObject implements TLMethod {
 
     public static final int ID = -185009311;
 
@@ -58,5 +60,10 @@ public class DeleteHistory extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new AffectedHistory(0, 0, 0);
     }
 }

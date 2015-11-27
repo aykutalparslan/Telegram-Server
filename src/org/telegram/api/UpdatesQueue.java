@@ -16,29 +16,31 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.tl;
+package org.telegram.api;
 
-import org.telegram.api.TLMethod;
-import org.telegram.mtproto.ProtocolBuffer;
+import com.hazelcast.core.IMap;
+import org.telegram.data.DatabaseConnection;
+import org.telegram.data.HazelcastConnection;
+import org.telegram.tl.TLUpdates;
 
-import java.io.Serializable;
+import java.util.ArrayList;
 
 /**
- * Created by aykut on 19/10/15.
+ * Created by aykut on 26/11/15.
  */
-public abstract class TLObject implements Serializable {
+public class UpdatesQueue {
+    public IMap<Integer, ArrayList<TLUpdates>> updatesIncoming = HazelcastConnection.getInstance().getMap("telegram_updates_incoming");
+    public IMap<Integer, ArrayList<TLUpdates>> updatesOutgoing = HazelcastConnection.getInstance().getMap("telegram_updates_outgoing");
 
-    public void deserialize(ProtocolBuffer buffer){
+    private static UpdatesQueue _instance;
 
+    private UpdatesQueue() {
     }
 
-    public ProtocolBuffer serialize(){
-        return null;
+    public static UpdatesQueue getInstance() {
+        if (_instance == null) {
+            _instance = new UpdatesQueue();
+        }
+        return _instance;
     }
-
-    public void serializeTo(ProtocolBuffer buff){
-
-    }
-
-    public abstract int getConstructor();
 }

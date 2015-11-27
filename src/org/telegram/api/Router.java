@@ -62,7 +62,7 @@ public class Router {
     }
 
     public void addChannelHandler(long session_id, ChannelHandlerContext ctx) {
-        channelHandlers.put(session_id, ctx);
+        channelHandlers.putIfAbsent(session_id, ctx);
     }
 
     public ActiveSession getActiveSession(long session_id) {
