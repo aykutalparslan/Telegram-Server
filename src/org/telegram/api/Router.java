@@ -62,7 +62,7 @@ public class Router {
     }
 
     public void addChannelHandler(long session_id, ChannelHandlerContext ctx) {
-        channelHandlers.putIfAbsent(session_id, ctx);
+        channelHandlers.put(session_id, ctx);
     }
 
     public ActiveSession getActiveSession(long session_id) {
@@ -77,7 +77,10 @@ public class Router {
         for (Object sess : activeSessions.values(new SqlPredicate("user_id = " + user_id)).toArray()) {
             //for now all sessions are on the same server
             ChannelHandlerContext ctx = channelHandlers.get(((ActiveSession) sess).session_id);
-            ctx.writeAndFlush(encryptRpc(msg, ((TelegramServerHandler) ctx.handler()).getMessageSeqNo(true), ((TelegramServerHandler) ctx.handler()).generateMessageId(rpc_response),
+            long msg_id = ((TelegramServerHandler) ctx.handler()).generateMessageId(rpc_response);
+
+            System.out.println("router:" + msg_id);
+            ctx.writeAndFlush(encryptRpc(msg, ((TelegramServerHandler) ctx.handler()).getMessageSeqNo(true), msg_id,
                     ((ActiveSession) sess).session_id, ((ActiveSession) sess).auth_key_id));
         }
     }

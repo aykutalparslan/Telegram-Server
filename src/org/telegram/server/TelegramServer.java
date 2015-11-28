@@ -27,6 +27,7 @@ import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import org.telegram.data.HazelcastConnection;
 
 import java.nio.channels.Channel;
 
@@ -41,7 +42,7 @@ public class TelegramServer {
     }
 
     public void run() throws Exception {
-
+        HazelcastConnection.getInstance();
         EventLoopGroup bossGroup = new NioEventLoopGroup();
         EventLoopGroup workerGroup = new NioEventLoopGroup();
         try {

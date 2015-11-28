@@ -37,7 +37,7 @@ public class msgs_ack extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        msg_ids = (TLVector<Long>) buffer.readTLObject(APIContext.getInstance());
+        msg_ids = (TLVector<Long>) buffer.readTLVector(APIContext.getInstance(), Long.class);
     }
 
     @Override

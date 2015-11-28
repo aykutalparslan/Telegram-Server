@@ -27,7 +27,7 @@ import org.telegram.tl.*;
 
 public class UpdateStatus extends TLObject implements TLMethod {
 
-    public static final int ID = 1713919532;
+    public static final int ID = 0x6628562c;
 
     public boolean offline;
 
@@ -65,7 +65,7 @@ public class UpdateStatus extends TLObject implements TLMethod {
         if (offline) {
             UserStore.getInstance().updateUserStatus(context.getUserId(), new UserStatusOffline());
         } else {
-            UserStore.getInstance().updateUserStatus(context.getUserId(), new UserStatusOnline());
+            UserStore.getInstance().updateUserStatus(context.getUserId(), new UserStatusOnline(120));
         }
 
         return new BoolTrue();

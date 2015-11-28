@@ -21,6 +21,7 @@ package org.telegram.server;
 import com.sun.tools.internal.xjc.reader.xmlschema.bindinfo.BIConversion;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.local.LocalAddress;
 import org.omg.PortableInterceptor.INACTIVE;
 import org.telegram.api.*;
 import org.telegram.data.UserModel;
@@ -126,16 +127,24 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void processRPC(ChannelHandlerContext ctx, TLObject rpc, long messageId) {
-        if (!(rpc instanceof Ping) && !(rpc instanceof ping_delay_disconnect) && !(rpc instanceof msgs_ack)) {
+        if (rpc != null) {
+            System.out.println("TLObject:" + rpc.toString());
+        } else {
+            System.out.println("null rpc");
+        }
+
+        /*if (!(rpc instanceof Ping) && !(rpc instanceof ping_delay_disconnect) && !(rpc instanceof msgs_ack) && !(rpc instanceof TLMethod)) {
             TLVector<Long> msg_ids = new TLVector<>();
             msg_ids.add(messageId);
             msgs_ack ack = new msgs_ack(msg_ids);
 
             ctx.writeAndFlush(encryptRpc(ack, getMessageSeqNo(false), generateMessageId(false)));
-            if (rpc != null) {
-                System.out.println("TLObject:" + rpc.toString());
-            } else {
-                System.out.println("null rpc");
+        }*/
+
+        if (rpc instanceof msgs_ack) {
+            msgs_ack ack = (msgs_ack) rpc;
+            for (Long msg_id : ack.msg_ids) {
+                System.out.println(msg_id);
             }
         }
 

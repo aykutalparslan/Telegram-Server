@@ -127,4 +127,8 @@ public class SendMessage extends TLObject implements TLMethod {
 
         return new SentMessage(msg_id, date, new MessageMediaEmpty(), new TLVector<TLMessageEntity>(), pts, 0, pts);
     }
+
+    public static String hex(int n) {
+        return String.format("0x%8s", Integer.toHexString(n)).replace(' ', '0');
+    }
 }

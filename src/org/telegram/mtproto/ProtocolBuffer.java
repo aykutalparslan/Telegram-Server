@@ -20,8 +20,10 @@ package org.telegram.mtproto;
 
 import org.telegram.tl.APIContext;
 import org.telegram.tl.TLObject;
+import org.telegram.tl.TLVector;
 
 import java.io.Serializable;
+import java.lang.reflect.Type;
 
 /**
  * Created by aykut on 21/09/15.
@@ -318,6 +320,14 @@ public class ProtocolBuffer implements Serializable {
 
     public TLObject readTLObject(APIContext context){
         return context.deserialize(this);
+    }
+
+    public TLObject readTLVector(APIContext context, Class c) {
+        this.readInt();//read constructor
+        TLVector tlVector = new TLVector();
+        tlVector.setDestClass(c);
+        tlVector.deserialize(this);
+        return tlVector;
     }
 
     public TLObject readBareTLType(APIContext context, TLObject bareTypeObject) {

@@ -20,12 +20,18 @@ package org.telegram.tl.messages;
 
 import org.telegram.api.TLContext;
 import org.telegram.api.TLMethod;
+import org.telegram.api.UpdatesQueue;
+import org.telegram.api.UserStore;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
+
+import java.util.ArrayList;
 
 public class ReadHistory extends TLObject implements TLMethod {
 
-    public static final int ID = 0xB04F2510;
+    public static final int ID = 0xb04f2510;
 
     public TLInputPeer peer;
     public int max_id;
@@ -68,6 +74,15 @@ public class ReadHistory extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        return new AffectedHistory(1, 1, 0);
+        if (!context.isAuthorized()) {
+            return new rpc_error(401, "UNAUTHORIZED");
+        }
+        ArrayList<TLUpdates> updatesSelf = UpdatesQueue.getInstance().updatesIncoming.get(context.getUserId());
+        if (updatesSelf != null) {
+            return new AffectedHistory(updatesSelf.size(), updatesSelf.size(), 0);
+        } else {
+            return new AffectedHistory(0, 0, 0);
+        }
+
     }
 }

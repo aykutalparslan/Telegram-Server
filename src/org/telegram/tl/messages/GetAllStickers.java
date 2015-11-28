@@ -23,7 +23,7 @@ import org.telegram.tl.*;
 
 public class GetAllStickers extends TLObject {
 
-    public static final int ID = -1438922648;
+    public static final int ID = 0xaa3bc868;
 
     public String hash;
 
