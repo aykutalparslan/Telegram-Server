@@ -58,11 +58,6 @@ public class DatabaseConnection {
         session.execute("CREATE KEYSPACE IF NOT EXISTS telegram WITH replication " +
                 "= {'class':'SimpleStrategy', 'replication_factor':1};");
         session.execute(
-                "CREATE TABLE IF NOT EXISTS telegram.counters (" +
-                        "counter_name text," +
-                        "next_id int," +
-                        "PRIMARY KEY (counter_name));");
-        session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.auth_keys (" +
                         "auth_key_id bigint," +
                         "auth_key blob," +
@@ -94,6 +89,9 @@ public class DatabaseConnection {
                         "username text," +
                         "access_hash bigint," +
                         "phone text," +
+                        "pts int," +
+                        "sent_messages int," +
+                        "received_messages int," +
                         "PRIMARY KEY (user_id));");
         session.execute(
                 "CREATE MATERIALIZED VIEW IF NOT EXISTS telegram.users_by_phone AS " +
@@ -131,6 +129,7 @@ public class DatabaseConnection {
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.incoming_messages (" +
                         "user_id int," +
+                        "from_user_id int," +
                         "message_id int," +
                         "message text," +
                         "flags int," +
@@ -139,7 +138,7 @@ public class DatabaseConnection {
                         "fwd_date int," +
                         "reply_to_msg_id int," +
                         "entities blob," +
-                        "PRIMARY KEY (user_id, message_id));");
+                        "PRIMARY KEY (user_id, from_user_id, message_id));");
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.contacts (" +
                         "user_id int," +
@@ -284,14 +283,17 @@ public class DatabaseConnection {
         return contacts;
     }
 
-    public void saveUser(int user_id, String first_name, String last_name, String username, long access_hash, String phone) {
-        session.execute("INSERT INTO telegram.users (user_id, first_name, last_name, username, access_hash, phone) VALUES (?,?,?,?,?,?);",
+    public void saveUser(int user_id, String first_name, String last_name, String username, long access_hash, String phone, int pts, int sent_messages, int received_messages) {
+        session.execute("INSERT INTO telegram.users (user_id, first_name, last_name, username, access_hash, phone, pts, sent_messages, received_messages) VALUES (?,?,?,?,?,?,?,?,?);",
                 user_id,
                 first_name,
                 last_name,
                 username,
                 access_hash,
-                phone);
+                phone,
+                pts,
+                sent_messages,
+                received_messages);
     }
 
     public void updateUser(int user_id, String first_name, String last_name, String username, long access_hash) {
@@ -300,6 +302,14 @@ public class DatabaseConnection {
                 last_name,
                 username,
                 access_hash,
+                user_id);
+    }
+
+    public void updateUser_pts(int user_id, int pts, int sent_messages, int received_messages) {
+        session.execute("UPDATE telegram.users SET pts = ?, sent_messages = ?, received_messages = ? WHERE user_id = ?;",
+                pts,
+                sent_messages,
+                received_messages,
                 user_id);
     }
 
@@ -314,6 +324,9 @@ public class DatabaseConnection {
     }
 
     public UserModel getUser(int user_id) {
+        if (user_id == 0) {
+            return null;
+        }
         ResultSet results = session.execute("SELECT * FROM telegram.users WHERE user_id = ?;",
                 user_id);
 
@@ -326,6 +339,9 @@ public class DatabaseConnection {
             userModel.username = row.getString("username");
             userModel.access_hash = row.getLong("access_hash");
             userModel.phone = row.getString("phone");
+            userModel.pts = row.getInt("pts");
+            userModel.sent_messages = row.getInt("sent_messages");
+            userModel.received_messages = row.getInt("received_messages");
         }
         return userModel;
     }
@@ -343,6 +359,9 @@ public class DatabaseConnection {
             userModel.username = row.getString("username");
             userModel.access_hash = row.getLong("access_hash");
             userModel.phone = row.getString("phone");
+            userModel.pts = row.getInt("pts");
+            userModel.sent_messages = row.getInt("sent_messages");
+            userModel.received_messages = row.getInt("received_messages");
         }
         return userModel;
     }
@@ -360,6 +379,9 @@ public class DatabaseConnection {
             userModel.username = row.getString("username");
             userModel.access_hash = row.getLong("access_hash");
             userModel.phone = row.getString("phone");
+            userModel.pts = row.getInt("pts");
+            userModel.sent_messages = row.getInt("sent_messages");
+            userModel.received_messages = row.getInt("received_messages");
         }
         return userModel;
     }

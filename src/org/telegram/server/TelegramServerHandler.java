@@ -147,10 +147,10 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         }*/
 
         if (rpc instanceof msgs_ack) {
-            msgs_ack ack = (msgs_ack) rpc;
+            /*msgs_ack ack = (msgs_ack) rpc;
             for (Long msg_id : ack.msg_ids) {
                 System.out.println(msg_id);
-            }
+            }*/
         }
 
         if (rpc instanceof InvokeWithLayer) {

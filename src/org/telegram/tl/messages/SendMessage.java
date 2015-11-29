@@ -18,15 +18,15 @@
 
 package org.telegram.tl.messages;
 
-import org.telegram.api.Router;
 import org.telegram.api.TLContext;
 import org.telegram.api.TLMethod;
 import org.telegram.api.UpdatesQueue;
+import org.telegram.api.UserStore;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
 import java.util.ArrayList;
-import java.util.Random;
 
 public class SendMessage extends TLObject implements TLMethod {
 
@@ -102,39 +102,27 @@ public class SendMessage extends TLObject implements TLMethod {
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
         int date = (int) (System.currentTimeMillis() / 1000L);
-        Random rnd = new Random();
         int msg_id = 0;
         int pts = 0;
         if (context.isAuthorized()) {
             int toUserId = ((InputPeerUser) peer).user_id;
+            UpdateShortMessage msg = (UpdateShortMessage) UpdatesQueue.getInstance().sendMessage(toUserId, context.getUserId(), this.message, this.entities);
 
-            ArrayList<TLUpdates> updates = UpdatesQueue.getInstance().updatesIncoming.get(toUserId);
-            ArrayList<TLUpdates> updatesSelf = UpdatesQueue.getInstance().updatesIncoming.get(context.getUserId());
-            if (updatesSelf != null) {
-                pts = updatesSelf.size();
-            } else {
-                updatesSelf = new ArrayList<>();
-            }
-            if (updates == null) {
-                updates = new ArrayList<>();
-            }
-            msg_id = updates.size() + updatesSelf.size() + 1;
-            int flags_msg = 0;
-            flags_msg |= 0x00000001;
-            UpdateShortMessage msg = new UpdateShortMessage(flags_msg, msg_id,
-                    context.getUserId(), this.message, updates.size() + 1, 1,
-                    date, 0, 0, 0, this.entities);
-            updates.add(msg);
-            UpdatesQueue.getInstance().updatesIncoming.set(toUserId, updates);
-            UpdatesQueue.getInstance().updatesOutgoing.set(context.getUserId(), updatesSelf);
+            ArrayList<TLUpdates> updatesOut = UpdatesQueue.getInstance().updatesOutgoing.get(context.getUserId());
 
-            Router.getInstance().Route(toUserId, msg, false);
+            if (updatesOut == null) {
+                updatesOut = new ArrayList<>();
+            }
+            UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
+            msg_id = um.sent_messages + um.received_messages + 1;
+
+            updatesOut.add(new UpdateShortMessage(msg.flags, msg_id, msg.user_id, msg.message,
+                    msg.pts, msg.pts_count, msg.date, msg.fwd_from_id, msg.fwd_date, msg.reply_to_msg_id, msg.entities));
+            UpdatesQueue.getInstance().updatesOutgoing.set(context.getUserId(), updatesOut);
+
+            pts = um.pts;
         }
 
         return new SentMessage(msg_id, date, new MessageMediaEmpty(), new TLVector<TLMessageEntity>(), pts, 0, pts);
-    }
-
-    public static String hex(int n) {
-        return String.format("0x%8s", Integer.toHexString(n)).replace(' ', '0');
     }
 }

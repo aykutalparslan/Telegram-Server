@@ -69,6 +69,7 @@ public class MTProtoDecoder  extends ByteToMessageDecoder {
         if (in.readableBytes() < currentPacketLength) {
             if (in.capacity() < currentPacketLength) {
                 in.capacity(in.capacity() + currentPacketLength);
+                System.out.println("new buff len:" + currentPacketLength);
             }
             in.resetReaderIndex();
             return;

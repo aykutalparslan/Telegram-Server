@@ -33,6 +33,9 @@ public class UserModel implements Serializable {
     public long access_hash;
     public String phone;
     public TLUserStatus status;
+    public int pts;
+    public int sent_messages;
+    public int received_messages;
 
     public UserModel() {
         status = new UserStatusEmpty();

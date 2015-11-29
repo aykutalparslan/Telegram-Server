@@ -20,8 +20,11 @@ package org.telegram.tl.updates;
 
 import org.telegram.api.TLContext;
 import org.telegram.api.TLMethod;
+import org.telegram.api.UserStore;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
 public class GetState extends TLObject implements TLMethod {
 
@@ -53,6 +56,10 @@ public class GetState extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        return new State(0, 0, (int) (System.currentTimeMillis() / 1000L), 1, 0);
+        if (context.isAuthorized()) {
+            UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 0, 0);
+            return new State(um.pts, 0, (int) (System.currentTimeMillis() / 1000L), um.pts, 0);
+        }
+        return new rpc_error(401, "UNAUTRORIZED");
     }
 }

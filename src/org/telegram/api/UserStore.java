@@ -94,7 +94,7 @@ public class UserStore {
     public UserModel createUser(UserModel userModel) {
         userModel.user_id = (int) userId.incrementAndGet();
         db.saveUser(userModel.user_id, userModel.first_name,
-                userModel.last_name, userModel.username, userModel.access_hash, userModel.phone);
+                userModel.last_name, userModel.username, userModel.access_hash, userModel.phone, 0, 0, 0);
 
         return getUser(userModel.user_id);
     }
@@ -117,5 +117,26 @@ public class UserStore {
         }
         um.status = status;
         usersShared.replace(user_id, um);
+    }
+
+    public UserModel increment_pts_getUser(int user_id, int pts_inc, int sent_message_inc, int received_message_inc) {
+        UserModel user = usersShared.get(user_id);
+        if (user == null) {
+            user = db.getUser(user_id);
+            if (user != null) {
+                usersShared.set(user_id, user);
+                userPhoneToId.set(user.phone, user_id);
+                usernameToId.set(user.username, user_id);
+            }
+        }
+        user.pts += pts_inc;
+        user.sent_messages += sent_message_inc;
+        user.received_messages += received_message_inc;
+
+        usersShared.set(user_id, user);
+        db.updateUser_pts(user_id, user.pts, user.sent_messages, user.received_messages);
+
+
+        return user;
     }
 }

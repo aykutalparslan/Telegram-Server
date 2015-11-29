@@ -79,6 +79,7 @@ public class SignUp extends TLObject implements TLMethod {
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
         UserModel userModel = UserStore.getInstance().getUser(phone_number);
         if (userModel == null) {
+            userModel = new UserModel();
             userModel.phone = phone_number;
             userModel.first_name = first_name;
             userModel.last_name = last_name;
