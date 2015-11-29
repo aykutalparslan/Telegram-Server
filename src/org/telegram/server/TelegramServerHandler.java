@@ -42,6 +42,7 @@ import org.telegram.tl.service.*;
 
 import javax.jws.soap.SOAPBinding;
 import java.util.ArrayList;
+import java.util.Random;
 
 /**
  * Created by aykut on 28/09/15.
@@ -50,8 +51,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
     private long lastOutgoingMessageId;
     private TLContext tlContext;
     private int seq_no = 0;
-    private boolean session_created = false;
-
+    private long unique_session = 0;
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
@@ -114,16 +114,21 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
 
             tlContext.setSessionId(session_id);
 
-            if (!session_created) {
-                new_session_created newSessionCreated = new new_session_created(message_id, session_id, ServerSaltStore.getInstance().getServerSalt(tlContext.getAuthKeyId()));
-                ctx.writeAndFlush(encryptRpc(newSessionCreated, getMessageSeqNo(true), generateMessageId(false)));
-                session_created = true;
+            if (unique_session == 0) {
+                create_new_session(ctx, message_id);
             }
 
             TLObject rpc = APIContext.getInstance().deserialize(buff);
 
             processRPC(ctx, rpc, message_id);
         }
+    }
+
+    private void create_new_session(ChannelHandlerContext ctx, long message_id) {
+        Random rnd = new Random();
+        unique_session = rnd.nextLong();
+        new_session_created newSessionCreated = new new_session_created(message_id, unique_session, ServerSaltStore.getInstance().getServerSalt(tlContext.getAuthKeyId()));
+        ctx.writeAndFlush(encryptRpc(newSessionCreated, getMessageSeqNo(true), generateMessageId(false)));
     }
 
     private void processRPC(ChannelHandlerContext ctx, TLObject rpc, long messageId) {
@@ -176,8 +181,6 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
                 Router.getInstance().addActiveSession(session);
 
                 Router.getInstance().addChannelHandler(tlContext.getSessionId(), ctx);
-
-                System.out.println("user is active: " + tlContext.getPhone());
             }
         }
 

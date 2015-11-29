@@ -103,7 +103,7 @@ public class SendMessage extends TLObject implements TLMethod {
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
         int date = (int) (System.currentTimeMillis() / 1000L);
         Random rnd = new Random();
-        int msg_id = rnd.nextInt();
+        int msg_id = 0;
         int pts = 0;
         if (context.isAuthorized()) {
             int toUserId = ((InputPeerUser) peer).user_id;
@@ -112,15 +112,21 @@ public class SendMessage extends TLObject implements TLMethod {
             ArrayList<TLUpdates> updatesSelf = UpdatesQueue.getInstance().updatesIncoming.get(context.getUserId());
             if (updatesSelf != null) {
                 pts = updatesSelf.size();
+            } else {
+                updatesSelf = new ArrayList<>();
             }
             if (updates == null) {
                 updates = new ArrayList<>();
             }
-            UpdateShortMessage msg = new UpdateShortMessage(0, msg_id,
+            msg_id = updates.size() + updatesSelf.size() + 1;
+            int flags_msg = 0;
+            flags_msg |= 0x00000001;
+            UpdateShortMessage msg = new UpdateShortMessage(flags_msg, msg_id,
                     context.getUserId(), this.message, updates.size() + 1, 1,
                     date, 0, 0, 0, this.entities);
             updates.add(msg);
             UpdatesQueue.getInstance().updatesIncoming.set(toUserId, updates);
+            UpdatesQueue.getInstance().updatesOutgoing.set(context.getUserId(), updatesSelf);
 
             Router.getInstance().Route(toUserId, msg, false);
         }
