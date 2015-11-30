@@ -171,16 +171,18 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
 
         if (rpc instanceof Ping || rpc instanceof ping_delay_disconnect) {
             if (tlContext.isAuthorized()) {
-                ActiveSession session = new ActiveSession();
-                session.auth_key_id = tlContext.getAuthKeyId();
-                session.session_id = tlContext.getSessionId();
-                session.phone = tlContext.getPhone();
-                session.server = ServerConfig.SERVER_HOSTNAME;
-                session.user_id = tlContext.getUserId();
-                session.username = "";
-                Router.getInstance().addActiveSession(session);
+                if (Router.getInstance().getActiveSession(tlContext.getSessionId()) == null) {
+                    ActiveSession session = new ActiveSession();
+                    session.auth_key_id = tlContext.getAuthKeyId();
+                    session.session_id = tlContext.getSessionId();
+                    session.phone = tlContext.getPhone();
+                    session.server = ServerConfig.SERVER_HOSTNAME;
+                    session.user_id = tlContext.getUserId();
+                    session.username = "";
+                    Router.getInstance().addActiveSession(session);
 
-                Router.getInstance().addChannelHandler(tlContext.getSessionId(), ctx);
+                    Router.getInstance().addChannelHandler(tlContext.getSessionId(), ctx);
+                }
             }
         }
 

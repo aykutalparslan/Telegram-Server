@@ -19,28 +19,33 @@
 package org.telegram.tl;
 
 import org.telegram.mtproto.ProtocolBuffer;
-import org.telegram.tl.*;
 
-public class UpdateReadMessages extends TLUpdate {
+public class UpdateReadHistoryOutbox extends TLUpdate {
 
-    public static final int ID = -966484431;
+    public static final int ID = 0x2f2f21bf;
 
-    public TLVector<Integer> messages;
+    public TLPeer peer;
+    public int max_id;
     public int pts;
+    public int pts_count;
 
-    public UpdateReadMessages() {
-        this.messages = new TLVector<>();
+    public UpdateReadHistoryOutbox() {
+
     }
 
-    public UpdateReadMessages(TLVector<Integer> messages, int pts){
-        this.messages = messages;
+    public UpdateReadHistoryOutbox(TLPeer peer, int max_id, int pts, int pts_count) {
+        this.peer = peer;
+        this.max_id = max_id;
         this.pts = pts;
+        this.pts_count = pts_count;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        messages = (TLVector<Integer>) buffer.readTLVector(APIContext.getInstance(), Integer.class);
+        peer = (TLPeer) buffer.readTLObject(APIContext.getInstance());
+        max_id = buffer.readInt();
         pts = buffer.readInt();
+        pts_count = buffer.readInt();
     }
 
     @Override
@@ -53,8 +58,10 @@ public class UpdateReadMessages extends TLUpdate {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
-        buff.writeTLObject(messages);
+        buff.writeTLObject(peer);
+        buff.writeInt(max_id);
         buff.writeInt(pts);
+        buff.writeInt(pts_count);
     }
 
     public int getConstructor() {

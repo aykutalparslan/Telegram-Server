@@ -18,10 +18,7 @@
 
 package org.telegram.tl.messages;
 
-import org.telegram.api.TLContext;
-import org.telegram.api.TLMethod;
-import org.telegram.api.UpdatesQueue;
-import org.telegram.api.UserStore;
+import org.telegram.api.*;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
@@ -74,14 +71,18 @@ public class ReadHistory extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        int date = (int) (System.currentTimeMillis() / 1000L);
         if (!context.isAuthorized()) {
             return new rpc_error(401, "UNAUTHORIZED");
         }
-        ArrayList<TLUpdates> updatesSelf = UpdatesQueue.getInstance().updatesIncoming.get(context.getUserId());
-        if (updatesSelf != null) {
-            return new AffectedHistory(updatesSelf.size(), updatesSelf.size(), 0);
+        UserModel um = UserStore.getInstance().getUser(context.getUserId());
+        UserModel umc = UserStore.getInstance().getUser(((InputPeerUser) peer).user_id);
+        if (um != null) {
+            UpdateShort update = new UpdateShort(new UpdateReadHistoryOutbox(um.toPeerUser(), umc.received_messages + umc.sent_messages + 1, umc.pts, 0), date);
+            Router.getInstance().Route(umc.user_id, update, false);
+            return new AffectedHistory(um.pts, um.pts, 0);
         } else {
-            return new AffectedHistory(0, 0, 0);
+            return new rpc_error(401, "UNAUTHORIZED");
         }
 
     }
