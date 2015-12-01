@@ -26,6 +26,7 @@ import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 import org.telegram.tl.contacts.*;
+import org.telegram.tl.service.rpc_error;
 
 public class GetFullUser extends TLObject implements TLMethod {
 
@@ -64,13 +65,16 @@ public class GetFullUser extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (!context.isAuthorized()) {
+            return new rpc_error(401, "UNAUTHORIZED");
+        }
         int user_id = 0;
         if (this.id instanceof InputUserContact) {
             user_id = ((InputUserContact) this.id).user_id;
         } else if (this.id instanceof InputUserForeign) {
             user_id = ((InputUserForeign) this.id).user_id;
         } else if (this.id instanceof InputUserSelf) {
-            UserModel um = UserStore.getInstance().getUser(SessionStore.getInstance().getSession(context.getSessionId()).phone);
+            UserModel um = UserStore.getInstance().getUser(context.getUserId());
             UserContact uc = new UserContact(um.user_id, um.first_name, um.last_name, um.username,
                     um.access_hash, um.phone, new UserProfilePhotoEmpty(), um.status);
             return new UserFull(uc, new Link(new MyLinkContact(), new ForeignLinkMutual(), uc),

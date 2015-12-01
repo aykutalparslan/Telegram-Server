@@ -72,7 +72,6 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             long messageId = data.readLong();
             data.readInt();
             TLObject message = APIContext.getInstance().deserialize(data);
-
             if (message != null) {
                 System.out.println("TLObject:" + message.toString());
             } else {
@@ -119,7 +118,6 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             }
 
             TLObject rpc = APIContext.getInstance().deserialize(buff);
-
             processRPC(ctx, rpc, message_id);
         }
     }
@@ -208,7 +206,6 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         MessageKeyData keyData = MessageKeyData.generateMessageKeyData(AuthKeyStore.getInstance().getAuthKey(context.getAuthKeyId()), messageKey, false);
         byte[] decryptedData = CryptoUtils.AES256IGEDecrypt(bytes, keyData.aesIv, keyData.aesKey);
         ProtocolBuffer buff = new ProtocolBuffer(decryptedData);
-
         return buff;
     }
 
@@ -230,6 +227,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         buffer.writeInt(messageBody.length());
         buffer.write(messageBody.getBytes());
 
+
         byte[] messageKeyFull = buffer.getSHA1();
         byte[] messageKey = new byte[16];
         System.arraycopy(messageKeyFull, messageKeyFull.length - 16, messageKey, 0, 16);
@@ -247,7 +245,6 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         data.writeLong(tlContext.getAuthKeyId());
         data.write(messageKey);
         data.write(encryptedData);
-
         return data;
     }
 

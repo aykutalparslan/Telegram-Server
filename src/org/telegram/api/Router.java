@@ -113,14 +113,12 @@ public class Router {
         buffer.write(b);
 
         byte[] dataForEncryption = buffer.getBytes();
-
         byte[] encryptedData = CryptoUtils.AES256IGEEncrypt(dataForEncryption, keyData.aesIv, keyData.aesKey);
 
         ProtocolBuffer data = new ProtocolBuffer(8 + messageKey.length + encryptedData.length);
         data.writeLong(auth_key_id);
         data.write(messageKey);
         data.write(encryptedData);
-
         return data;
     }
 }

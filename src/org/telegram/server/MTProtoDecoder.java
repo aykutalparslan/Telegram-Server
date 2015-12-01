@@ -31,47 +31,47 @@ import java.util.List;
  * Created by aykut on 25/09/15.
  */
 public class MTProtoDecoder  extends ByteToMessageDecoder {
+    int currentPacketLength;
+    byte fByte;
+
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
-        if (in.readableBytes() < 1) {
-            return;
-        }
-
-        int currentPacketLength;
-
-        byte fByte = in.readByte();
-        if((byte) 0xef == fByte){
+        if (currentPacketLength == 0) {
             if (in.readableBytes() < 1) {
                 return;
             }
+
             fByte = in.readByte();
-        }
-        if (fByte != 0x7f && fByte != -1) {
-            if (fByte < 0) {
-                currentPacketLength = ((int) fByte + 128) * 4;
+            if ((byte) 0xef == fByte) {
+                if (in.readableBytes() < 1) {
+                    return;
+                }
+                fByte = in.readByte();
+            }
+            if (fByte != 0x7f && fByte != -1) {
+                if (fByte < 0) {
+                    currentPacketLength = ((int) fByte + 128) * 4;
+                } else {
+                    currentPacketLength = (int) fByte * 4;
+                }
             } else {
-                currentPacketLength = (int) fByte * 4;
+                if (in.readableBytes() < 3) {
+                    return;
+                }
+                byte[] lenBytes = new byte[4];
+                lenBytes[3] = in.readByte();
+                lenBytes[2] = in.readByte();
+                lenBytes[1] = in.readByte();
+                ByteBuffer wrapped = ByteBuffer.wrap(lenBytes);
+                int len = wrapped.getInt();
+                currentPacketLength = len * 4;
             }
-        } else {
-            if (in.readableBytes() < 3) {
-                in.resetReaderIndex();
-                return;
-            }
-            byte[] lenBytes = new byte[4];
-            lenBytes[3] = in.readByte();
-            lenBytes[2] = in.readByte();
-            lenBytes[1] = in.readByte();
-            ByteBuffer wrapped = ByteBuffer.wrap(lenBytes);
-            int len = wrapped.getInt();
-            currentPacketLength = len * 4;
         }
 
         if (in.readableBytes() < currentPacketLength) {
             if (in.capacity() < currentPacketLength) {
                 in.capacity(in.capacity() + currentPacketLength);
-                System.out.println("new buff len:" + currentPacketLength);
             }
-            in.resetReaderIndex();
             return;
         }
 
@@ -82,5 +82,6 @@ public class MTProtoDecoder  extends ByteToMessageDecoder {
         received.write(bytes);
 
         out.add(received);
+        currentPacketLength = 0;
     }
 }
