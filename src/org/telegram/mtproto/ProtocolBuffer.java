@@ -23,7 +23,6 @@ import org.telegram.tl.TLObject;
 import org.telegram.tl.TLVector;
 
 import java.io.Serializable;
-import java.lang.reflect.Type;
 
 /**
  * Created by aykut on 21/09/15.
@@ -56,7 +55,7 @@ public class ProtocolBuffer implements Serializable {
      * @param value
      */
     public void writeByte(byte value) {
-        expand(1);
+        expandIfNecessary(1);
         _bytes[_writerIndex] = value;
         _writerIndex ++;
         set_limit();
@@ -67,7 +66,7 @@ public class ProtocolBuffer implements Serializable {
      * @param value
      */
     public void writeByte(int value) {
-        expand(1);
+        expandIfNecessary(1);
         _bytes[_writerIndex] = (byte)value;
         _writerIndex ++;
         set_limit();
@@ -78,7 +77,7 @@ public class ProtocolBuffer implements Serializable {
      * @param value
      */
     public void writeInt(int value) {
-        expand(4);
+        expandIfNecessary(4);
         _bytes[_writerIndex] = (byte) (value & 0xff);
         _bytes[_writerIndex + 1] = (byte) ((value >> 8) & 0xff);
         _bytes[_writerIndex + 2] = (byte) ((value >> 16) & 0xff);
@@ -93,7 +92,7 @@ public class ProtocolBuffer implements Serializable {
      * @param value
      */
     public void writeLong(long value) {
-        expand(8);
+        expandIfNecessary(8);
         _bytes[_writerIndex] = (byte) (value & 0xff);
         _bytes[_writerIndex + 1] = (byte) ((value >> 8) & 0xff);
         _bytes[_writerIndex + 2] = (byte) ((value >> 16) & 0xff);
@@ -208,7 +207,7 @@ public class ProtocolBuffer implements Serializable {
      * @param count
      */
     public void write(byte[] arr, int offset, int count) {
-        expand(arr.length);
+        expandIfNecessary(arr.length);
 
         System.arraycopy(arr, offset, _bytes, _writerIndex, count);
         _writerIndex += count;
@@ -220,14 +219,14 @@ public class ProtocolBuffer implements Serializable {
      * @param arr
      */
     public void write(byte[] arr) {
-        expand(arr.length);
+        expandIfNecessary(arr.length);
 
         System.arraycopy(arr, 0, _bytes, _writerIndex, arr.length);
         _writerIndex += arr.length;
         set_limit();
     }
 
-    private void expand(int length) {
+    private void expandIfNecessary(int length) {
         if (_bytes == null) {
             _bytes = new byte[length];
             _writerIndex = 0;
