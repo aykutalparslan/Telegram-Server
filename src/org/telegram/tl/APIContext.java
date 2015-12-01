@@ -549,8 +549,4 @@ public class APIContext {
         }
         return null;
     }
-
-    public static String hex(int n) {
-        return String.format("0x%8s", Integer.toHexString(n)).replace(' ', '0');
-    }
 }
