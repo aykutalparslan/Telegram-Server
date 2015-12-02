@@ -18,12 +18,16 @@
 
 package org.telegram.tl.upload;
 
+import org.telegram.api.TLContext;
+import org.telegram.api.TLMethod;
+import org.telegram.data.DatabaseConnection;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
-public class SaveBigFilePart extends TLObject {
+public class SaveBigFilePart extends TLObject implements TLMethod {
 
-    public static final int ID = -562337987;
+    public static final int ID = 0xde7b673d;
 
     public long file_id;
     public int file_part;
@@ -66,5 +70,15 @@ public class SaveBigFilePart extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (context.isAuthorized()) {
+            DatabaseConnection.getInstance().saveFilePart(file_id, file_part, bytes);
+            return new BoolTrue();
+        } else {
+            return new rpc_error(401, "UNAUTHORIZED");
+        }
     }
 }
