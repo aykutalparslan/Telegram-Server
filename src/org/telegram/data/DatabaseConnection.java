@@ -61,6 +61,8 @@ public class DatabaseConnection {
                 "CREATE TABLE IF NOT EXISTS telegram.auth_keys (" +
                         "auth_key_id bigint," +
                         "auth_key blob," +
+                        "phone text," +
+                        "user_id int," +
                         "PRIMARY KEY (auth_key_id));");
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.server_salts (" +
@@ -191,14 +193,22 @@ public class DatabaseConnection {
                         "type int," +
                         "mtime int," +
                         "part_size int," +
+                        "name text," +
+                        "md5_checksum text," +
                         "PRIMARY KEY (file_id));");
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegramfs.file_parts (" +
-                        "part_id bigint," +
                         "file_id bigint," +
                         "part_num int," +
                         "bytes blob," +
-                        "PRIMARY KEY ((file_id, part_id), part_num)) WITH CLUSTERING ORDER BY (part_num ASC);");
+                        "PRIMARY KEY (file_id, part_num)) WITH CLUSTERING ORDER BY (part_num ASC);");
+    }
+
+    public void saveFilePart(long file_id, int part_num, byte[] bytes) {
+        session.execute("INSERT INTO telegramfs.file_parts (file_id, part_num, bytes) VALUES (?,?,?);",
+                file_id,
+                part_num,
+                ByteBuffer.wrap(bytes));
     }
 
     public void saveSession(long auth_key_id, long session_id, int layer, String phone) {
@@ -412,6 +422,13 @@ public class DatabaseConnection {
                 ByteBuffer.wrap(auth_key));
     }
 
+    public void savePhoneAndUserId(long auth_key_id, String phone, int user_id) {
+        session.execute("UPDATE telegram.auth_keys SET phone = ?, user_id = ? WHERE auth_key_id = ?;",
+                phone,
+                user_id,
+                auth_key_id);
+    }
+
     public void saveServerSalt(long auth_key_id, long valid_since, long server_salt, int TTL){
         session.execute("INSERT INTO telegram.server_salts (auth_key_id, valid_since, server_salt) VALUES (?,?,?) USING TTL "+String.valueOf(TTL)+";",
                 auth_key_id,
@@ -419,18 +436,21 @@ public class DatabaseConnection {
                 server_salt);
     }
 
-    public byte[] getAuthKey(long auth_key_id){
+    public AuthKeyModel getAuthKey(long auth_key_id) {
         ResultSet results = session.execute("SELECT * FROM telegram.auth_keys WHERE auth_key_id = ?;",
                 auth_key_id);
 
-        byte[] bytes = null;
+        AuthKeyModel authKeyModel = new AuthKeyModel();
         for (Row row : results) {
             ByteBuffer buff = row.getBytes("auth_key");
-            bytes = new byte[buff.remaining()];
-            buff.get(bytes);
+            authKeyModel.auth_key = new byte[buff.remaining()];
+            buff.get(authKeyModel.auth_key);
+            authKeyModel.auth_key_id = auth_key_id;
+            authKeyModel.phone = row.getString("phone");
+            authKeyModel.user_id = row.getInt("user_id");
         }
 
-        return bytes;
+        return authKeyModel;
     }
 
     public ServerSaltModel[] getserverSalts(long auth_key_id, int count){
