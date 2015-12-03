@@ -62,10 +62,12 @@ public class UpdateStatus extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        if (offline) {
-            UserStore.getInstance().updateUserStatus(context.getUserId(), new UserStatusOffline());
-        } else {
-            UserStore.getInstance().updateUserStatus(context.getUserId(), new UserStatusOnline(120));
+        if (context.isAuthorized()) {
+            if (offline) {
+                UserStore.getInstance().updateUserStatus(context.getUserId(), new UserStatusOffline());
+            } else {
+                UserStore.getInstance().updateUserStatus(context.getUserId(), new UserStatusOnline(120));
+            }
         }
 
         return new BoolTrue();
