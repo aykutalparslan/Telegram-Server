@@ -49,6 +49,8 @@ public class DatabaseConnection {
         //session.execute("DROP TABLE telegram.auth_keys;");
         //session.execute("DROP TABLE telegram.sessions;");
         //session.execute("DROP TABLE telegram.server_salts;");
+        //session.execute("DROP MATERIALIZED VIEW telegram.users_by_phone;");
+        //session.execute("DROP MATERIALIZED VIEW telegram.users_by_username;");
         //session.execute("DROP TABLE telegram.users;");
         //session.execute("DROP KEYSPACE telegram;");
         //session.execute("DROP TABLE telegramfs.files;");
@@ -133,6 +135,21 @@ public class DatabaseConnection {
                         "user_id int," +
                         "from_user_id int," +
                         "message_id int," +
+                        "peer_message_id int," +
+                        "message text," +
+                        "flags int," +
+                        "date int," +
+                        "fwd_from_id int," +
+                        "fwd_date int," +
+                        "reply_to_msg_id int," +
+                        "entities blob," +
+                        "PRIMARY KEY (user_id, from_user_id, message_id));");
+        session.execute(
+                "CREATE TABLE IF NOT EXISTS telegram.outgoing_messages (" +
+                        "user_id int," +
+                        "from_user_id int," +
+                        "message_id int," +
+                        "peer_message_id int," +
                         "message text," +
                         "flags int," +
                         "date int," +
@@ -202,6 +219,28 @@ public class DatabaseConnection {
                         "part_num int," +
                         "bytes blob," +
                         "PRIMARY KEY (file_id, part_num)) WITH CLUSTERING ORDER BY (part_num ASC);");
+    }
+
+    public void saveIncomingMessage(int user_id, int from_user_id, int message_id, int peer_message_id, String message, int flags, int date) {
+        session.execute("INSERT INTO telegram.incoming_messages (user_id, from_user_id, message_id, peer_message_id, message, flags, date) VALUES (?,?,?,?,?,?,?);",
+                user_id,
+                from_user_id,
+                message_id,
+                peer_message_id,
+                message,
+                flags,
+                date);
+    }
+
+    public void saveOutgoingMessage(int user_id, int from_user_id, int message_id, int peer_message_id, String message, int flags, int date) {
+        session.execute("INSERT INTO telegram.outgoing_messages (user_id, from_user_id, message_id, peer_message_id, message, flags, date) VALUES (?,?,?,?,?,?,?);",
+                user_id,
+                from_user_id,
+                message_id,
+                peer_message_id,
+                message,
+                flags,
+                date);
     }
 
     public void saveFilePart(long file_id, int part_num, byte[] bytes) {
