@@ -33,9 +33,8 @@ public class APIContextTest {
     @Test
     public void deserializes_req_pq() {
         ProtocolBuffer buffer = new ProtocolBuffer(1);
-        byte[] nonce = new byte[16];
-        Random rnd = new Random();
-        rnd.nextBytes(nonce);
+        byte[] nonce = new byte[]{1, 4, 34, -23, 23, 66, 9, 0, 11, 90, 123, -67, 87, 2, -45, 8};
+        ;
         req_pq a = new req_pq(nonce);
         buffer.writeTLObject(a);
         TLObject b = buffer.readTLObject(APIContext.getInstance());

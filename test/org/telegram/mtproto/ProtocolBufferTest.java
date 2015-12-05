@@ -93,11 +93,11 @@ public class ProtocolBufferTest {
     }
 
     @Test
-    public void writesAndReadsTLObject() {
+    public void writesAndReadsRawBytes() {
         ProtocolBuffer buffer = new ProtocolBuffer(1);
-        TLObject a = new Ping();
-        buffer.writeTLObject(a);
-        TLObject b = buffer.readTLObject(APIContext.getInstance());
-        assertArrayEquals(a.serialize().getBytes(), b.serialize().getBytes());
+        byte[] a = new byte[]{1, 4, 34, -23, 23, 66, 9};
+        buffer.write(a);
+        byte[] b = buffer.read(buffer.length());
+        assertArrayEquals(a, b);
     }
 }
