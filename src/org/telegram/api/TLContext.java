@@ -18,6 +18,7 @@
 
 package org.telegram.api;
 
+import org.telegram.data.AuthKeyModel;
 import org.telegram.data.SessionModel;
 import org.telegram.data.UserModel;
 
@@ -27,15 +28,19 @@ import org.telegram.data.UserModel;
 public class TLContext {
     public boolean isAuthorized() {
         if (!authorized) {//temporary fix
+            AuthKeyModel akm = AuthKeyStore.getInstance().getAuthKey(authKeyId);
             SessionModel sm = SessionStore.getInstance().getSession(sessionId);
             if (sm == null) {
                 sm = new SessionModel();
                 sm.auth_key_id = authKeyId;
                 sm.session_id = sessionId;
-                sm.phone = AuthKeyStore.getInstance().getAuthKey(authKeyId).phone;
+                sm.phone = akm.phone;
                 SessionStore.getInstance().createSession(sm);
             }
-            UserModel um = UserStore.getInstance().getUser(sm.phone);
+            UserModel um = UserStore.getInstance().getUser(akm.user_id);
+            if (um.phone == null || um.user_id == 0) {
+                return authorized;
+            }
             authorized = true;
             setPhone(um.phone);
             setUserId(um.user_id);
