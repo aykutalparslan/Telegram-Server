@@ -19,6 +19,7 @@
 package org.telegram.tl.auth;
 
 import org.telegram.api.*;
+import org.telegram.data.DatabaseConnection;
 import org.telegram.data.SessionModel;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
@@ -86,6 +87,8 @@ public class SignUp extends TLObject implements TLMethod {
             userModel.username = last_name.toLowerCase() + "." + first_name.toLowerCase();
             userModel = UserStore.getInstance().createUser(userModel);
         }
+
+        AuthKeyStore.getInstance().updateAuthKey(context.getAuthKeyId(), phone_number, userModel.user_id);
 
         SessionModel sessionModel = new SessionModel();
         sessionModel.auth_key_id = context.getAuthKeyId();

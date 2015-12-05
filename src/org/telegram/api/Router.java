@@ -106,7 +106,7 @@ public class Router {
         byte[] messageKeyFull = buffer.getSHA1();
         byte[] messageKey = new byte[16];
         System.arraycopy(messageKeyFull, messageKeyFull.length - 16, messageKey, 0, 16);
-        MessageKeyData keyData = MessageKeyData.generateMessageKeyData(AuthKeyStore.getInstance().getAuthKey(auth_key_id), messageKey, true);
+        MessageKeyData keyData = MessageKeyData.generateMessageKeyData(AuthKeyStore.getInstance().getAuthKey(auth_key_id).auth_key, messageKey, true);
 
         byte[] b = new byte[extraLen];
         Utilities.random.nextBytes(b);

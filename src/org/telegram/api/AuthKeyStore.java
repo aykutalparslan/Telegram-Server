@@ -18,6 +18,8 @@
 
 package org.telegram.api;
 
+import com.hazelcast.core.IMap;
+import org.telegram.data.AuthKeyModel;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.HazelcastConnection;
 
@@ -29,7 +31,7 @@ import java.util.concurrent.ConcurrentMap;
  * Created by aykut on 06/11/15.
  */
 public class AuthKeyStore {
-    private ConcurrentMap<Long, byte[]> authKeysShared = HazelcastConnection.getInstance().getMap("telegram_auth_keys");
+    private IMap<Long, AuthKeyModel> authKeysShared = HazelcastConnection.getInstance().getMap("telegram_auth_keys");
 
     private static AuthKeyStore _instance;
 
@@ -44,12 +46,18 @@ public class AuthKeyStore {
         return _instance;
     }
 
-    public byte[] getAuthKey(long authKeyId) {
-        byte[] authKey = authKeysShared.get(authKeyId);
-        if (authKey == null || authKey.length == 0) {
+    public AuthKeyModel getAuthKey(long authKeyId) {
+        AuthKeyModel authKey = authKeysShared.get(authKeyId);
+        if (authKey == null || authKey.auth_key.length == 0) {
             authKey = DatabaseConnection.getInstance().getAuthKey(authKeyId);
-            authKeysShared.put(authKeyId, authKey);
+            authKeysShared.set(authKeyId, authKey);
         }
         return authKey;
+    }
+
+    public void updateAuthKey(long authKeyId, String phone, int user_id) {
+        DatabaseConnection.getInstance().savePhoneAndUserId(authKeyId, phone, user_id);
+        AuthKeyModel authKey = DatabaseConnection.getInstance().getAuthKey(authKeyId);
+        authKeysShared.set(authKeyId, authKey);
     }
 }

@@ -29,7 +29,11 @@ public class TLContext {
         if (!authorized) {//temporary fix
             SessionModel sm = SessionStore.getInstance().getSession(sessionId);
             if (sm == null) {
-                return false;
+                sm = new SessionModel();
+                sm.auth_key_id = authKeyId;
+                sm.session_id = sessionId;
+                sm.phone = AuthKeyStore.getInstance().getAuthKey(authKeyId).phone;
+                SessionStore.getInstance().createSession(sm);
             }
             UserModel um = UserStore.getInstance().getUser(sm.phone);
             authorized = true;

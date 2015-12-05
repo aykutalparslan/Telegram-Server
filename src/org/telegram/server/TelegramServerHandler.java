@@ -203,7 +203,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
     }
 
     private ProtocolBuffer decryptRpc(TLContext context, byte[] bytes, byte[] messageKey) {
-        MessageKeyData keyData = MessageKeyData.generateMessageKeyData(AuthKeyStore.getInstance().getAuthKey(context.getAuthKeyId()), messageKey, false);
+        MessageKeyData keyData = MessageKeyData.generateMessageKeyData(AuthKeyStore.getInstance().getAuthKey(context.getAuthKeyId()).auth_key, messageKey, false);
         byte[] decryptedData = CryptoUtils.AES256IGEDecrypt(bytes, keyData.aesIv, keyData.aesKey);
         ProtocolBuffer buff = new ProtocolBuffer(decryptedData);
         return buff;
@@ -231,7 +231,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         byte[] messageKeyFull = buffer.getSHA1();
         byte[] messageKey = new byte[16];
         System.arraycopy(messageKeyFull, messageKeyFull.length - 16, messageKey, 0, 16);
-        MessageKeyData keyData = MessageKeyData.generateMessageKeyData(AuthKeyStore.getInstance().getAuthKey(tlContext.getAuthKeyId()), messageKey, true);
+        MessageKeyData keyData = MessageKeyData.generateMessageKeyData(AuthKeyStore.getInstance().getAuthKey(tlContext.getAuthKeyId()).auth_key, messageKey, true);
 
         byte[] b = new byte[extraLen];
         Utilities.random.nextBytes(b);
