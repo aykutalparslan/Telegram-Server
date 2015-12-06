@@ -22,6 +22,7 @@ import org.telegram.api.TLContext;
 import org.telegram.api.TLMethod;
 import org.telegram.api.UpdatesQueue;
 import org.telegram.api.UserStore;
+import org.telegram.data.DatabaseConnection;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
@@ -43,7 +44,8 @@ public class SendMessage extends TLObject implements TLMethod {
     public SendMessage() {
     }
 
-    public SendMessage(int flags, TLInputPeer peer, int reply_to_msg_id, String message, long random_id, TLReplyMarkup reply_markup, TLVector<TLMessageEntity> entities) {
+    public SendMessage(int flags, TLInputPeer peer, int reply_to_msg_id, String message, long random_id,
+                       TLReplyMarkup reply_markup, TLVector<TLMessageEntity> entities) {
         this.flags = flags;
         this.peer = peer;
         this.reply_to_msg_id = reply_to_msg_id;
@@ -106,7 +108,8 @@ public class SendMessage extends TLObject implements TLMethod {
         int pts = 0;
         if (context.isAuthorized()) {
             int toUserId = ((InputPeerUser) peer).user_id;
-            UpdateShortMessage msg = (UpdateShortMessage) UpdatesQueue.getInstance().sendMessage(toUserId, context.getUserId(), this.message, this.entities);
+            UpdateShortMessage msg = (UpdateShortMessage) UpdatesQueue.getInstance().sendMessage(toUserId,
+                    context.getUserId(), this.message, this.entities);
 
             ArrayList<TLUpdates> updatesOut = UpdatesQueue.getInstance().updatesOutgoing.get(context.getUserId());
 
@@ -116,8 +119,15 @@ public class SendMessage extends TLObject implements TLMethod {
             UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
             msg_id = um.sent_messages + um.received_messages + 1;
 
+            DatabaseConnection.getInstance().saveIncomingMessage(toUserId, context.getUserId(), msg.id, msg_id,
+                    msg.message, msg.flags, msg.date);
+
+            DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, msg_id, msg.id,
+                    msg.message, msg.flags, msg.date);
+
             updatesOut.add(new UpdateShortMessage(msg.flags, msg_id, msg.user_id, msg.message,
-                    msg.pts, msg.pts_count, msg.date, msg.fwd_from_id, msg.fwd_date, msg.reply_to_msg_id, msg.entities));
+                    msg.pts, msg.pts_count, msg.date, msg.fwd_from_id, msg.fwd_date,
+                    msg.reply_to_msg_id, msg.entities));
             UpdatesQueue.getInstance().updatesOutgoing.set(context.getUserId(), updatesOut);
 
             pts = um.pts;
