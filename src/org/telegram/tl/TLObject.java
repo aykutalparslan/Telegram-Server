@@ -18,7 +18,6 @@
 
 package org.telegram.tl;
 
-import org.telegram.api.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 
 import java.io.Serializable;

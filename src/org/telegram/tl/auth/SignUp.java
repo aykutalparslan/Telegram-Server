@@ -18,8 +18,7 @@
 
 package org.telegram.tl.auth;
 
-import org.telegram.api.*;
-import org.telegram.data.DatabaseConnection;
+import org.telegram.core.*;
 import org.telegram.data.SessionModel;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;

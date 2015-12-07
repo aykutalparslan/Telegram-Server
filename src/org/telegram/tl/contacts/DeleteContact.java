@@ -18,10 +18,10 @@
 
 package org.telegram.tl.contacts;
 
-import org.telegram.api.SessionStore;
-import org.telegram.api.TLContext;
-import org.telegram.api.TLMethod;
-import org.telegram.api.UserStore;
+import org.telegram.core.SessionStore;
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.core.UserStore;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.SessionModel;
 import org.telegram.data.UserModel;

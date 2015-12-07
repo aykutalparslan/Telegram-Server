@@ -16,16 +16,12 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.api;
+package org.telegram.core;
 
 import com.hazelcast.core.IMap;
 import org.telegram.data.AuthKeyModel;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.HazelcastConnection;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * Created by aykut on 06/11/15.

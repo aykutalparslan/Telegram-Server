@@ -16,16 +16,14 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.api;
+package org.telegram.core;
 
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.HazelcastConnection;
 import org.telegram.data.ServerSaltModel;
-import org.telegram.mtproto.ServerSalt;
 import org.telegram.mtproto.Utilities;
 
 import java.security.SecureRandom;
-import java.util.HashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**

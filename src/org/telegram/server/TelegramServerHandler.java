@@ -18,13 +18,9 @@
 
 package org.telegram.server;
 
-import com.sun.tools.internal.xjc.reader.xmlschema.bindinfo.BIConversion;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.local.LocalAddress;
-import org.omg.PortableInterceptor.INACTIVE;
-import org.telegram.api.*;
-import org.telegram.data.UserModel;
+import org.telegram.core.*;
 import org.telegram.mtproto.MTProtoAuth;
 import org.telegram.mtproto.MessageKeyData;
 import org.telegram.mtproto.ProtocolBuffer;
@@ -33,15 +29,11 @@ import org.telegram.mtproto.secure.CryptoUtils;
 import org.telegram.tl.*;
 import org.telegram.tl.auth.Authorization;
 import org.telegram.tl.auth.SignIn;
-import org.telegram.tl.messages.SendMessage;
-import org.telegram.tl.messages.SentMessage;
 import org.telegram.tl.pq.req_DH_params;
 import org.telegram.tl.pq.req_pq;
 import org.telegram.tl.pq.set_client_DH_params;
 import org.telegram.tl.service.*;
 
-import javax.jws.soap.SOAPBinding;
-import java.util.ArrayList;
 import java.util.Random;
 
 /**

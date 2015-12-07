@@ -18,12 +18,10 @@
 
 package org.telegram.tl.messages;
 
-import org.telegram.api.TLContext;
-import org.telegram.api.TLMethod;
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
-
-import javax.jws.soap.SOAPBinding;
 
 public class GetHistory extends TLObject implements TLMethod {
 

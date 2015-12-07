@@ -18,8 +18,8 @@
 
 package org.telegram.tl.upload;
 
-import org.telegram.api.TLContext;
-import org.telegram.api.TLMethod;
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;

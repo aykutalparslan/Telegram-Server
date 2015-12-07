@@ -18,9 +18,8 @@
 
 package org.telegram.tl.help;
 
-import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy;
-import org.telegram.api.TLContext;
-import org.telegram.api.TLMethod;
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.server.ServerConfig;
 import org.telegram.tl.*;

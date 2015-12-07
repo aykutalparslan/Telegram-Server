@@ -18,13 +18,11 @@
 
 package org.telegram.tl.messages;
 
-import org.telegram.api.*;
+import org.telegram.core.*;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 import org.telegram.tl.service.rpc_error;
-
-import java.util.ArrayList;
 
 public class ReadHistory extends TLObject implements TLMethod {
 

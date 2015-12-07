@@ -16,10 +16,20 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.api;
+package org.telegram.core;
 
-import org.telegram.tl.TLObject;
 
-public interface TLMethod {
-    TLObject execute(TLContext context, long messageId, long reqMessageId);
+import java.io.Serializable;
+
+/**
+ * Created by aykut on 17/11/15.
+ */
+public class ActiveSession implements Serializable {
+    public long auth_key_id;
+    public long session_id;
+    public int layer;
+    public int user_id;
+    public String phone;
+    public String username;
+    public String server;
 }

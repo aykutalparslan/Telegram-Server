@@ -18,18 +18,15 @@
 
 package org.telegram.tl.contacts;
 
-import org.telegram.api.SessionStore;
-import org.telegram.api.TLContext;
-import org.telegram.api.TLMethod;
-import org.telegram.api.UserStore;
+import org.telegram.core.SessionStore;
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.core.UserStore;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.SessionModel;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
-
-import java.security.SecureRandom;
-import java.util.Random;
 
 public class ImportContacts extends TLObject implements TLMethod {
 

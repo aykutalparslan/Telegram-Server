@@ -16,7 +16,7 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.api;
+package org.telegram.core;
 
 import org.telegram.data.AuthKeyModel;
 import org.telegram.data.SessionModel;

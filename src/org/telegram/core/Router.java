@@ -16,7 +16,7 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.api;
+package org.telegram.core;
 
 import com.hazelcast.core.IMap;
 import com.hazelcast.query.SqlPredicate;
@@ -26,13 +26,10 @@ import org.telegram.mtproto.MessageKeyData;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.mtproto.Utilities;
 import org.telegram.mtproto.secure.CryptoUtils;
-import org.telegram.server.ServerConfig;
 import org.telegram.server.TelegramServerHandler;
-import org.telegram.tl.TLChat;
 import org.telegram.tl.TLObject;
 
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * Created by aykut on 17/11/15.

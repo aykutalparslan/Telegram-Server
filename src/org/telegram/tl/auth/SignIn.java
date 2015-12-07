@@ -18,12 +18,10 @@
 
 package org.telegram.tl.auth;
 
-import org.telegram.api.*;
+import org.telegram.core.*;
 import org.telegram.data.SessionModel;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
-import org.telegram.mtproto.Utilities;
-import org.telegram.server.ServerConfig;
 import org.telegram.tl.*;
 import org.telegram.tl.service.rpc_error;
 

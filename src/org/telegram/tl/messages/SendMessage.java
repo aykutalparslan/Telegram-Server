@@ -18,10 +18,10 @@
 
 package org.telegram.tl.messages;
 
-import org.telegram.api.TLContext;
-import org.telegram.api.TLMethod;
-import org.telegram.api.UpdatesQueue;
-import org.telegram.api.UserStore;
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.core.UpdatesQueue;
+import org.telegram.core.UserStore;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
