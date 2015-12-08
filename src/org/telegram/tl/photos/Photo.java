@@ -25,21 +25,21 @@ public class Photo extends TLPhoto {
 
     public static final int ID = 539045032;
 
-    public TLPhoto photo;
+    public org.telegram.tl.TLPhoto photo;
     public TLVector<TLUser> users;
 
     public Photo() {
         this.users = new TLVector<>();
     }
 
-    public Photo(TLPhoto photo, TLVector<TLUser> users){
+    public Photo(org.telegram.tl.TLPhoto photo, TLVector<TLUser> users) {
         this.photo = photo;
         this.users = users;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        photo = (TLPhoto) buffer.readTLObject(APIContext.getInstance());
+        photo = (org.telegram.tl.TLPhoto) buffer.readTLObject(APIContext.getInstance());
         users = (TLVector<TLUser>) buffer.readTLObject(APIContext.getInstance());
     }
 

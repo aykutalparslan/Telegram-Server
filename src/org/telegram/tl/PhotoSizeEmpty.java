@@ -25,7 +25,7 @@ public class PhotoSizeEmpty extends TLPhotoSize {
 
     public static final int ID = 236446268;
 
-    public String type;
+    public String type = "";
 
     public PhotoSizeEmpty() {
     }

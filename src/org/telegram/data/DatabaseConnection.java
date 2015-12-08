@@ -19,6 +19,7 @@
 package org.telegram.data;
 import com.datastax.driver.core.*;
 import org.telegram.mtproto.ServerSalt;
+import org.telegram.server.ServerConfig;
 import org.telegram.tl.*;
 
 import java.nio.ByteBuffer;
@@ -97,6 +98,18 @@ public class DatabaseConnection {
                         "pts int," +
                         "sent_messages int," +
                         "received_messages int," +
+                        "PRIMARY KEY (user_id));");
+        session.execute(
+                "CREATE TABLE IF NOT EXISTS telegram.profile_photos (" +
+                        "user_id int," +
+                        "file_id bigint," +
+                        "caption text," +
+                        "lat double," +
+                        "lon double," +
+                        "crop_left double," +
+                        "crop_top double," +
+                        "crop_width double," +
+                        "date int," +
                         "PRIMARY KEY (user_id));");
         session.execute(
                 "CREATE MATERIALIZED VIEW IF NOT EXISTS telegram.users_by_phone AS " +
@@ -220,6 +233,43 @@ public class DatabaseConnection {
                         "part_num int," +
                         "bytes blob," +
                         "PRIMARY KEY (file_id, part_num)) WITH CLUSTERING ORDER BY (part_num ASC);");
+    }
+
+    public void saveProfilePhoto(int user_id, long file_id, String caption, double lat, double lon, double crop_left, double crop_top, double crop_width, int date) {
+        session.execute("INSERT INTO telegram.profile_photos (user_id, file_id, caption, lat, lon, crop_left, crop_top, crop_width, date) VALUES (?,?,?,?,?,?,?,?,?);",
+                user_id,
+                file_id,
+                caption,
+                lat,
+                lon,
+                crop_left,
+                crop_top,
+                crop_width,
+                date);
+    }
+
+    public UserProfilePhoto getProfilePhoto(int user_id) {
+        ResultSet results = session.execute("SELECT * FROM telegram.profile_photos WHERE user_id = ?;",
+                user_id);
+
+        UserProfilePhoto profilePhoto = new UserProfilePhoto();
+        FileLocation photoSmall = new FileLocation();
+        FileLocation photoBig = new FileLocation();
+
+        for (Row row : results) {
+            profilePhoto.photo_id = row.getLong("file_id");
+            photoSmall.dc_id = ServerConfig.SERVER_ID;
+            photoSmall.volume_id = 0;
+            photoSmall.local_id = 0;
+            photoSmall.secret = profilePhoto.photo_id;
+            profilePhoto.photo_small = photoSmall;
+            photoBig.dc_id = ServerConfig.SERVER_ID;
+            photoBig.volume_id = 0;
+            photoBig.local_id = 1;
+            photoBig.secret = profilePhoto.photo_id;
+            profilePhoto.photo_big = photoBig;
+        }
+        return profilePhoto;
     }
 
     public void saveIncomingMessage(int user_id, int from_user_id, int message_id, int peer_message_id, String message, int flags, int date) {
