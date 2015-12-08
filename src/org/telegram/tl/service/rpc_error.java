@@ -60,4 +60,8 @@ public class rpc_error extends TLObject {
     public int getConstructor() {
         return ID;
     }
+
+    public static rpc_error UNAUTHORIZED() {
+        return new rpc_error(401, "UNAUTHORIZED");
+    }
 }
