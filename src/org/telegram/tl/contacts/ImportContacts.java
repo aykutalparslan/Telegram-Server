@@ -18,10 +18,8 @@
 
 package org.telegram.tl.contacts;
 
-import org.telegram.core.SessionStore;
-import org.telegram.core.TLContext;
-import org.telegram.core.TLMethod;
-import org.telegram.core.UserStore;
+import org.telegram.core.*;
+import org.telegram.data.AuthKeyModel;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.SessionModel;
 import org.telegram.data.UserModel;
@@ -72,15 +70,14 @@ public class ImportContacts extends TLObject implements TLMethod {
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
         TLVector<TLImportedContact> imported = new TLVector<>();
         TLVector<TLUser> users = new TLVector<>();
-        SessionModel sm = SessionStore.getInstance().getSession(context.getSessionId());
-        if (sm != null) {
-            UserModel um = UserStore.getInstance().getUser(sm.phone);
-            if (um != null) {
+        if (context.isAuthorized()) {
+            AuthKeyModel akm = AuthKeyStore.getInstance().getAuthKey(context.getAuthKeyId());
+            if (akm != null) {
                 for (TLInputContact c : contacts) {
                     UserModel cu = UserStore.getInstance().getUser(((InputPhoneContact) c).phone.replace("+", ""));
 
                     if (cu != null) {
-                        DatabaseConnection.getInstance().saveContact(um.user_id, ((InputPhoneContact) c).client_id,
+                        DatabaseConnection.getInstance().saveContact(akm.user_id, ((InputPhoneContact) c).client_id,
                                 ((InputPhoneContact) c).phone.replace("+", ""),
                                 ((InputPhoneContact) c).first_name,
                                 ((InputPhoneContact) c).last_name, true);
@@ -88,7 +85,7 @@ public class ImportContacts extends TLObject implements TLMethod {
                         imported.add(ic);
                         users.add(cu.toUserContact());
                     } else {
-                        DatabaseConnection.getInstance().saveContact(um.user_id, ((InputPhoneContact) c).client_id,
+                        DatabaseConnection.getInstance().saveContact(akm.user_id, ((InputPhoneContact) c).client_id,
                                 ((InputPhoneContact) c).phone.replace("+", ""),
                                 ((InputPhoneContact) c).first_name,
                                 ((InputPhoneContact) c).last_name, true);

@@ -123,7 +123,7 @@ public class SendMessage extends TLObject implements TLMethod {
                     msg.message, msg.flags, msg.date);
 
             DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, msg_id, msg.id,
-                    msg.message, msg.flags, msg.date);
+                    msg.message, 2, msg.date);
 
             updatesOut.add(new UpdateShortMessage(msg.flags, msg_id, msg.user_id, msg.message,
                     msg.pts, msg.pts_count, msg.date, msg.fwd_from_id, msg.fwd_date,

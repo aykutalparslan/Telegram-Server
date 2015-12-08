@@ -38,7 +38,7 @@ public class TLContext {
                 SessionStore.getInstance().createSession(sm);
             }
             UserModel um = UserStore.getInstance().getUser(akm.user_id);
-            if (um.phone == null || um.user_id == 0) {
+            if (um == null || um.phone == null || um.user_id == 0) {
                 return authorized;
             }
             authorized = true;

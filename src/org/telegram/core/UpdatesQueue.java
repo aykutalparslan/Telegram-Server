@@ -58,8 +58,7 @@ public class UpdatesQueue {
         UserModel um = UserStore.getInstance().increment_pts_getUser(to_user_id, 1, 0, 1);
         msg_id = um.sent_messages + um.received_messages + 1;
 
-        int flags_msg = 0;
-        flags_msg |= 0x00000001;
+        int flags_msg = 1;
         UpdateShortMessage msg = new UpdateShortMessage(flags_msg, msg_id,
                 from_user_id, message, um.pts, 1,
                 date, 0, 0, 0, entities);
