@@ -18,10 +18,15 @@
 
 package org.telegram.tl.photos;
 
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.core.UserStore;
+import org.telegram.data.DatabaseConnection;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
-public class UpdateProfilePhoto extends TLObject {
+public class UpdateProfilePhoto extends TLObject implements TLMethod {
 
     public static final int ID = -285902432;
 
@@ -58,5 +63,22 @@ public class UpdateProfilePhoto extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (context.isAuthorized()) {
+            int date = (int) (System.currentTimeMillis() / 1000L);
+            DatabaseConnection.getInstance().saveProfilePhoto(context.getUserId(), ((InputPhoto) id).id, "",
+                    0, 0, 0, 0, 0, date);
+            TLVector<TLPhotoSize> photoSizes = new TLVector<>();
+            photoSizes.add(new PhotoSize("s", new FileLocation(0, 0, 0, ((InputPhoto) id).id), 128, 128, 5092));
+            org.telegram.tl.Photo photo = new org.telegram.tl.Photo(((InputPhoto) id).id, ((InputPhoto) id).id, date, photoSizes);
+            TLVector<TLUser> users = new TLVector<>();
+            users.add(UserStore.getInstance().getUser(context.getUserId()).toUserSelf());
+
+            return new org.telegram.tl.photos.Photo(photo, users);
+        }
+        return rpc_error.UNAUTHORIZED();
     }
 }
