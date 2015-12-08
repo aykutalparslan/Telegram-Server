@@ -19,6 +19,7 @@
 package org.telegram.data;
 import com.datastax.driver.core.*;
 import org.telegram.mtproto.ServerSalt;
+import org.telegram.tl.*;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -147,7 +148,7 @@ public class DatabaseConnection {
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.outgoing_messages (" +
                         "user_id int," +
-                        "from_user_id int," +
+                        "to_user_id int," +
                         "message_id int," +
                         "peer_message_id int," +
                         "message text," +
@@ -157,7 +158,7 @@ public class DatabaseConnection {
                         "fwd_date int," +
                         "reply_to_msg_id int," +
                         "entities blob," +
-                        "PRIMARY KEY (user_id, from_user_id, message_id));");
+                        "PRIMARY KEY (user_id, to_user_id, message_id));");
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.contacts (" +
                         "user_id int," +
@@ -232,10 +233,74 @@ public class DatabaseConnection {
                 date);
     }
 
-    public void saveOutgoingMessage(int user_id, int from_user_id, int message_id, int peer_message_id, String message, int flags, int date) {
-        session.execute("INSERT INTO telegram.outgoing_messages (user_id, from_user_id, message_id, peer_message_id, message, flags, date) VALUES (?,?,?,?,?,?,?);",
+    public Message[] getIncomingMessages(int user_id) {
+        ResultSet results = session.execute("SELECT * FROM telegram.incoming_messages WHERE user_id = ?;",
+                user_id);
+
+        Message[] messages = new Message[results.getAvailableWithoutFetching()];
+        int i = 0;
+        for (Row row : results) {
+            Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
+                    new PeerUser(user_id), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
+            messages[i] = m;
+            i++;
+        }
+
+        return messages;
+    }
+
+    public Message[] getIncomingMessages(int user_id, int from_user_id, int max_id) {
+        ResultSet results = session.execute("SELECT * FROM telegram.incoming_messages WHERE user_id = ? AND from_user_id = ? AND message_id < ?;",
+                user_id, from_user_id, max_id);
+
+        Message[] messages = new Message[results.getAvailableWithoutFetching()];
+        int i = 0;
+        for (Row row : results) {
+            Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
+                    new PeerUser(user_id), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
+            messages[i] = m;
+            i++;
+        }
+
+        return messages;
+    }
+
+    public Message[] getOutgoingMessages(int user_id) {
+        ResultSet results = session.execute("SELECT * FROM telegram.outgoing_messages WHERE user_id = ?;",
+                user_id);
+
+        Message[] messages = new Message[results.getAvailableWithoutFetching()];
+        int i = 0;
+        for (Row row : results) {
+            Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
+                    new PeerUser(row.getInt("to_user_id")), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
+            messages[i] = m;
+            i++;
+        }
+
+        return messages;
+    }
+
+    public Message[] getOutgoingMessages(int user_id, int from_user_id, int max_id) {
+        ResultSet results = session.execute("SELECT * FROM telegram.outgoing_messages WHERE user_id = ? AND to_user_id = ? AND message_id < ?;",
+                user_id, from_user_id, max_id);
+
+        Message[] messages = new Message[results.getAvailableWithoutFetching()];
+        int i = 0;
+        for (Row row : results) {
+            Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
+                    new PeerUser(row.getInt("to_user_id")), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
+            messages[i] = m;
+            i++;
+        }
+
+        return messages;
+    }
+
+    public void saveOutgoingMessage(int user_id, int to_user_id, int message_id, int peer_message_id, String message, int flags, int date) {
+        session.execute("INSERT INTO telegram.outgoing_messages (user_id, to_user_id, message_id, peer_message_id, message, flags, date) VALUES (?,?,?,?,?,?,?);",
                 user_id,
-                from_user_id,
+                to_user_id,
                 message_id,
                 peer_message_id,
                 message,

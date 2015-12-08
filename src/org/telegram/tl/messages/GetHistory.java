@@ -20,8 +20,14 @@ package org.telegram.tl.messages;
 
 import org.telegram.core.TLContext;
 import org.telegram.core.TLMethod;
+import org.telegram.core.UserStore;
+import org.telegram.data.DatabaseConnection;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+
+import java.util.Collections;
+import java.util.Comparator;
 
 public class GetHistory extends TLObject implements TLMethod {
 
@@ -72,10 +78,61 @@ public class GetHistory extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        TLVector<TLMessage> messages = new TLVector<>();
-        TLVector<TLChat> chats = new TLVector<>();
-        TLVector<TLUser> users = new TLVector<>();
+        TLVector<TLMessage> tlMessages = new TLVector<>();
+        TLVector<TLChat> tlChats = new TLVector<>();
+        TLVector<TLUser> tlUsers = new TLVector<>();
+        UserModel um = UserStore.getInstance().getUser(context.getUserId());
+        if (um != null) {
+            tlUsers.add(um.toUserSelf());
+        }
+        if (context.isAuthorized()) {
+            Message[] messages_in = DatabaseConnection.getInstance().getIncomingMessages(context.getUserId(), ((InputPeerUser) peer).user_id, max_id);
+            Message[] messages_out = DatabaseConnection.getInstance().getOutgoingMessages(context.getUserId(), ((InputPeerUser) peer).user_id, max_id);
+            for (Message m : messages_in) {
+                m.flags = 0;
+                processMessage(tlMessages, tlUsers, m);
+            }
+            for (Message m : messages_out) {
+                m.flags = 2;
+                processMessage(tlMessages, tlUsers, m);
+            }
+        }
 
-        return new Messages(messages, chats, users);
+        Collections.sort(tlMessages, new Comparator<TLMessage>() {
+            @Override
+            public int compare(TLMessage o1, TLMessage o2) {
+                return ((Message) o2).id - ((Message) o1).id;
+            }
+        });
+
+        return new Messages(tlMessages, tlChats, tlUsers);
+    }
+
+    private void processMessage(TLVector<TLMessage> tlMessages, TLVector<TLUser> tlUsers, Message m) {
+        tlMessages.add(m);
+        boolean user_exists_from = false;
+        boolean user_exists_to = false;
+        for (TLUser d : tlUsers) {
+            if (d instanceof UserContact) {
+                if (((UserContact) d).id == m.from_id) {
+                    user_exists_from = true;
+                }
+                if (((UserContact) d).id == ((PeerUser) m.to_id).user_id) {
+                    user_exists_to = true;
+                }
+            }
+        }
+        if (!user_exists_from) {
+            UserModel uc = UserStore.getInstance().getUser(m.from_id);
+            if (uc != null) {
+                tlUsers.add(uc.toUserContact());
+            }
+        }
+        if (!user_exists_to) {
+            UserModel uc = UserStore.getInstance().getUser(((PeerUser) m.to_id).user_id);
+            if (uc != null) {
+                tlUsers.add(uc.toUserContact());
+            }
+        }
     }
 }
