@@ -82,6 +82,8 @@ public class SignIn extends TLObject implements TLMethod {
                 SessionStore.getInstance().createSession(sessionModel);
             }
 
+            AuthKeyStore.getInstance().updateAuthKey(context.getAuthKeyId(), phone_number, userModel.user_id);
+
             UserStatusOnline online = new UserStatusOnline(120);
             UserStore.getInstance().updateUserStatus(userModel.user_id, online);
             return new Authorization(Integer.MAX_VALUE, new UserSelf(userModel.user_id, userModel.first_name, userModel.last_name, userModel.username, phone_number, new UserProfilePhotoEmpty(),
