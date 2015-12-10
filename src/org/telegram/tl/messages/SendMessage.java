@@ -111,11 +111,6 @@ public class SendMessage extends TLObject implements TLMethod {
             UpdateShortMessage msg = (UpdateShortMessage) UpdatesQueue.getInstance().sendMessage(toUserId,
                     context.getUserId(), this.message, this.entities);
 
-            ArrayList<TLUpdates> updatesOut = UpdatesQueue.getInstance().updatesOutgoing.get(context.getUserId());
-
-            if (updatesOut == null) {
-                updatesOut = new ArrayList<>();
-            }
             UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
             msg_id = um.sent_messages + um.received_messages + 1;
 
@@ -124,11 +119,6 @@ public class SendMessage extends TLObject implements TLMethod {
 
             DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, msg_id, msg.id,
                     msg.message, 2, msg.date);
-
-            updatesOut.add(new UpdateShortMessage(msg.flags, msg_id, msg.user_id, msg.message,
-                    msg.pts, msg.pts_count, msg.date, msg.fwd_from_id, msg.fwd_date,
-                    msg.reply_to_msg_id, msg.entities));
-            UpdatesQueue.getInstance().updatesOutgoing.set(context.getUserId(), updatesOut);
 
             pts = um.pts;
         }
