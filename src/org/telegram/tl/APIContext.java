@@ -38,7 +38,7 @@ import org.telegram.tl.upload.SaveFilePart;
 import org.telegram.tl.users.GetFullUser;
 import org.telegram.tl.users.GetUsers;
 
-public class APIContext {
+public class APIContext implements DeserializationContext {
     static APIContext apiContext = null;
     public static APIContext getInstance() {
         if (apiContext == null) {
@@ -520,6 +520,7 @@ public class APIContext {
         addToSchema(MessageMediaUnsupportedL12.class);
     }
 
+    @Override
     public <T extends TLObject> void addToSchema(Class<T> type) {
         try {
             if(schema == null){
@@ -532,6 +533,7 @@ public class APIContext {
         }
     }
 
+    @Override
     public TLObject deserialize(ProtocolBuffer buffer) {
         int constructor = buffer.readInt();
         Class obj = schema.get(constructor);

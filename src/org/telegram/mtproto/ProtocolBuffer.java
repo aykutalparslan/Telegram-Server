@@ -18,7 +18,7 @@
 
 package org.telegram.mtproto;
 
-import org.telegram.tl.APIContext;
+import org.telegram.tl.DeserializationContext;
 import org.telegram.tl.TLObject;
 import org.telegram.tl.TLVector;
 
@@ -317,11 +317,11 @@ public class ProtocolBuffer implements Serializable {
         return new String(readBytes());
     }
 
-    public TLObject readTLObject(APIContext context){
+    public TLObject readTLObject(DeserializationContext context) {
         return context.deserialize(this);
     }
 
-    public TLObject readTLVector(APIContext context, Class c) {
+    public TLObject readTLVector(DeserializationContext context, Class c) {
         this.readInt();//read constructor
         TLVector tlVector = new TLVector();
         tlVector.setDestClass(c);
@@ -329,7 +329,7 @@ public class ProtocolBuffer implements Serializable {
         return tlVector;
     }
 
-    public TLObject readBareTLType(APIContext context, TLObject bareTypeObject) {
+    public TLObject readBareTLType(DeserializationContext context, TLObject bareTypeObject) {
         bareTypeObject.deserialize(this);
         return bareTypeObject;
     }
@@ -351,7 +351,7 @@ public class ProtocolBuffer implements Serializable {
         }
     }
 
-    public int getIntFromByte(byte b) {
+    private int getIntFromByte(byte b) {
         return b >= 0 ? b : ((int)b) + 256;
     }
 
