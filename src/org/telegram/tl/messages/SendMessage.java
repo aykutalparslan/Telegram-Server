@@ -18,16 +18,11 @@
 
 package org.telegram.tl.messages;
 
-import org.telegram.core.TLContext;
-import org.telegram.core.TLMethod;
-import org.telegram.core.UpdatesQueue;
-import org.telegram.core.UserStore;
+import org.telegram.core.*;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
-
-import java.util.ArrayList;
 
 public class SendMessage extends TLObject implements TLMethod {
 
@@ -108,7 +103,7 @@ public class SendMessage extends TLObject implements TLMethod {
         int pts = 0;
         if (context.isAuthorized()) {
             int toUserId = ((InputPeerUser) peer).user_id;
-            UpdateShortMessage msg = (UpdateShortMessage) UpdatesQueue.getInstance().sendMessage(toUserId,
+            UpdateShortMessage msg = (UpdateShortMessage) crateShortMessage(toUserId,
                     context.getUserId(), this.message, this.entities);
 
             UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
@@ -124,5 +119,22 @@ public class SendMessage extends TLObject implements TLMethod {
         }
 
         return new SentMessage(msg_id, date, new MessageMediaEmpty(), new TLVector<TLMessageEntity>(), pts, 0, pts);
+    }
+
+    public TLUpdates crateShortMessage(int to_user_id, int from_user_id, String message, TLVector<TLMessageEntity> entities) {
+        int date = (int) (System.currentTimeMillis() / 1000L);
+        int msg_id;
+
+        UserModel um = UserStore.getInstance().increment_pts_getUser(to_user_id, 1, 0, 1);
+        msg_id = um.sent_messages + um.received_messages + 1;
+
+        int flags_msg = 1;
+        UpdateShortMessage msg = new UpdateShortMessage(flags_msg, msg_id,
+                from_user_id, message, um.pts, 1,
+                date, 0, 0, 0, entities);
+
+        Router.getInstance().Route(to_user_id, msg, false);
+
+        return msg;
     }
 }
