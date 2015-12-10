@@ -329,9 +329,9 @@ public class ProtocolBuffer implements Serializable {
         return tlVector;
     }
 
-    public TLObject readBareTLType(TLObject bareTypeObject) {
-        bareTypeObject.deserialize(this);
-        return bareTypeObject;
+    public TLObject readBareTLType(TLObject o) {
+        o.deserialize(this);
+        return o;
     }
 
 
