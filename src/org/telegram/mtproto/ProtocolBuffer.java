@@ -329,7 +329,7 @@ public class ProtocolBuffer implements Serializable {
         return tlVector;
     }
 
-    public TLObject readBareTLType(DeserializationContext context, TLObject bareTypeObject) {
+    public TLObject readBareTLType(TLObject bareTypeObject) {
         bareTypeObject.deserialize(this);
         return bareTypeObject;
     }

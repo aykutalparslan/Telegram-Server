@@ -39,7 +39,7 @@ public class msg_container extends TLObject {
     public void deserialize(ProtocolBuffer buffer) {
         TLVector<message> t = new TLVector<>();
         t.setDestClass(message.class);
-        messages = (TLVector<message>) buffer.readBareTLType(APIContext.getInstance(), t);
+        messages = (TLVector<message>) buffer.readBareTLType(t);
     }
 
     @Override

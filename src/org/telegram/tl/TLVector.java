@@ -84,7 +84,7 @@ public class TLVector<T> extends TLObject implements List<T> {
             } else if (destClass == String.class) {
                 items.add((T) buffer.readString());
             } else if (destClass == message.class) {
-                items.add((T) buffer.readBareTLType(APIContext.getInstance(), new message()));
+                items.add((T) buffer.readBareTLType(new message()));
             } else {
                 items.add((T) APIContext.getInstance().deserialize(buffer));
             }
