@@ -20,8 +20,10 @@ package org.telegram.mtproto;
 
 import org.junit.Test;
 import org.telegram.tl.APIContext;
+import org.telegram.tl.DeserializationContext;
 import org.telegram.tl.TLObject;
 import org.telegram.tl.service.Ping;
+import org.telegram.tl.service.rpc_error;
 
 import static org.junit.Assert.*;
 
@@ -99,5 +101,28 @@ public class ProtocolBufferTest {
         buffer.write(a);
         byte[] b = buffer.read(buffer.length());
         assertArrayEquals(a, b);
+    }
+
+    @Test
+    public void writesAndReadsTLObject() {
+        ProtocolBuffer buffer = new ProtocolBuffer(1);
+        rpc_error a = new rpc_error(401, "UNAUTHORIZED");
+        buffer.writeTLObject(a);
+        rpc_error b = (rpc_error) buffer.readTLObject(new DeserializationContext() {
+            @Override
+            public <T extends TLObject> void addToSchema(Class<T> type) {
+
+            }
+
+            @Override
+            public TLObject deserialize(ProtocolBuffer buffer) {
+                buffer.readInt();
+                rpc_error error = new rpc_error();
+                error.deserialize(buffer);
+                return error;
+            }
+        });
+        assertEquals(a.error_code, b.error_code);
+        assertEquals(a.error_code, b.error_code);
     }
 }
