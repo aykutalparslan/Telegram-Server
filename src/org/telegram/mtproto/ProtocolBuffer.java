@@ -321,7 +321,7 @@ public class ProtocolBuffer implements Serializable {
         return context.deserialize(this);
     }
 
-    public TLObject readTLVector(DeserializationContext context, Class c) {
+    public TLObject readTLVector(Class c) {
         this.readInt();//read constructor
         TLVector tlVector = new TLVector();
         tlVector.setDestClass(c);

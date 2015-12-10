@@ -39,7 +39,7 @@ public class UpdateReadMessages extends TLUpdate {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        messages = (TLVector<Integer>) buffer.readTLVector(APIContext.getInstance(), Integer.class);
+        messages = (TLVector<Integer>) buffer.readTLVector(Integer.class);
         pts = buffer.readInt();
     }
 
