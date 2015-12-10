@@ -232,6 +232,7 @@ public class DatabaseConnection {
                         "file_id bigint," +
                         "part_num int," +
                         "bytes blob," +
+                        "size int," +
                         "PRIMARY KEY (file_id, part_num)) WITH CLUSTERING ORDER BY (part_num ASC);");
     }
 
@@ -358,11 +359,32 @@ public class DatabaseConnection {
                 date);
     }
 
+    public void saveFile(long file_id, int part_size) {
+        session.execute("INSERT INTO telegramfs.files (file_id, part_size) VALUES (?,?);",
+                file_id,
+                part_size);
+    }
+
+    public int getPartSizeForFile(long file_id) {
+        ResultSet results = session.execute("SELECT part_size FROM telegramfs.files WHERE file_id = ?;",
+                file_id);
+        int size = 0;
+        for (Row row : results) {
+            size = row.getInt("part_size");
+        }
+        return size;
+    }
+
     public void saveFilePart(long file_id, int part_num, byte[] bytes) {
-        session.execute("INSERT INTO telegramfs.file_parts (file_id, part_num, bytes) VALUES (?,?,?);",
+        if (part_num == 1) {
+            saveFile(file_id, bytes.length);
+        }
+
+        session.execute("INSERT INTO telegramfs.file_parts (file_id, part_num, bytes, size) VALUES (?,?,?,?);",
                 file_id,
                 part_num,
-                ByteBuffer.wrap(bytes));
+                ByteBuffer.wrap(bytes),
+                bytes.length);
     }
 
     public void saveSession(long auth_key_id, long session_id, int layer, String phone) {
