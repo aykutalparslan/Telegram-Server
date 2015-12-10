@@ -32,8 +32,6 @@ import java.util.ArrayList;
  * Created by aykut on 26/11/15.
  */
 public class UpdatesQueue {
-    public IMap<Integer, ArrayList<TLUpdates>> updatesIncoming = HazelcastConnection.getInstance().getMap("telegram_updates_incoming");
-    public IMap<Integer, ArrayList<TLUpdates>> updatesOutgoing = HazelcastConnection.getInstance().getMap("telegram_updates_outgoing");
 
     private static UpdatesQueue _instance;
 
@@ -50,10 +48,6 @@ public class UpdatesQueue {
     public TLUpdates sendMessage(int to_user_id, int from_user_id, String message, TLVector<TLMessageEntity> entities) {
         int date = (int) (System.currentTimeMillis() / 1000L);
         int msg_id;
-        ArrayList<TLUpdates> updatesIn = UpdatesQueue.getInstance().updatesIncoming.get(to_user_id);
-        if (updatesIn == null) {
-            updatesIn = new ArrayList<>();
-        }
 
         UserModel um = UserStore.getInstance().increment_pts_getUser(to_user_id, 1, 0, 1);
         msg_id = um.sent_messages + um.received_messages + 1;
@@ -62,8 +56,6 @@ public class UpdatesQueue {
         UpdateShortMessage msg = new UpdateShortMessage(flags_msg, msg_id,
                 from_user_id, message, um.pts, 1,
                 date, 0, 0, 0, entities);
-        updatesIn.add(msg);
-        UpdatesQueue.getInstance().updatesIncoming.set(to_user_id, updatesIn);
 
         Router.getInstance().Route(to_user_id, msg, false);
 
