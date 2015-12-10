@@ -18,29 +18,25 @@
 
 package org.telegram.core;
 
-import com.hazelcast.core.IMap;
-import org.telegram.data.HazelcastConnection;
 import org.telegram.data.UserModel;
 import org.telegram.tl.TLMessageEntity;
 import org.telegram.tl.TLUpdates;
 import org.telegram.tl.TLVector;
 import org.telegram.tl.UpdateShortMessage;
 
-import java.util.ArrayList;
-
 /**
  * Created by aykut on 26/11/15.
  */
-public class UpdatesQueue {
+public class Messages {
 
-    private static UpdatesQueue _instance;
+    private static Messages _instance;
 
-    private UpdatesQueue() {
+    private Messages() {
     }
 
-    public static UpdatesQueue getInstance() {
+    public static Messages getInstance() {
         if (_instance == null) {
-            _instance = new UpdatesQueue();
+            _instance = new Messages();
         }
         return _instance;
     }
