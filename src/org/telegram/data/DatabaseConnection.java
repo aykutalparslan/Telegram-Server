@@ -387,6 +387,20 @@ public class DatabaseConnection {
                 bytes.length);
     }
 
+    public byte[] getFilePart(long file_id, int part_num) {
+        ResultSet results = session.execute("SELECT * FROM telegram.file_parts WHERE file_id = ? AND part_num = ?;",
+                file_id,
+                part_num);
+        byte[] bytes = null;
+        for (Row row : results) {
+            ByteBuffer buff = row.getBytes("bytes");
+            bytes = new byte[buff.remaining()];
+            buff.get(bytes);
+        }
+
+        return bytes;
+    }
+
     public void saveSession(long auth_key_id, long session_id, int layer, String phone) {
         session.execute("INSERT INTO telegram.sessions (session_id, auth_key_id, layer, phone) VALUES (?,?,?,?);",
                 session_id,
