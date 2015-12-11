@@ -23,23 +23,26 @@ import org.telegram.tl.*;
 
 public class UpdateNewMessage extends TLUpdate {
 
-    public static final int ID = 20626867;
+    public static final int ID = 0x1f2b0afd;
 
     public TLMessage message;
     public int pts;
+    public int pts_count;
 
     public UpdateNewMessage() {
     }
 
-    public UpdateNewMessage(TLMessage message, int pts){
+    public UpdateNewMessage(TLMessage message, int pts, int pts_count) {
         this.message = message;
         this.pts = pts;
+        this.pts_count = pts_count;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         message = (TLMessage) buffer.readTLObject(APIContext.getInstance());
         pts = buffer.readInt();
+        pts_count = buffer.readInt();
     }
 
     @Override
@@ -54,6 +57,7 @@ public class UpdateNewMessage extends TLUpdate {
         buff.writeInt(getConstructor());
         buff.writeTLObject(message);
         buff.writeInt(pts);
+        buff.writeInt(pts_count);
     }
 
     public int getConstructor() {

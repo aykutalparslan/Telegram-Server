@@ -1,21 +1,3 @@
-/*
- *     This file is part of Telegram Server
- *     Copyright (C) 2015  Aykut Alparslan KOÇ
- *
- *     Telegram Server is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
- *
- *     Telegram Server is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package org.telegram.tl;
 
 import org.telegram.mtproto.ProtocolBuffer;
@@ -23,23 +5,23 @@ import org.telegram.tl.*;
 
 public class InputMediaUploadedVideo extends TLInputMedia {
 
-    public static final int ID = 322623222;
+    public static final int ID = 0xe13fd4bc;
 
     public TLInputFile file;
     public int duration;
     public int w;
     public int h;
-    public String mime_type;
+    public String caption;
 
     public InputMediaUploadedVideo() {
     }
 
-    public InputMediaUploadedVideo(TLInputFile file, int duration, int w, int h, String mime_type){
+    public InputMediaUploadedVideo(TLInputFile file, int duration, int w, int h, String caption) {
         this.file = file;
         this.duration = duration;
         this.w = w;
         this.h = h;
-        this.mime_type = mime_type;
+        this.caption = caption;
     }
 
     @Override
@@ -48,7 +30,7 @@ public class InputMediaUploadedVideo extends TLInputMedia {
         duration = buffer.readInt();
         w = buffer.readInt();
         h = buffer.readInt();
-        mime_type = buffer.readString();
+        caption = buffer.readString();
     }
 
     @Override
@@ -65,7 +47,7 @@ public class InputMediaUploadedVideo extends TLInputMedia {
         buff.writeInt(duration);
         buff.writeInt(w);
         buff.writeInt(h);
-        buff.writeString(mime_type);
+        buff.writeString(caption);
     }
 
     public int getConstructor() {
