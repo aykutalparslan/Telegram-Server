@@ -80,9 +80,8 @@ public class UploadProfilePhoto extends TLObject implements TLMethod {
             int date = (int) (System.currentTimeMillis() / 1000L);
             DatabaseConnection.getInstance().saveProfilePhoto(context.getUserId(), ((InputFile) file).id, caption,
                     0, 0, 0, 0, 0, date);
-            TLVector<TLPhotoSize> photoSizes = new TLVector<>();
-            photoSizes.add(new PhotoSize("s", new FileLocation(0, 0, 0, ((InputFile) file).id), 128, 128, 5092));
-            Photo photo = new org.telegram.tl.Photo(((InputFile) file).id, ((InputFile) file).id, date, photoSizes);
+
+            Photo photo = new org.telegram.tl.Photo(((InputFile) file).id, ((InputFile) file).id, date, new TLVector<TLPhotoSize>());
             TLVector<TLUser> users = new TLVector<>();
             users.add(UserStore.getInstance().getUser(context.getUserId()).toUserSelf());
 
