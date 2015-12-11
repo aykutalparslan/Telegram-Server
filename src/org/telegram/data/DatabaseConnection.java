@@ -18,6 +18,7 @@
 
 package org.telegram.data;
 import com.datastax.driver.core.*;
+import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.mtproto.ServerSalt;
 import org.telegram.server.ServerConfig;
 import org.telegram.tl.*;
@@ -151,6 +152,7 @@ public class DatabaseConnection {
                         "message_id int," +
                         "peer_message_id int," +
                         "message text," +
+                        "media blob," +
                         "flags int," +
                         "date int," +
                         "fwd_from_id int," +
@@ -165,6 +167,7 @@ public class DatabaseConnection {
                         "message_id int," +
                         "peer_message_id int," +
                         "message text," +
+                        "media blob," +
                         "flags int," +
                         "date int," +
                         "fwd_from_id int," +
@@ -284,6 +287,17 @@ public class DatabaseConnection {
                 date);
     }
 
+    public void saveIncomingMessage(int user_id, int from_user_id, int message_id, int peer_message_id, byte[] media, int flags, int date) {
+        session.execute("INSERT INTO telegram.incoming_messages (user_id, from_user_id, message_id, peer_message_id, media, flags, date) VALUES (?,?,?,?,?,?,?);",
+                user_id,
+                from_user_id,
+                message_id,
+                peer_message_id,
+                ByteBuffer.wrap(media),
+                flags,
+                date);
+    }
+
     public Message[] getIncomingMessages(int user_id) {
         ResultSet results = session.execute("SELECT * FROM telegram.incoming_messages WHERE user_id = ?;",
                 user_id);
@@ -291,9 +305,25 @@ public class DatabaseConnection {
         Message[] messages = new Message[results.getAvailableWithoutFetching()];
         int i = 0;
         for (Row row : results) {
-            Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
-                    new PeerUser(user_id), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
-            messages[i] = m;
+            ByteBuffer buff = row.getBytes("media");
+            if (buff != null) {
+                byte[] bytes = new byte[buff.remaining()];
+                if (buff.remaining() > 0) {
+                    buff.get(bytes);
+                }
+
+                if (bytes != null && bytes.length > 0) {
+                    TLObject media = APIContext.getInstance().deserialize(new ProtocolBuffer(bytes));
+                    Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
+                            new PeerUser(user_id), row.getInt("date"), "", (TLMessageMedia) media);
+                    messages[i] = m;
+                }
+            } else {
+                Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
+                        new PeerUser(user_id), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
+                messages[i] = m;
+            }
+
             i++;
         }
 
@@ -307,9 +337,25 @@ public class DatabaseConnection {
         Message[] messages = new Message[results.getAvailableWithoutFetching()];
         int i = 0;
         for (Row row : results) {
-            Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
-                    new PeerUser(user_id), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
-            messages[i] = m;
+            ByteBuffer buff = row.getBytes("media");
+            if (buff != null) {
+                byte[] bytes = new byte[buff.remaining()];
+                if (buff.remaining() > 0) {
+                    buff.get(bytes);
+                }
+
+                if (bytes != null && bytes.length > 0) {
+                    TLObject media = APIContext.getInstance().deserialize(new ProtocolBuffer(bytes));
+                    Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
+                            new PeerUser(user_id), row.getInt("date"), "", (TLMessageMedia) media);
+                    messages[i] = m;
+                }
+            } else {
+                Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
+                        new PeerUser(user_id), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
+                messages[i] = m;
+            }
+
             i++;
         }
 
@@ -323,9 +369,24 @@ public class DatabaseConnection {
         Message[] messages = new Message[results.getAvailableWithoutFetching()];
         int i = 0;
         for (Row row : results) {
-            Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
-                    new PeerUser(row.getInt("to_user_id")), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
-            messages[i] = m;
+            ByteBuffer buff = row.getBytes("media");
+            if (buff != null) {
+                byte[] bytes = new byte[buff.remaining()];
+                if (buff.remaining() > 0) {
+                    buff.get(bytes);
+                }
+                if (bytes != null && bytes.length > 0) {
+                    TLObject media = APIContext.getInstance().deserialize(new ProtocolBuffer(bytes));
+                    Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
+                            new PeerUser(row.getInt("to_user_id")), row.getInt("date"), "", (TLMessageMedia) media);
+                    messages[i] = m;
+                }
+            } else {
+                Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
+                        new PeerUser(row.getInt("to_user_id")), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
+                messages[i] = m;
+            }
+
             i++;
         }
 
@@ -339,9 +400,24 @@ public class DatabaseConnection {
         Message[] messages = new Message[results.getAvailableWithoutFetching()];
         int i = 0;
         for (Row row : results) {
-            Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
-                    new PeerUser(row.getInt("to_user_id")), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
-            messages[i] = m;
+            ByteBuffer buff = row.getBytes("media");
+            if (buff != null) {
+                byte[] bytes = new byte[buff.remaining()];
+                if (buff.remaining() > 0) {
+                    buff.get(bytes);
+                }
+                if (bytes != null && bytes.length > 0) {
+                    TLObject media = APIContext.getInstance().deserialize(new ProtocolBuffer(bytes));
+                    Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
+                            new PeerUser(row.getInt("to_user_id")), row.getInt("date"), "", (TLMessageMedia) media);
+                    messages[i] = m;
+                }
+            } else {
+                Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
+                        new PeerUser(row.getInt("to_user_id")), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
+                messages[i] = m;
+            }
+
             i++;
         }
 
@@ -355,6 +431,17 @@ public class DatabaseConnection {
                 message_id,
                 peer_message_id,
                 message,
+                flags,
+                date);
+    }
+
+    public void saveOutgoingMessage(int user_id, int to_user_id, int message_id, int peer_message_id, byte[] media, int flags, int date) {
+        session.execute("INSERT INTO telegram.outgoing_messages (user_id, to_user_id, message_id, peer_message_id, media, flags, date) VALUES (?,?,?,?,?,?,?);",
+                user_id,
+                to_user_id,
+                message_id,
+                peer_message_id,
+                ByteBuffer.wrap(media),
                 flags,
                 date);
     }
@@ -388,7 +475,7 @@ public class DatabaseConnection {
     }
 
     public byte[] getFilePart(long file_id, int part_num) {
-        ResultSet results = session.execute("SELECT * FROM telegram.file_parts WHERE file_id = ? AND part_num = ?;",
+        ResultSet results = session.execute("SELECT * FROM telegramfs.file_parts WHERE file_id = ? AND part_num = ?;",
                 file_id,
                 part_num);
         byte[] bytes = null;
@@ -399,6 +486,18 @@ public class DatabaseConnection {
         }
 
         return bytes;
+    }
+
+    public int getFileSize(long file_id) {
+        ResultSet results = session.execute("SELECT * FROM telegramfs.file_parts WHERE file_id = ?;",
+                file_id);
+
+        int size = 0;
+        for (Row row : results) {
+            size += row.getInt("size");
+        }
+
+        return size;
     }
 
     public void saveSession(long auth_key_id, long session_id, int layer, String phone) {
@@ -648,7 +747,7 @@ public class DatabaseConnection {
                 auth_key_id);
 
         int final_count = Math.max(64, count);
-        int size = Math.max(final_count, results.getAvailableWithoutFetching());
+        int size = Math.min(final_count, results.getAvailableWithoutFetching());
         ServerSaltModel[] salts = new ServerSaltModel[size];
 
         for (int i = 0; i < size; i++) {
