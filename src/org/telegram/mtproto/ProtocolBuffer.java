@@ -231,7 +231,7 @@ public class ProtocolBuffer implements Serializable {
             _bytes = new byte[length];
             _writerIndex = 0;
         } else if ((_bytes.length - _writerIndex) < length) {
-            byte[] tmp = new byte[_bytes.length + length];
+            byte[] tmp = new byte[_bytes.length + (length - (_bytes.length - _writerIndex))];
             System.arraycopy(_bytes, 0, tmp, 0, _bytes.length);
             _bytes = tmp;
         }
