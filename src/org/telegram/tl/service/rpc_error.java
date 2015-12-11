@@ -64,4 +64,8 @@ public class rpc_error extends TLObject {
     public static rpc_error UNAUTHORIZED() {
         return new rpc_error(401, "UNAUTHORIZED");
     }
+
+    public static rpc_error BAD_REQUEST() {
+        return new rpc_error(400, "BAD_REQUEST");
+    }
 }
