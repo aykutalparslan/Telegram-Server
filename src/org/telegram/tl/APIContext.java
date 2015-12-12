@@ -345,6 +345,7 @@ public class APIContext implements DeserializationContext {
         addToSchema(InputUserSelf.class);
         addToSchema(InputUserContact.class);
         addToSchema(InputUserForeign.class);
+        addToSchema(InputUser.class);
         addToSchema(InputAudioEmpty.class);
         addToSchema(InputAudio.class);
         addToSchema(InputDocumentEmpty.class);
