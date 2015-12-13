@@ -23,6 +23,7 @@ import org.telegram.data.DatabaseConnection;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
 public class SendMessage extends TLObject implements TLMethod {
 
@@ -116,9 +117,11 @@ public class SendMessage extends TLObject implements TLMethod {
                     msg.message, 2, msg.date);
 
             pts = um.pts;
+
+            return new SentMessage(msg_id, date, new MessageMediaEmpty(), new TLVector<TLMessageEntity>(), pts, 0, pts);
         }
 
-        return new SentMessage(msg_id, date, new MessageMediaEmpty(), new TLVector<TLMessageEntity>(), pts, 0, pts);
+        return rpc_error.UNAUTHORIZED();
     }
 
     public TLUpdates crateShortMessage(int to_user_id, int from_user_id, String message, TLVector<TLMessageEntity> entities) {
