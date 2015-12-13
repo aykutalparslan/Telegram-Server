@@ -20,8 +20,10 @@ package org.telegram.tl.messages;
 
 import org.telegram.core.TLContext;
 import org.telegram.core.TLMethod;
+import org.telegram.data.DatabaseConnection;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
 public class DeleteHistory extends TLObject implements TLMethod {
 
@@ -64,6 +66,19 @@ public class DeleteHistory extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        return new AffectedHistory(0, 0, 0);
+        if (context.isAuthorized()) {
+            if (peer instanceof InputPeerUser) {
+                DatabaseConnection.getInstance().deleteHistory(context.getUserId(), ((InputPeerUser) peer).user_id);
+            }
+            if (peer instanceof InputPeerContact) {
+                DatabaseConnection.getInstance().deleteHistory(context.getUserId(), ((InputPeerContact) peer).user_id);
+            }
+            if (peer instanceof InputPeerForeign) {
+                DatabaseConnection.getInstance().deleteHistory(context.getUserId(), ((InputPeerForeign) peer).user_id);
+            }
+
+            return new AffectedHistory(0, 0, 0);
+        }
+        return rpc_error.UNAUTHORIZED();
     }
 }
