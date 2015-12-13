@@ -18,31 +18,54 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.core.Router;
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.core.UserStore;
+import org.telegram.data.DatabaseConnection;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.server.ServerConfig;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
-public class SendMedia extends TLObject {
+import java.util.Random;
 
-    public static final int ID = -1547149962;
+public class SendMedia extends TLObject implements TLMethod {
 
+    public static final int ID = 0xc8f16791;
+
+    public int flags;
     public TLInputPeer peer;
+    public int reply_to_msg_id;
     public TLInputMedia media;
     public long random_id;
+    public TLReplyMarkup reply_markup;
 
     public SendMedia() {
     }
 
-    public SendMedia(TLInputPeer peer, TLInputMedia media, long random_id){
+    public SendMedia(int flags, TLInputPeer peer, int reply_to_msg_id, TLInputMedia media, long random_id, TLReplyMarkup reply_markup) {
+        this.flags = flags;
         this.peer = peer;
+        this.reply_to_msg_id = reply_to_msg_id;
         this.media = media;
         this.random_id = random_id;
+        this.reply_markup = reply_markup;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
+        flags = buffer.readInt();
         peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        if ((flags & 1) != 0) {
+            reply_to_msg_id = buffer.readInt();
+        }
         media = (TLInputMedia) buffer.readTLObject(APIContext.getInstance());
         random_id = buffer.readLong();
+        if ((flags & 4) != 0) {
+            reply_markup = (TLReplyMarkup) buffer.readTLObject(APIContext.getInstance());
+        }
     }
 
     @Override
@@ -55,12 +78,183 @@ public class SendMedia extends TLObject {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
+        buff.writeInt(flags);
         buff.writeTLObject(peer);
+        if ((flags & 1) != 0) {
+            buff.writeInt(reply_to_msg_id);
+        }
         buff.writeTLObject(media);
         buff.writeLong(random_id);
+        if ((flags & 4) != 0) {
+            buff.writeTLObject(reply_markup);
+        }
     }
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        int date = (int) (System.currentTimeMillis() / 1000L);
+        int msg_id = 0;
+        if (context.isAuthorized()) {
+            int toUserId = ((InputPeerUser) peer).user_id;
+            TLMessageMedia messageMedia;
+            messageMedia = createMessageMedia();
+            UpdateNewMessage msg = crateNewMessage(toUserId, context.getUserId(), messageMedia);
+
+            UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
+            msg_id = um.sent_messages + um.received_messages + 1;
+
+            byte[] mediaBytes = ((Message) msg.message).media.serialize().getBytes();
+            DatabaseConnection.getInstance().saveIncomingMessage(toUserId, context.getUserId(), ((Message) msg.message).id, msg_id,
+                    mediaBytes, ((Message) msg.message).flags, ((Message) msg.message).date);
+
+            DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, msg_id, ((Message) msg.message).id,
+                    mediaBytes, 2, ((Message) msg.message).date);
+
+            Random rnd = new Random();
+            UpdateMessageID umi = new UpdateMessageID(msg_id, rnd.nextLong());
+            TLVector<TLUpdate> updateTLVector = new TLVector<>();
+            updateTLVector.add(umi);
+            msg.pts = um.pts;
+            UpdateNewMessage msg_self = new UpdateNewMessage(new Message(2, msg_id, context.getUserId(),
+                    new PeerUser(toUserId), date, "", messageMedia), um.pts, 0);
+            updateTLVector.add(msg_self);
+            TLVector<TLUser> userTLVector = new TLVector<>();
+            userTLVector.add(um.toUserSelf());
+            UserModel uc = UserStore.getInstance().getUser(toUserId);
+            userTLVector.add(uc.toUserContact());
+            Updates updates = new Updates(updateTLVector, userTLVector, new TLVector<TLChat>(), date, um.pts);
+
+            return updates;
+        }
+        return rpc_error.UNAUTHORIZED();
+    }
+
+    private TLMessageMedia createMessageMedia() {
+        if (media instanceof InputMediaContact) {
+            String phone = stripPhone(((InputMediaContact) media).phone_number);
+            int user_id = 0;
+            UserModel um = UserStore.getInstance().getUser(phone);
+            if (um != null) {
+                user_id = um.user_id;
+            }
+            return new MessageMediaContact(((InputMediaContact) media).phone_number,
+                    ((InputMediaContact) media).first_name, ((InputMediaContact) media).last_name,
+                    user_id);
+        } else if (media instanceof InputMediaPhoto) {//TODO: get photo info from database
+            long file_id = ((InputPhoto) ((InputMediaPhoto) media).id).id;
+            int file_size = DatabaseConnection.getInstance().getFileSize(file_id);
+            TLVector<TLPhotoSize> photoSizes = new TLVector<>();
+            Random rnd = new Random();
+            photoSizes.add(new PhotoSize("s", new FileLocation(ServerConfig.SERVER_ID, file_id, rnd.nextInt(), file_id), 96, 96, file_size));
+            photoSizes.add(new PhotoSize("m", new FileLocation(ServerConfig.SERVER_ID, file_id, rnd.nextInt(), file_id), 256, 256, file_size));
+            photoSizes.add(new PhotoSize("x", new FileLocation(ServerConfig.SERVER_ID, file_id, rnd.nextInt(), file_id), 512, 512, file_size));
+            return new MessageMediaPhoto(new Photo(file_id,
+                    ((InputPhoto) ((InputMediaPhoto) media).id).access_hash, 0, photoSizes),
+                    ((InputMediaPhoto) media).caption);
+        } else if (media instanceof InputMediaUploadedPhoto) {//TODO: save photo info to database
+            long file_id = ((InputFile) ((InputMediaUploadedPhoto) media).file).id;
+            int file_size = DatabaseConnection.getInstance().getFileSize(file_id);
+            TLVector<TLPhotoSize> photoSizes = new TLVector<>();
+            Random rnd = new Random();
+            photoSizes.add(new PhotoSize("s", new FileLocation(ServerConfig.SERVER_ID, file_id, rnd.nextInt(), file_id), 96, 96, file_size));
+            photoSizes.add(new PhotoSize("m", new FileLocation(ServerConfig.SERVER_ID, file_id, rnd.nextInt(), file_id), 256, 256, file_size));
+            photoSizes.add(new PhotoSize("x", new FileLocation(ServerConfig.SERVER_ID, file_id, rnd.nextInt(), file_id), 512, 512, file_size));
+            PhotoEmpty pe = new PhotoEmpty(file_id);
+            return new MessageMediaPhoto(new Photo(file_id,
+                    ((InputFile) ((InputMediaUploadedPhoto) media).file).id, 0, photoSizes),
+                    ((InputMediaUploadedPhoto) media).caption);
+        } else if (media instanceof InputMediaDocument) {//TODO: get document info from database
+            long file_id = ((InputDocument) ((InputMediaDocument) media).document_id).id;
+            int file_size = DatabaseConnection.getInstance().getFileSize(file_id);
+            return new MessageMediaDocument(new Document(file_id, ((InputDocument) ((InputMediaDocument) media).document_id).access_hash,
+                    0, "", file_size, new PhotoSizeEmpty(), ServerConfig.SERVER_ID, new TLVector<TLDocumentAttribute>()));
+        } else if (media instanceof InputMediaUploadedDocument) {//TODO: save document info to database
+            long file_id = ((InputFile) ((InputMediaUploadedDocument) media).file).id;
+            int file_size = DatabaseConnection.getInstance().getFileSize(file_id);
+            return new MessageMediaDocument(new Document(file_id, file_id,
+                    0, ((InputMediaUploadedDocument) media).mime_type, file_size, new PhotoSizeEmpty(),
+                    ServerConfig.SERVER_ID, ((InputMediaUploadedDocument) media).attributes));
+        } else if (media instanceof InputMediaUploadedThumbDocument) {//TODO: save document info to database
+            long file_id = ((InputFile) ((InputMediaUploadedThumbDocument) media).file).id;
+            int file_size = DatabaseConnection.getInstance().getFileSize(file_id);
+            return new MessageMediaDocument(new Document(file_id, file_id,
+                    0, ((InputMediaUploadedThumbDocument) media).mime_type, file_size, new PhotoSizeEmpty(),
+                    ServerConfig.SERVER_ID, ((InputMediaUploadedThumbDocument) media).attributes));
+        } else if (media instanceof InputMediaUploadedAudio) {//TODO: save audio info to database
+            long file_id = ((InputFile) ((InputMediaUploadedAudio) media).file).id;
+            int file_size = DatabaseConnection.getInstance().getFileSize(file_id);
+            return new MessageMediaAudio(new Audio(file_id, ((InputAudio) ((InputMediaAudio) media).audio_id).access_hash,
+                    0, ((InputMediaUploadedAudio) media).duration, ((InputMediaUploadedAudio) media).mime_type,
+                    file_size, ServerConfig.SERVER_ID));
+        } else if (media instanceof InputMediaAudio) {//TODO: get audio info from database
+            long file_id = ((InputAudio) ((InputMediaAudio) media).audio_id).id;
+            int file_size = DatabaseConnection.getInstance().getFileSize(file_id);
+            return new MessageMediaAudio(new Audio(file_id, ((InputAudio) ((InputMediaAudio) media).audio_id).access_hash,
+                    0, 0, "", file_size, ServerConfig.SERVER_ID));
+        } else if (media instanceof InputMediaUploadedVideo) {//TODO: save video info to database
+            long file_id = ((InputFile) ((InputMediaUploadedVideo) media).file).id;
+            int file_size = DatabaseConnection.getInstance().getFileSize(file_id);
+            return new MessageMediaVideo(new Video(file_id, ((InputVideo) ((InputMediaVideo) media).video_id).access_hash,
+                    0, ((InputMediaUploadedVideo) media).duration, ((InputMediaUploadedVideo) media).caption,
+                    file_size, new PhotoSizeEmpty(), ServerConfig.SERVER_ID, ((InputMediaUploadedVideo) media).w,
+                    ((InputMediaUploadedVideo) media).h), ((InputMediaVideo) media).caption);
+        } else if (media instanceof InputMediaVideo) {//TODO: get video info from database
+            long file_id = ((InputVideo) ((InputMediaVideo) media).video_id).id;
+            int file_size = DatabaseConnection.getInstance().getFileSize(file_id);
+            return new MessageMediaVideo(new Video(file_id, ((InputVideo) ((InputMediaVideo) media).video_id).access_hash,
+                    0, 0, "", file_size, new PhotoSizeEmpty(), ServerConfig.SERVER_ID, 0, 0), ((InputMediaVideo) media).caption);
+        } else if (media instanceof InputMediaGeoPoint) {
+            return new MessageMediaGeo(new GeoPoint(((InputGeoPoint) ((InputMediaGeoPoint) media).geo_point).lon,
+                    ((InputGeoPoint) ((InputMediaGeoPoint) media).geo_point).lat));
+        } else if (media instanceof InputMediaVenue) {
+            GeoPoint geo = new GeoPoint(((InputGeoPoint) ((InputMediaVenue) media).geo_point).lon,
+                    ((InputGeoPoint) ((InputMediaGeoPoint) media).geo_point).lat);
+            return new MessageMediaVenue(geo, ((InputMediaVenue) media).title, ((InputMediaVenue) media).address,
+                    ((InputMediaVenue) media).provider, ((InputMediaVenue) media).venue_id);
+        } else {
+            return new MessageMediaEmpty();
+        }
+    }
+
+    private String stripPhone(String phone) {
+        StringBuilder res = new StringBuilder(phone);
+        String phoneChars = "0123456789";
+        for (int i = res.length() - 1; i >= 0; i--) {
+            if (!phoneChars.contains(res.substring(i, i + 1))) {
+                res.deleteCharAt(i);
+            }
+        }
+        return res.toString();
+    }
+
+    public UpdateNewMessage crateNewMessage(int to_user_id, int from_user_id, TLMessageMedia media) {
+        int date = (int) (System.currentTimeMillis() / 1000L);
+        int msg_id;
+
+        UserModel um = UserStore.getInstance().increment_pts_getUser(to_user_id, 1, 0, 1);
+        msg_id = um.sent_messages + um.received_messages + 1;
+
+        int flags_msg = 1;
+        UpdateNewMessage msg = new UpdateNewMessage(new Message(flags_msg, msg_id, from_user_id,
+                new PeerUser(to_user_id), date, "", media), um.pts, 1);
+
+        TLVector<TLUpdate> updateTLVector = new TLVector<>();
+        updateTLVector.add(msg);
+
+        UserModel uc = UserStore.getInstance().getUser(from_user_id);
+
+        TLVector<TLUser> userTLVector = new TLVector<>();
+        userTLVector.add(um.toUserSelf());
+        userTLVector.add(uc.toUserContact());
+
+        UpdatesCombined updatesCombined = new UpdatesCombined(updateTLVector, userTLVector, new TLVector<TLChat>(), date, um.pts, um.pts);
+
+        Router.getInstance().Route(to_user_id, updatesCombined, false);
+
+        return msg;
     }
 }
