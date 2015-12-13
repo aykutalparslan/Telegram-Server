@@ -18,10 +18,14 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.data.DatabaseConnection;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
-public class DeleteMessages extends TLObject {
+public class DeleteMessages extends TLObject implements TLMethod {
 
     public static final int ID = 351460618;
 
@@ -37,7 +41,7 @@ public class DeleteMessages extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        id = (TLVector<Integer>) buffer.readTLObject(APIContext.getInstance());
+        id = (TLVector<Integer>) buffer.readTLVector(Integer.class);
     }
 
     @Override
@@ -55,5 +59,15 @@ public class DeleteMessages extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (context.isAuthorized()) {
+            DatabaseConnection.getInstance().deleteMessages(context.getUserId(), id);
+
+            return id;
+        }
+        return rpc_error.UNAUTHORIZED();
     }
 }
