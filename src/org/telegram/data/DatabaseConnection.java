@@ -192,10 +192,9 @@ public class DatabaseConnection {
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.chats (" +
                         "chat_id int," +
-                        "admin_user_id int," +
+                        "admin_id int," +
                         "title text," +
-                        "photo blob," +
-                        "participants_count int," +
+                        "photo bigint," +
                         "date int," +
                         "version int," +
                         "PRIMARY KEY (chat_id));");
@@ -203,9 +202,12 @@ public class DatabaseConnection {
                 "CREATE TABLE IF NOT EXISTS telegram.chat_users (" +
                         "chat_id int," +
                         "user_id int," +
-                        "access_hash bigint," +
-                        "fwd_limit int," +
-                        "PRIMARY KEY (chat_id, user_id));");
+                        "PRIMARY KEY (chat_id));");
+        session.execute(
+                "CREATE MATERIALIZED VIEW IF NOT EXISTS telegram.user_chats AS " +
+                        "SELECT * FROM telegram.chat_users " +
+                        "WHERE chat_id IS NOT NULL AND user_id IS NOT NULL " +
+                        "PRIMARY KEY (user_id, chat_id);");
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.dialogs (" +
                         "user_id int," +
@@ -237,6 +239,21 @@ public class DatabaseConnection {
                         "bytes blob," +
                         "size int," +
                         "PRIMARY KEY (file_id, part_num)) WITH CLUSTERING ORDER BY (part_num ASC);");
+    }
+
+    public void createChat(int chat_id, String title, long photo, int date, int version, int[] users) {
+        session.execute("INSERT INTO telegram.chats (chat_id, admin_id, title, photo, date, version) VALUES (?,?,?,?,?,?);",
+                chat_id,
+                users[0],
+                title,
+                photo,
+                date,
+                version);
+        for (int user_id : users) {
+            session.execute("INSERT INTO telegram.chat_users (chat_id, user_id) VALUES (?,?);",
+                    chat_id,
+                    user_id);
+        }
     }
 
     public void saveProfilePhoto(int user_id, long file_id, String caption, double lat, double lon, double crop_left, double crop_top, double crop_width, int date) {
@@ -296,6 +313,28 @@ public class DatabaseConnection {
                 ByteBuffer.wrap(media),
                 flags,
                 date);
+    }
+
+    public void deleteHistory(int user_id, int peer_id) {
+        session.execute("DELETE FROM telegram.incoming_messages WHERE user_id = ? AND from_user_id = ?;",
+                user_id,
+                peer_id);
+
+        session.execute("DELETE FROM telegram.outgoing_messages WHERE user_id = ? AND to_user_id = ?;",
+                user_id,
+                peer_id);
+    }
+
+    public void deleteMessages(int user_id, TLVector<Integer> messages) {
+        for (int message_id : messages) {
+            session.execute("DELETE FROM telegram.incoming_messages WHERE user_id = ? AND message_id = ?;",
+                    user_id,
+                    message_id);
+
+            session.execute("DELETE FROM telegram.outgoing_messages WHERE user_id = ? AND message_id = ?;",
+                    user_id,
+                    message_id);
+        }
     }
 
     public Message[] getIncomingMessages(int user_id) {
