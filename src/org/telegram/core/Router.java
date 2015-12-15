@@ -76,7 +76,6 @@ public class Router {
             ChannelHandlerContext ctx = channelHandlers.get(((ActiveSession) sess).session_id);
             long msg_id = ((TelegramServerHandler) ctx.handler()).generateMessageId(rpc_response);
 
-            System.out.println("router:" + msg_id);
             ctx.writeAndFlush(encryptRpc(msg, ((TelegramServerHandler) ctx.handler()).getMessageSeqNo(true), msg_id,
                     ((ActiveSession) sess).session_id, ((ActiveSession) sess).auth_key_id));
         }
