@@ -18,10 +18,15 @@
 
 package org.telegram.tl.updates;
 
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.core.UserStore;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
-public class GetDifference extends TLObject {
+public class GetDifference extends TLObject implements TLMethod {
 
     public static final int ID = 168039573;
 
@@ -62,5 +67,15 @@ public class GetDifference extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (context.isAuthorized()) {
+            UserModel um = UserStore.getInstance().getUser(context.getUserId());
+            return new DifferenceEmpty(0, um.pts);
+        }
+
+        return rpc_error.UNAUTHORIZED();
     }
 }
