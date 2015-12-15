@@ -49,6 +49,10 @@ public class UserModel implements Serializable {
         return new UserContact(user_id, first_name, last_name, username, access_hash, phone, new UserProfilePhotoEmpty(), status);
     }
 
+    public User toUser() {
+        return new User(1, user_id, access_hash, first_name, last_name, username, phone, new UserProfilePhotoEmpty(), status, 0);
+    }
+
     public PeerUser toPeerUser() {
         return new PeerUser(user_id);
     }
