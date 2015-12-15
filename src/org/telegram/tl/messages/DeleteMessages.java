@@ -27,7 +27,7 @@ import org.telegram.tl.service.rpc_error;
 
 public class DeleteMessages extends TLObject implements TLMethod {
 
-    public static final int ID = 351460618;
+    public static final int ID = 0xa5f18925;
 
     public TLVector<Integer> id;
 
