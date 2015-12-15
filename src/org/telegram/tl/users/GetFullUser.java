@@ -74,19 +74,15 @@ public class GetFullUser extends TLObject implements TLMethod {
             user_id = ((InputUserForeign) this.id).user_id;
         } else if (this.id instanceof InputUserSelf) {
             UserModel um = UserStore.getInstance().getUser(context.getUserId());
-            UserContact uc = new UserContact(um.user_id, um.first_name, um.last_name, um.username,
-                    um.access_hash, um.phone, new UserProfilePhotoEmpty(), um.status);
-            return new UserFull(uc, new Link(new MyLinkContact(), new ForeignLinkMutual(), uc),
-                    new PhotoEmpty(), new PeerNotifySettingsEmpty(), false, uc.first_name, uc.last_name);
+            return new UserFull(um.toUser(), new Link(new MyLinkContact(), new ForeignLinkMutual(), um.toUser()),
+                    new PhotoEmpty(), new PeerNotifySettingsEmpty(), false, um.first_name, um.last_name);
         } else if (this.id instanceof InputUser) {
             user_id = ((InputUser) this.id).user_id;
         }
         UserModel um = UserStore.getInstance().getUser(user_id);
         if (um != null) {
-            UserContact uc = new UserContact(um.user_id, um.first_name, um.last_name, um.username,
-                    um.access_hash, um.phone, new UserProfilePhotoEmpty(), um.status);
-            return new UserFull(uc, new Link(new MyLinkContact(), new ForeignLinkMutual(), uc),
-                    new PhotoEmpty(), new PeerNotifySettingsEmpty(), false, uc.first_name, uc.last_name);
+            return new UserFull(um.toUser(), new Link(new MyLinkContact(), new ForeignLinkMutual(), um.toUser()),
+                    new PhotoEmpty(), new PeerNotifySettingsEmpty(), false, um.first_name, um.last_name);
         }
         return null;
     }

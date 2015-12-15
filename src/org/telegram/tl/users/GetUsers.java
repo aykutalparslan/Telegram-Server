@@ -67,14 +67,13 @@ public class GetUsers extends TLObject implements TLMethod {
         for (TLInputUser u : this.id) {
             if (u instanceof InputUserContact) {
                 UserModel um = UserStore.getInstance().getUser(((InputUserContact) u).user_id);
-                UserContact uc = new UserContact(um.user_id, um.first_name, um.last_name, um.username,
-                        um.access_hash, um.phone, new UserProfilePhotoEmpty(), um.status);
-                users.add(uc);
+                users.add(um.toUserContact());
             } else if (u instanceof InputUserForeign) {
                 UserModel um = UserStore.getInstance().getUser(((InputUserForeign) u).user_id);
-                UserContact uc = new UserContact(um.user_id, um.first_name, um.last_name, um.username,
-                        um.access_hash, um.phone, new UserProfilePhotoEmpty(), um.status);
-                users.add(uc);
+                users.add(um.toUserContact());
+            } else if (u instanceof InputUser) {
+                UserModel um = UserStore.getInstance().getUser(((InputUser) u).user_id);
+                users.add(um.toUser());
             }
         }
 
