@@ -23,7 +23,7 @@ import org.telegram.tl.*;
 
 public class SendMessageGeoLocationAction extends TLSendMessageAction {
 
-    public static final int ID = 393186209;
+    public static final int ID = 0x176f8ba1;
 
 
     public SendMessageGeoLocationAction(){

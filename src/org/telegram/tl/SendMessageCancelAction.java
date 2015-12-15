@@ -23,7 +23,7 @@ import org.telegram.tl.*;
 
 public class SendMessageCancelAction extends TLSendMessageAction {
 
-    public static final int ID = -44119819;
+    public static final int ID = 0xfd5ec8f5;
 
 
     public SendMessageCancelAction(){

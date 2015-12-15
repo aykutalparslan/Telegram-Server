@@ -23,7 +23,7 @@ import org.telegram.tl.*;
 
 public class SendMessageUploadVideoAction extends TLSendMessageAction {
 
-    public static final int ID = -1845219337;
+    public static final int ID = 0xe9763aec;
 
 
     public SendMessageUploadVideoAction(){

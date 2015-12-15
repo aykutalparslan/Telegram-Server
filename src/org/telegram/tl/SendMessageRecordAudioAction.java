@@ -23,7 +23,7 @@ import org.telegram.tl.*;
 
 public class SendMessageRecordAudioAction extends TLSendMessageAction {
 
-    public static final int ID = -718310409;
+    public static final int ID = 0xd52f73f7;
 
 
     public SendMessageRecordAudioAction(){

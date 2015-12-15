@@ -18,12 +18,16 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.core.Router;
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
-public class SetTyping extends TLObject {
+public class SetTyping extends TLObject implements TLMethod {
 
-    public static final int ID = -1551737264;
+    public static final int ID = 0xa3825e50;
 
     public TLInputPeer peer;
     public TLSendMessageAction action;
@@ -58,5 +62,19 @@ public class SetTyping extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (context.isAuthorized()) {
+            if (peer instanceof InputPeerUser) {
+                int date = (int) (System.currentTimeMillis() / 1000L);
+                UpdateUserTyping typing = new UpdateUserTyping(context.getUserId(), new SendMessageTypingAction());
+                UpdateShort updateShort = new UpdateShort(typing, date);
+                Router.getInstance().Route(((InputPeerUser) peer).user_id, updateShort, false);
+                return new BoolTrue();
+            }
+        }
+        return rpc_error.UNAUTHORIZED();
     }
 }

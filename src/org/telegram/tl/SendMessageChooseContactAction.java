@@ -23,7 +23,7 @@ import org.telegram.tl.*;
 
 public class SendMessageChooseContactAction extends TLSendMessageAction {
 
-    public static final int ID = 1653390447;
+    public static final int ID = 0x628cbc6f;
 
 
     public SendMessageChooseContactAction(){

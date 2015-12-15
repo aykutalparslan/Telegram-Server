@@ -76,6 +76,7 @@ public class APIContext implements DeserializationContext {
         addToSchema(UserContact.class);
         addToSchema(UserRequest.class);
         addToSchema(UserForeign.class);
+        addToSchema(User.class);
         addToSchema(UserDeleted.class);
         addToSchema(File.class);
         addToSchema(GeoPointEmpty.class);
