@@ -96,7 +96,6 @@ public class SignUp extends TLObject implements TLMethod {
         sessionModel.phone = phone_number;
         SessionStore.getInstance().createSession(sessionModel);
 
-        return new Authorization(Integer.MAX_VALUE, new UserSelf(userModel.user_id, first_name, last_name, userModel.username, phone_number, new UserProfilePhotoEmpty(),
-                new UserStatusEmpty(), true));
+        return new Authorization(Integer.MAX_VALUE, userModel.toUser());
     }
 }
