@@ -25,7 +25,7 @@ import org.telegram.tl.contacts.*;
 
 public class Link extends TLLink {
 
-    public static final int ID = -322001931;
+    public static final int ID = 0x3ace484c;
 
     public TLMyLink my_link;
     public TLForeignLink foreign_link;

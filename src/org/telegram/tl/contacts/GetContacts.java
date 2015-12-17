@@ -76,8 +76,7 @@ public class GetContacts extends TLObject implements TLMethod {
             UserModel umc = UserStore.getInstance().getUser(u.phone);
             if (umc != null) {
                 contacts.add(new Contact(umc.user_id, true));
-                users.add(new UserContact(umc.user_id, umc.first_name, umc.last_name,
-                        umc.username, umc.access_hash, umc.phone, new UserProfilePhotoEmpty(), umc.status));
+                users.add(umc.toUser());
             }
 
         }

@@ -434,6 +434,7 @@ public class APIContext implements DeserializationContext {
         addToSchema(GetWallPapers.class);
         addToSchema(GetNearestDc.class);
         addToSchema(SendMedia.class);
+        addToSchema(SendMediaL25.class);
         addToSchema(ImportAuthorization.class);
         addToSchema(DiscardEncryption.class);
         addToSchema(ReadMessageContents.class);
@@ -549,7 +550,7 @@ public class APIContext implements DeserializationContext {
             req.deserialize(buffer);
             return req;
         } else {
-
+            System.out.println("constructor: " + Integer.toHexString(constructor) + " not found");
         }
         return null;
     }

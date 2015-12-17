@@ -83,7 +83,7 @@ public class ImportContacts extends TLObject implements TLMethod {
                                 ((InputPhoneContact) c).last_name, true);
                         ImportedContact ic = new ImportedContact(cu.user_id, ((InputPhoneContact) c).client_id);
                         imported.add(ic);
-                        users.add(cu.toUserContact());
+                        users.add(cu.toUser());
                     } else {
                         DatabaseConnection.getInstance().saveContact(akm.user_id, ((InputPhoneContact) c).client_id,
                                 ((InputPhoneContact) c).phone.replace("+", ""),

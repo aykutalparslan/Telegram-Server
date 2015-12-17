@@ -31,27 +31,25 @@ import org.telegram.tl.service.rpc_error;
 
 import java.util.Random;
 
-public class SendMedia extends TLObject implements TLMethod {
+public class SendMediaL25 extends TLObject implements TLMethod {
 
-    public static final int ID = 0xc8f16791;
+    public static final int ID = 0x2d7923b1;
 
     public int flags;
     public TLInputPeer peer;
     public int reply_to_msg_id;
     public TLInputMedia media;
     public long random_id;
-    public TLReplyMarkup reply_markup;
 
-    public SendMedia() {
+    public SendMediaL25() {
     }
 
-    public SendMedia(int flags, TLInputPeer peer, int reply_to_msg_id, TLInputMedia media, long random_id, TLReplyMarkup reply_markup) {
+    public SendMediaL25(int flags, TLInputPeer peer, int reply_to_msg_id, TLInputMedia media, long random_id) {
         this.flags = flags;
         this.peer = peer;
         this.reply_to_msg_id = reply_to_msg_id;
         this.media = media;
         this.random_id = random_id;
-        this.reply_markup = reply_markup;
     }
 
     @Override
@@ -63,9 +61,6 @@ public class SendMedia extends TLObject implements TLMethod {
         }
         media = (TLInputMedia) buffer.readTLObject(APIContext.getInstance());
         random_id = buffer.readLong();
-        if ((flags & 4) != 0) {
-            reply_markup = (TLReplyMarkup) buffer.readTLObject(APIContext.getInstance());
-        }
     }
 
     @Override
@@ -85,9 +80,6 @@ public class SendMedia extends TLObject implements TLMethod {
         }
         buff.writeTLObject(media);
         buff.writeLong(random_id);
-        if ((flags & 4) != 0) {
-            buff.writeTLObject(reply_markup);
-        }
     }
 
     public int getConstructor() {
