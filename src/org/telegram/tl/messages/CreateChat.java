@@ -18,6 +18,7 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.core.Router;
 import org.telegram.core.TLContext;
 import org.telegram.core.TLMethod;
 import org.telegram.core.UserStore;
@@ -112,6 +113,20 @@ public class CreateChat extends TLObject implements TLMethod {
 
             updateTLVector.add(chat_created);
             Updates updates = new Updates(updateTLVector, userTLVector, chatTLVector, date, um.pts);
+
+            for (int user_id : users_ids) {
+                if (user_id != um.user_id) {
+                    UserModel umc = UserStore.getInstance().increment_pts_getUser(user_id, 1, 1, 0);
+                    TLVector<TLUpdate> updateTLVector2 = new TLVector<>();
+                    int message_id2 = umc.sent_messages + umc.received_messages + 1;
+                    UpdateNewMessage chat_created2 = new UpdateNewMessage(new MessageService(flags, message_id2, context.getUserId(),
+                            new PeerChat(chat_id), date, new MessageActionChatCreate(title, usersVectorInteger)), umc.pts, 1);
+                    updateTLVector2.add(ucp);
+                    updateTLVector2.add(chat_created2);
+                    Updates updates2 = new Updates(updateTLVector2, userTLVector, chatTLVector, date, umc.pts);
+                    Router.getInstance().Route(user_id, updates2, false);
+                }
+            }
 
             return updates;
         }
