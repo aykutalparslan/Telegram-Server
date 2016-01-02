@@ -44,7 +44,7 @@ public class AuthKeyStore {
 
     public AuthKeyModel getAuthKey(long authKeyId) {
         AuthKeyModel authKey = authKeysShared.get(authKeyId);
-        if (authKey == null || authKey.auth_key.length == 0) {
+        if (authKey == null || authKey.auth_key_id == 0) {
             authKey = DatabaseConnection.getInstance().getAuthKey(authKeyId);
             authKeysShared.set(authKeyId, authKey);
         }

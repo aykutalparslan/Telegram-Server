@@ -41,16 +41,34 @@ public class UserModel implements Serializable {
         status = new UserStatusEmpty();
     }
 
-    public UserSelf toUserSelf() {
+    /*public UserSelf toUserSelf() {
         return new UserSelf(user_id, first_name, last_name, username, phone, new UserProfilePhotoEmpty(), status, false);
     }
 
     public UserContact toUserContact() {
         return new UserContact(user_id, first_name, last_name, username, access_hash, phone, new UserProfilePhotoEmpty(), status);
-    }
+    }*/
 
     public User toUser() {
-        return new User(1, user_id, access_hash, first_name, last_name, username, phone, new UserProfilePhotoEmpty(), status, 0);
+        int flags = 0x00000001;
+        flags |= 0x00000002;
+        flags |= 0x00000004;
+        flags |= 0x00000008;
+        flags |= 0x00000010;
+        flags |= 0x00000020;
+        flags |= 0x00000040;
+        return new User(flags, user_id, access_hash, first_name, last_name, username, phone, new UserProfilePhotoEmpty(), status, 0);
+    }
+
+    public User toUser(int flags) {
+        flags |= 0x00000001;
+        flags |= 0x00000002;
+        flags |= 0x00000004;
+        flags |= 0x00000008;
+        flags |= 0x00000010;
+        flags |= 0x00000020;
+        flags |= 0x00000040;
+        return new User(flags, user_id, access_hash, first_name, last_name, username, phone, new UserProfilePhotoEmpty(), status, 0);
     }
 
     public PeerUser toPeerUser() {

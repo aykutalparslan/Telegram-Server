@@ -18,12 +18,20 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.core.UserStore;
+import org.telegram.data.DatabaseConnection;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
-public class CreateChat extends TLObject {
+import java.util.Random;
 
-    public static final int ID = 1100847854;
+public class CreateChat extends TLObject implements TLMethod {
+
+    public static final int ID = 0x9cb126e;
 
     public TLVector<TLInputUser> users;
     public String title;
@@ -59,5 +67,54 @@ public class CreateChat extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (context.isAuthorized()) {
+            int date = (int) (System.currentTimeMillis() / 1000L);
+            int[] users_ids = new int[users.size() + 1];
+            users_ids[0] = context.getUserId();
+            for (int i = 0; i < users.size(); i++) {
+                if (users.get(i) instanceof InputUser) {
+                    users_ids[i + 1] = ((InputUser) users.get(i)).user_id;
+                } else if (users.get(i) instanceof InputUserContact) {
+                    users_ids[i + 1] = ((InputUserContact) users.get(i)).user_id;
+                } else if (users.get(i) instanceof InputUserForeign) {
+                    users_ids[i + 1] = ((InputUserForeign) users.get(i)).user_id;
+                }
+            }
+            Random rnd = new Random();//TODO: add a chat id counter
+            int chat_id = rnd.nextInt();
+            DatabaseConnection.getInstance().createChat(chat_id, title, 0, date, 0, users_ids);
+
+            TLVector<TLChat> chatTLVector = new TLVector<>();
+            chatTLVector.add(new Chat(chat_id, title, new ChatPhotoEmpty(), users_ids.length, date, false, 1));
+            TLVector<TLUser> userTLVector = new TLVector<>();
+            TLVector<TLUpdate> updateTLVector = new TLVector<>();
+            TLVector<TLChatParticipant> participants = new TLVector<>();
+            TLVector<Integer> usersVectorInteger = new TLVector<>();
+            for (int user_id : users_ids) {
+                usersVectorInteger.add(user_id);
+                UserModel umc = UserStore.getInstance().getUser(user_id);
+                if (umc != null) {
+                    userTLVector.add(umc.toUser());
+                }
+                participants.add(new ChatParticipant(user_id, context.getUserId(), date));
+            }
+            UpdateChatParticipants ucp = new UpdateChatParticipants(new ChatParticipants(chat_id, context.getUserId(), participants, 1));
+            updateTLVector.add(ucp);
+            UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 1, 1, 0);
+            int message_id = um.sent_messages + um.received_messages + 1;
+            int flags = 0;
+            UpdateNewMessage chat_created = new UpdateNewMessage(new MessageService(flags, message_id, context.getUserId(),
+                    new PeerChat(chat_id), date, new MessageActionChatCreate(title, usersVectorInteger)), um.pts, 1);
+
+            updateTLVector.add(chat_created);
+            Updates updates = new Updates(updateTLVector, userTLVector, chatTLVector, date, um.pts);
+
+            return updates;
+        }
+        return rpc_error.UNAUTHORIZED();
     }
 }

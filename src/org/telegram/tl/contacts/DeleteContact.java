@@ -73,7 +73,7 @@ public class DeleteContact extends TLObject implements TLMethod {
                 if (um != null) {
                     UserModel umc = UserStore.getInstance().getUser(((InputUserContact) id).user_id);
                     DatabaseConnection.getInstance().deleteContact(um.user_id, umc.phone);
-                    return new Link(new MyLinkContact(), new ForeignLinkUnknown(), umc.toUserContact());
+                    return new Link(new MyLinkContact(), new ForeignLinkUnknown(), umc.toUser());
                 }
             }
 

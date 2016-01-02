@@ -149,6 +149,7 @@ public class DatabaseConnection {
                 "CREATE TABLE IF NOT EXISTS telegram.incoming_messages (" +
                         "user_id int," +
                         "from_user_id int," +
+                        "from_user_type int," +
                         "message_id int," +
                         "peer_message_id int," +
                         "message text," +
@@ -164,6 +165,7 @@ public class DatabaseConnection {
                 "CREATE TABLE IF NOT EXISTS telegram.outgoing_messages (" +
                         "user_id int," +
                         "to_user_id int," +
+                        "to_user_type int," +
                         "message_id int," +
                         "peer_message_id int," +
                         "message text," +

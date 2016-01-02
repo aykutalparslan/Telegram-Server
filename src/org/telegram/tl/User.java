@@ -40,7 +40,7 @@ public class User extends TLUser {
 
     public User(int flags, int id, long access_hash, String first_name, String last_name, String username,
                 String phone, TLUserProfilePhoto photo, TLUserStatus status, int bot_info_version) {
-        this.flags = id;
+        this.flags = flags;
         this.id = id;
         this.first_name = first_name;
         this.last_name = last_name;

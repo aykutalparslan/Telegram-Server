@@ -86,7 +86,7 @@ public class GetDialogs extends TLObject implements TLMethod {
             TLVector<TLUser> tlUsers = new TLVector<>();
             UserModel um = UserStore.getInstance().getUser(context.getUserId());
             if (um != null) {
-                tlUsers.add(um.toUserSelf());
+                tlUsers.add(um.toUser());
             }
 
             for (Message m : messages_in) {
@@ -105,7 +105,7 @@ public class GetDialogs extends TLObject implements TLMethod {
                     tlDialogs.add(d);
                     UserModel uc = UserStore.getInstance().getUser(pu.user_id);
                     if (uc != null) {
-                        tlUsers.add(uc.toUserContact());
+                        tlUsers.add(uc.toUser());
                     }
                 } else {
                     for (TLDialog d : tlDialogs) {
@@ -138,7 +138,7 @@ public class GetDialogs extends TLObject implements TLMethod {
                     tlDialogs.add(d);
                     UserModel uc = UserStore.getInstance().getUser(pu.user_id);
                     if (uc != null) {
-                        tlUsers.add(uc.toUserContact());
+                        tlUsers.add(uc.toUser());
                     }
                 } else {
                     for (TLDialog d : tlDialogs) {

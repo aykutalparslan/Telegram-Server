@@ -83,7 +83,7 @@ public class GetHistory extends TLObject implements TLMethod {
         TLVector<TLUser> tlUsers = new TLVector<>();
         UserModel um = UserStore.getInstance().getUser(context.getUserId());
         if (um != null) {
-            tlUsers.add(um.toUserSelf());
+            tlUsers.add(um.toUser());
         }
         if (context.isAuthorized()) {
             int peer_id = 0;
@@ -140,13 +140,13 @@ public class GetHistory extends TLObject implements TLMethod {
         if (!user_exists_from) {
             UserModel uc = UserStore.getInstance().getUser(m.from_id);
             if (uc != null) {
-                tlUsers.add(uc.toUserContact());
+                tlUsers.add(uc.toUser());
             }
         }
         if (!user_exists_to) {
             UserModel uc = UserStore.getInstance().getUser(((PeerUser) m.to_id).user_id);
             if (uc != null) {
-                tlUsers.add(uc.toUserContact());
+                tlUsers.add(uc.toUser());
             }
         }
     }
