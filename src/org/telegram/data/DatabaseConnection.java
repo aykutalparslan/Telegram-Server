@@ -130,22 +130,6 @@ public class DatabaseConnection {
                         "tl_object blob," +
                         "PRIMARY KEY (session_id, message_id));");
         session.execute(
-                "CREATE TABLE IF NOT EXISTS telegram.messages (" +
-                        "user_id int," +
-                        "dialog_id bigint," +
-                        "message_id bigint," +
-                        "mesage_type int," +
-                        "flags int," +
-                        "tl_id int," +
-                        "from_id int," +
-                        "to_type int," +
-                        "to_id int," +
-                        "date int," +
-                        "message text," +
-                        "media blob," +
-                        "action blob," +
-                        "PRIMARY KEY (user_id, dialog_id, message_id));");
-        session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.incoming_messages (" +
                         "user_id int," +
                         "from_user_id int," +
@@ -241,6 +225,25 @@ public class DatabaseConnection {
                         "bytes blob," +
                         "size int," +
                         "PRIMARY KEY (file_id, part_num)) WITH CLUSTERING ORDER BY (part_num ASC);");
+    }
+
+    public TLChat getChat(int chat_id) {
+        if (chat_id == 0) {
+            return new ChatEmpty();
+        }
+        ResultSet results = session.execute("SELECT * FROM telegram.chats WHERE chat_id = ?;",
+                chat_id);
+
+        Chat chat = null;
+        for (Row row : results) {
+            chat = new Chat();
+            chat.id = row.getInt("chat_id");
+            chat.title = row.getString("title");
+            chat.photo = new ChatPhotoEmpty();
+            chat.date = row.getInt("date");
+            chat.version = row.getInt("version");
+        }
+        return chat;
     }
 
     public void createChat(int chat_id, String title, long photo, int date, int version, int[] users) {
@@ -661,6 +664,16 @@ public class DatabaseConnection {
             user_id = results.one().getInt(0);
         }
         return user_id;
+    }
+
+    public int getLastChatId() {
+        ResultSet results = session.execute("SELECT max(chat_id) FROM telegram.chats;");
+
+        int chat_id = 0;
+        if (results.getAvailableWithoutFetching() > 0) {
+            chat_id = results.one().getInt(0);
+        }
+        return chat_id;
     }
 
     public UserModel getUser(int user_id) {
