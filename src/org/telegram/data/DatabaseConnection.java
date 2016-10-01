@@ -305,6 +305,12 @@ public class DatabaseConnection {
         }
     }
 
+    public void editChatTitle(int chat_id, String title) {
+        session.execute("UPDATE telegram.chats  SET title = ? WHERE chat_id = ?;",
+                title,
+                chat_id);
+    }
+
     public void addChatUser(int chat_id, int user_id) {
         session.execute("INSERT INTO telegram.chat_users (chat_id, user_id) VALUES (?,?);",
                 chat_id,

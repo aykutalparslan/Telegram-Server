@@ -18,12 +18,15 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.core.*;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
-public class EditChatTitle extends TLObject {
+public class EditChatTitle extends TLObject implements TLMethod {
 
-    public static final int ID = -1262720843;
+    public static final int ID = 0xdc452855;
 
     public int chat_id;
     public String title;
@@ -58,5 +61,55 @@ public class EditChatTitle extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (context.isAuthorized()) {
+            int date = (int) (System.currentTimeMillis() / 1000L);
+
+            TLChat chat = ChatStore.getInstance().editChatTitle(chat_id, title);
+
+            UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 1, 1, 0);
+            int message_id = um.sent_messages + um.received_messages + 1;
+            int flags = 259;
+
+            TLVector<TLChat> chatTLVector = new TLVector<>();
+            if (chat != null) {
+                chatTLVector.add(chat);
+            }
+            TLVector<TLUser> userTLVector = new TLVector<>();
+
+            userTLVector.add(um.toUser());
+            TLVector<TLUpdate> updateTLVector = new TLVector<>();
+
+            UpdateNewMessage title_changed = new UpdateNewMessage(new MessageService(flags, message_id, context.getUserId(),
+                    new PeerChat(chat_id), date, new MessageActionChatEditTitle(title)), um.pts, 1);
+
+            updateTLVector.add(title_changed);
+
+            Updates updates = new Updates(updateTLVector, userTLVector, chatTLVector, date, 0);
+            int[] users_ids = ChatStore.getInstance().getChatParticipants(chat_id);
+
+            for (int user_id : users_ids) {
+                if (user_id != context.getUserId() && user_id != 0) {
+                    UserModel umc2 = UserStore.getInstance().increment_pts_getUser(user_id, 1, 1, 0);
+                    TLVector<TLUpdate> updateTLVector2 = new TLVector<>();
+                    int message_id2 = umc2.sent_messages + umc2.received_messages + 1;
+                    int flags2 = 0;
+
+                    UpdateNewMessage title_changed2 = new UpdateNewMessage(new MessageService(flags2, message_id, context.getUserId(),
+                            new PeerChat(chat_id), date, new MessageActionChatEditTitle(title)), umc2.pts, 1);
+
+                    updateTLVector2.add(title_changed2);
+
+                    Updates updates2 = new Updates(updateTLVector2, userTLVector, chatTLVector, date, 0);
+                    Router.getInstance().Route(user_id, updates2, false);
+                }
+            }
+
+            return updates;
+        }
+        return rpc_error.UNAUTHORIZED();
     }
 }

@@ -54,11 +54,17 @@ public class ChatStore {
     public TLChat getChat(int chat_id) {
         TLChat chat = chatsShared.get(chat_id);
         if (chat == null) {
-            chat = db.getChat(chat_id);
-            if (chat != null) {
-                chatsShared.set(chat_id, chat);
-            }
+            chat = getChatFromDb(chat_id);
         }
+        return chat;
+    }
+
+    public TLChat getChatFromDb(int chat_id) {
+        TLChat chat = db.getChat(chat_id);
+        if (chat != null) {
+            chatsShared.set(chat_id, chat);
+        }
+
         return chat;
     }
 
@@ -98,6 +104,15 @@ public class ChatStore {
         if (chat != null) {
             db.deleteChatUser(chat_id, user_id);
         }
+        return chat;
+    }
+
+    public TLChat editChatTitle(int chat_id, String chat_title) {
+        TLChat chat = getChat(chat_id);
+        if (chat != null) {
+            db.editChatTitle(chat_id, chat_title);
+        }
+        chat = getChatFromDb(chat_id);
         return chat;
     }
 }
