@@ -33,6 +33,8 @@ public class Chat extends TLChat {
     public boolean left;
     public int version;
 
+    public int _admin_id;
+
     public Chat() {
     }
 

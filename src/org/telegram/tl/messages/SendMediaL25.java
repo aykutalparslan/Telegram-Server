@@ -91,7 +91,14 @@ public class SendMediaL25 extends TLObject implements TLMethod {
         int date = (int) (System.currentTimeMillis() / 1000L);
         int msg_id = 0;
         if (context.isAuthorized()) {
-            int toUserId = ((InputPeerUser) peer).user_id;
+            int toUserId = 0;
+            int toChatId = 0;
+
+            if (peer instanceof InputPeerChat) {
+                toChatId = ((InputPeerChat) peer).chat_id;
+            } else if (peer instanceof InputPeerUser) {
+                toUserId = ((InputPeerUser) peer).user_id;
+            }
             TLMessageMedia messageMedia;
             messageMedia = createMessageMedia();
             UpdateNewMessage msg = crateNewMessage(toUserId, context.getUserId(), messageMedia);
@@ -100,10 +107,10 @@ public class SendMediaL25 extends TLObject implements TLMethod {
             msg_id = um.sent_messages + um.received_messages + 1;
 
             byte[] mediaBytes = ((Message) msg.message).media.serialize().getBytes();
-            DatabaseConnection.getInstance().saveIncomingMessage(toUserId, context.getUserId(), ((Message) msg.message).id, msg_id,
+            DatabaseConnection.getInstance().saveIncomingMessage(toUserId, context.getUserId(), toChatId, ((Message) msg.message).id, msg_id,
                     mediaBytes, ((Message) msg.message).flags, ((Message) msg.message).date);
 
-            DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, msg_id, ((Message) msg.message).id,
+            DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, toChatId, msg_id, ((Message) msg.message).id,
                     mediaBytes, 2, ((Message) msg.message).date);
 
             Random rnd = new Random();

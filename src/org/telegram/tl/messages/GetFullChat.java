@@ -18,10 +18,15 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.core.ChatStore;
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.core.UserStore;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class GetFullChat extends TLObject {
+public class GetFullChat extends TLObject implements TLMethod {
 
     public static final int ID = 998448230;
 
@@ -54,5 +59,36 @@ public class GetFullChat extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        int date = (int) (System.currentTimeMillis() / 1000L);
+        TLChat chat = ChatStore.getInstance().getChat(chat_id);
+        TLVector<TLChat> chatTLVector = new TLVector<>();
+        chatTLVector.add(chat);
+        int[] participants_arr = ChatStore.getInstance().getChatParticipants(chat_id);
+        TLVector<TLUser> userTLVector = new TLVector<>();
+        TLVector<Integer> usersVectorInteger = new TLVector<>();
+        TLVector<TLChatParticipant> participants = new TLVector<>();
+        for (int user_id : participants_arr) {
+            usersVectorInteger.add(user_id);
+            UserModel umc = UserStore.getInstance().getUser(user_id);
+            if (umc != null) {
+                userTLVector.add(umc.toUser());
+                participants.add(new ChatParticipant(user_id, context.getUserId(), date));
+            }
+        }
+
+        org.telegram.tl.ChatFull chatFull = new org.telegram.tl.ChatFull(chat_id,
+                new ChatParticipants(chat_id, ((Chat) chat)._admin_id, participants, 1),
+                new PhotoEmpty(),
+                new PeerNotifySettingsEmpty(),
+                new ChatInviteEmpty(),
+                new TLVector<TLBotInfo>());
+
+        ChatFull fullChat = new ChatFull(chatFull, chatTLVector, userTLVector);
+
+        return fullChat;
     }
 }

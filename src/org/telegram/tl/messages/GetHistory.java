@@ -99,16 +99,7 @@ public class GetHistory extends TLObject implements TLMethod {
                     processMessage(tlMessages, tlUsers, m);
                 }
             } else if (peer instanceof InputPeerChat) {
-                Message[] messages_in = DatabaseConnection.getInstance().getIncomingMessages(context.getUserId(), ((InputPeerChat) peer).chat_id, max_id);
-                Message[] messages_out = DatabaseConnection.getInstance().getOutgoingMessages(context.getUserId(), ((InputPeerChat) peer).chat_id, max_id);
-                for (Message m : messages_in) {
-                    m.flags = 0;
-                    processMessage(tlMessages, tlUsers, m);
-                }
-                for (Message m : messages_out) {
-                    m.flags = 2;
-                    processMessage(tlMessages, tlUsers, m);
-                }
+
             }
 
         }

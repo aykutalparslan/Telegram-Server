@@ -21,23 +21,30 @@ package org.telegram.tl;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
+import java.util.ArrayList;
+
 public class ChatFull extends TLChatFull {
 
-    public static final int ID = 1661886910;
+    public static final int ID = 0x2e02a614;
 
     public int id;
     public TLChatParticipants participants;
     public TLPhoto chat_photo;
     public TLPeerNotifySettings notify_settings;
+    public TLExportedChatInvite exported_invite;
+    public TLVector<TLBotInfo> bot_info;
 
     public ChatFull() {
     }
 
-    public ChatFull(int id, TLChatParticipants participants, TLPhoto chat_photo, TLPeerNotifySettings notify_settings){
+    public ChatFull(int id, TLChatParticipants participants, TLPhoto chat_photo, TLPeerNotifySettings notify_settings,
+                    TLExportedChatInvite exported_invite, TLVector<TLBotInfo> bot_info) {
         this.id = id;
         this.participants = participants;
         this.chat_photo = chat_photo;
         this.notify_settings = notify_settings;
+        this.exported_invite = exported_invite;
+        this.bot_info = bot_info;
     }
 
     @Override
@@ -46,6 +53,8 @@ public class ChatFull extends TLChatFull {
         participants = (TLChatParticipants) buffer.readTLObject(APIContext.getInstance());
         chat_photo = (TLPhoto) buffer.readTLObject(APIContext.getInstance());
         notify_settings = (TLPeerNotifySettings) buffer.readTLObject(APIContext.getInstance());
+        exported_invite = (TLExportedChatInvite) buffer.readTLObject(APIContext.getInstance());
+        bot_info = (TLVector<TLBotInfo>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
@@ -62,6 +71,8 @@ public class ChatFull extends TLChatFull {
         buff.writeTLObject(participants);
         buff.writeTLObject(chat_photo);
         buff.writeTLObject(notify_settings);
+        buff.writeTLObject(exported_invite);
+        buff.writeTLObject(bot_info);
     }
 
     public int getConstructor() {

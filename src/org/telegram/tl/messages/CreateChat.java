@@ -18,10 +18,7 @@
 
 package org.telegram.tl.messages;
 
-import org.telegram.core.Router;
-import org.telegram.core.TLContext;
-import org.telegram.core.TLMethod;
-import org.telegram.core.UserStore;
+import org.telegram.core.*;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
@@ -74,56 +71,94 @@ public class CreateChat extends TLObject implements TLMethod {
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
         if (context.isAuthorized()) {
             int date = (int) (System.currentTimeMillis() / 1000L);
-            int[] users_ids = new int[users.size() + 1];
-            users_ids[0] = context.getUserId();
+
+            boolean contains_self = false;
             for (int i = 0; i < users.size(); i++) {
-                if (users.get(i) instanceof InputUser) {
-                    users_ids[i + 1] = ((InputUser) users.get(i)).user_id;
-                } else if (users.get(i) instanceof InputUserContact) {
-                    users_ids[i + 1] = ((InputUserContact) users.get(i)).user_id;
-                } else if (users.get(i) instanceof InputUserForeign) {
-                    users_ids[i + 1] = ((InputUserForeign) users.get(i)).user_id;
+                if (users.get(i) instanceof InputUserSelf) {
+                    contains_self = true;
                 }
             }
-            Random rnd = new Random();//TODO: add a chat id counter
-            int chat_id = rnd.nextInt();
-            DatabaseConnection.getInstance().createChat(chat_id, title, 0, date, 0, users_ids);
+            int[] users_ids;
+            if (contains_self) {
+                users_ids = new int[users.size()];
+                for (int i = 0; i < users.size(); i++) {
+                    if (users.get(i) instanceof InputUser) {
+                        users_ids[i] = ((InputUser) users.get(i)).user_id;
+                    } else if (users.get(i) instanceof InputUserContact) {
+                        users_ids[i] = ((InputUserContact) users.get(i)).user_id;
+                    } else if (users.get(i) instanceof InputUserForeign) {
+                        users_ids[i] = ((InputUserForeign) users.get(i)).user_id;
+                    } else if (users.get(i) instanceof InputUserSelf) {
+                        users_ids[i] = context.getUserId();
+                    }
+                }
+            } else {
+                users_ids = new int[users.size() + 1];
+                for (int i = 0; i < users.size(); i++) {
+                    if (users.get(i) instanceof InputUser) {
+                        users_ids[i] = ((InputUser) users.get(i)).user_id;
+                    } else if (users.get(i) instanceof InputUserContact) {
+                        users_ids[i] = ((InputUserContact) users.get(i)).user_id;
+                    } else if (users.get(i) instanceof InputUserForeign) {
+                        users_ids[i] = ((InputUserForeign) users.get(i)).user_id;
+                    }
+                }
+                users_ids[users_ids.length - 1] = context.getUserId();
+            }
+
+            Random rnd = new Random();
 
             TLVector<TLChat> chatTLVector = new TLVector<>();
-            chatTLVector.add(new Chat(chat_id, title, new ChatPhotoEmpty(), users_ids.length, date, false, 1));
+            TLChat newChat = ChatStore.getInstance().createChat(new Chat(0, title, new ChatPhotoEmpty(),
+                    users_ids.length, date, false, 1), users_ids, context.getUserId());
+            chatTLVector.add(newChat);
+            int chat_id = ((Chat) newChat).id;
+
             TLVector<TLUser> userTLVector = new TLVector<>();
             TLVector<TLUpdate> updateTLVector = new TLVector<>();
-            TLVector<TLChatParticipant> participants = new TLVector<>();
             TLVector<Integer> usersVectorInteger = new TLVector<>();
+            TLVector<TLChatParticipant> participants = new TLVector<>();
             for (int user_id : users_ids) {
                 usersVectorInteger.add(user_id);
                 UserModel umc = UserStore.getInstance().getUser(user_id);
                 if (umc != null) {
                     userTLVector.add(umc.toUser());
+                    participants.add(new ChatParticipant(user_id, context.getUserId(), date));
                 }
-                participants.add(new ChatParticipant(user_id, context.getUserId(), date));
             }
-            UpdateChatParticipants ucp = new UpdateChatParticipants(new ChatParticipants(chat_id, context.getUserId(), participants, 1));
-            updateTLVector.add(ucp);
             UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 1, 1, 0);
             int message_id = um.sent_messages + um.received_messages + 1;
-            int flags = 0;
-            UpdateNewMessage chat_created = new UpdateNewMessage(new MessageService(flags, message_id, context.getUserId(),
+            int flags = 259;
+
+            UpdateNewMessage chat_created = new UpdateNewMessage(new MessageService(flags, 0, context.getUserId(),
                     new PeerChat(chat_id), date, new MessageActionChatCreate(title, usersVectorInteger)), um.pts, 1);
 
             updateTLVector.add(chat_created);
-            Updates updates = new Updates(updateTLVector, userTLVector, chatTLVector, date, um.pts);
+
+            UpdateMessageID updateMessageID = new UpdateMessageID(message_id, rnd.nextLong());
+            updateTLVector.add(updateMessageID);
+
+            UpdateChatParticipants ucp = new UpdateChatParticipants(new ChatParticipants(chat_id, context.getUserId(), participants, 1));
+            updateTLVector.add(ucp);
+
+            Updates updates = new Updates(updateTLVector, userTLVector, chatTLVector, date, 0);
 
             for (int user_id : users_ids) {
-                if (user_id != um.user_id) {
+                if (user_id != context.getUserId() && user_id != 0) {
                     UserModel umc = UserStore.getInstance().increment_pts_getUser(user_id, 1, 1, 0);
                     TLVector<TLUpdate> updateTLVector2 = new TLVector<>();
                     int message_id2 = umc.sent_messages + umc.received_messages + 1;
-                    UpdateNewMessage chat_created2 = new UpdateNewMessage(new MessageService(flags, message_id2, context.getUserId(),
+                    int flags2 = 0;
+                    UpdateNewMessage chat_created2 = new UpdateNewMessage(new MessageService(flags2, 0, context.getUserId(),
                             new PeerChat(chat_id), date, new MessageActionChatCreate(title, usersVectorInteger)), umc.pts, 1);
-                    updateTLVector2.add(ucp);
+
+                    UpdateMessageID updateMessageID2 = new UpdateMessageID(message_id, rnd.nextLong());
+                    updateTLVector2.add(updateMessageID2);
+
                     updateTLVector2.add(chat_created2);
-                    Updates updates2 = new Updates(updateTLVector2, userTLVector, chatTLVector, date, umc.pts);
+                    updateTLVector2.add(ucp);
+
+                    Updates updates2 = new Updates(updateTLVector2, userTLVector, chatTLVector, date, 0);
                     Router.getInstance().Route(user_id, updates2, false);
                 }
             }

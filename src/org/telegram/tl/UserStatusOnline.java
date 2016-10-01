@@ -25,7 +25,7 @@ import java.io.Serializable;
 
 public class UserStatusOnline extends TLUserStatus implements Serializable {
 
-    public static final int ID = -306628279;
+    public static final int ID = 0xedb93949;
 
     public int expires;
 

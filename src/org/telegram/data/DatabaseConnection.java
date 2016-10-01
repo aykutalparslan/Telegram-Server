@@ -24,6 +24,7 @@ import org.telegram.server.ServerConfig;
 import org.telegram.tl.*;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 
 public class DatabaseConnection {
@@ -133,7 +134,7 @@ public class DatabaseConnection {
                 "CREATE TABLE IF NOT EXISTS telegram.incoming_messages (" +
                         "user_id int," +
                         "from_user_id int," +
-                        "from_user_type int," +
+                        "to_chat_id int," +
                         "message_id int," +
                         "peer_message_id int," +
                         "message text," +
@@ -146,10 +147,15 @@ public class DatabaseConnection {
                         "entities blob," +
                         "PRIMARY KEY (user_id, from_user_id, message_id));");
         session.execute(
+                "CREATE MATERIALIZED VIEW IF NOT EXISTS telegram.incoming_messages_by_chat AS " +
+                        "SELECT * FROM telegram.incoming_messages " +
+                        "WHERE user_id IS NOT NULL AND from_user_id IS NOT NULL AND to_chat_id IS NOT NULL AND message_id IS NOT NULL " +
+                        "PRIMARY KEY (user_id, to_chat_id, from_user_id, message_id);");
+        session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.outgoing_messages (" +
                         "user_id int," +
                         "to_user_id int," +
-                        "to_user_type int," +
+                        "to_chat_id int," +
                         "message_id int," +
                         "peer_message_id int," +
                         "message text," +
@@ -161,6 +167,11 @@ public class DatabaseConnection {
                         "reply_to_msg_id int," +
                         "entities blob," +
                         "PRIMARY KEY (user_id, to_user_id, message_id));");
+        session.execute(
+                "CREATE MATERIALIZED VIEW IF NOT EXISTS telegram.outgoing_messages_by_chat AS " +
+                        "SELECT * FROM telegram.outgoing_messages " +
+                        "WHERE user_id IS NOT NULL AND to_user_id IS NOT NULL AND to_chat_id IS NOT NULL AND message_id IS NOT NULL " +
+                        "PRIMARY KEY (user_id, to_chat_id, to_user_id, message_id);");
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.contacts (" +
                         "user_id int," +
@@ -227,6 +238,11 @@ public class DatabaseConnection {
                         "PRIMARY KEY (file_id, part_num)) WITH CLUSTERING ORDER BY (part_num ASC);");
     }
 
+    public int[] getChatUsers() {
+
+        return null;
+    }
+
     public TLChat getChat(int chat_id) {
         if (chat_id == 0) {
             return new ChatEmpty();
@@ -242,14 +258,44 @@ public class DatabaseConnection {
             chat.photo = new ChatPhotoEmpty();
             chat.date = row.getInt("date");
             chat.version = row.getInt("version");
+            chat._admin_id = row.getInt("admin_id");
         }
+
+        ResultSet results_users = session.execute("SELECT * FROM telegram.chat_users WHERE chat_id = ?;",
+                chat_id);
+        for (Row row : results_users) {
+            chat.participants_count++;
+        }
+
         return chat;
     }
 
-    public void createChat(int chat_id, String title, long photo, int date, int version, int[] users) {
+    public int[] getChatParticipants(int chat_id) {
+        if (chat_id == 0) {
+            return null;
+        }
+        ResultSet results_users = session.execute("SELECT * FROM telegram.chat_users WHERE chat_id = ?;",
+                chat_id);
+        ArrayList<Integer> chat_participants = new ArrayList<>();
+        for (Row row : results_users) {
+            chat_participants.add(row.getInt("user_id"));
+
+        }
+
+        int[] participants = new int[chat_participants.size()];
+        int i = 0;
+        for (Integer user : chat_participants) {
+            participants[i] = user;
+            i++;
+        }
+
+        return participants;
+    }
+
+    public void createChat(int chat_id, String title, long photo, int date, int version, int[] users, int admin_id) {
         session.execute("INSERT INTO telegram.chats (chat_id, admin_id, title, photo, date, version) VALUES (?,?,?,?,?,?);",
                 chat_id,
-                users[0],
+                admin_id,
                 title,
                 photo,
                 date,
@@ -298,10 +344,11 @@ public class DatabaseConnection {
         return profilePhoto;
     }
 
-    public void saveIncomingMessage(int user_id, int from_user_id, int message_id, int peer_message_id, String message, int flags, int date) {
-        session.execute("INSERT INTO telegram.incoming_messages (user_id, from_user_id, message_id, peer_message_id, message, flags, date) VALUES (?,?,?,?,?,?,?);",
+    public void saveIncomingMessage(int user_id, int from_user_id, int to_chat_id, int message_id, int peer_message_id, String message, int flags, int date) {
+        session.execute("INSERT INTO telegram.incoming_messages (user_id, from_user_id, to_chat_id, message_id, peer_message_id, message, flags, date) VALUES (?,?,?,?,?,?,?,?);",
                 user_id,
                 from_user_id,
+                to_chat_id,
                 message_id,
                 peer_message_id,
                 message,
@@ -309,10 +356,11 @@ public class DatabaseConnection {
                 date);
     }
 
-    public void saveIncomingMessage(int user_id, int from_user_id, int message_id, int peer_message_id, byte[] media, int flags, int date) {
-        session.execute("INSERT INTO telegram.incoming_messages (user_id, from_user_id, message_id, peer_message_id, media, flags, date) VALUES (?,?,?,?,?,?,?);",
+    public void saveIncomingMessage(int user_id, int from_user_id, int to_chat_id, int message_id, int peer_message_id, byte[] media, int flags, int date) {
+        session.execute("INSERT INTO telegram.incoming_messages (user_id, from_user_id, to_chat_id, message_id, peer_message_id, media, flags, date) VALUES (?,?,?,?,?,?,?,?);",
                 user_id,
                 from_user_id,
+                to_chat_id,
                 message_id,
                 peer_message_id,
                 ByteBuffer.wrap(media),
@@ -350,6 +398,13 @@ public class DatabaseConnection {
         int i = 0;
         for (Row row : results) {
             ByteBuffer buff = row.getBytes("media");
+            TLPeer peer;
+            int to_chat_id = row.getInt("to_chat_id");
+            if (to_chat_id != 0) {
+                peer = new PeerChat(to_chat_id);
+            } else {
+                peer = new PeerUser(user_id);
+            }
             if (buff != null) {
                 byte[] bytes = new byte[buff.remaining()];
                 if (buff.remaining() > 0) {
@@ -359,12 +414,12 @@ public class DatabaseConnection {
                 if (bytes != null && bytes.length > 0) {
                     TLObject media = APIContext.getInstance().deserialize(new ProtocolBuffer(bytes));
                     Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
-                            new PeerUser(user_id), row.getInt("date"), "", (TLMessageMedia) media);
+                            peer, row.getInt("date"), "", (TLMessageMedia) media);
                     messages[i] = m;
                 }
             } else {
                 Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
-                        new PeerUser(user_id), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
+                        peer, row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
                 messages[i] = m;
             }
 
@@ -406,9 +461,9 @@ public class DatabaseConnection {
         return messages;
     }
 
-    public Message[] getOutgoingMessages(int user_id) {
-        ResultSet results = session.execute("SELECT * FROM telegram.outgoing_messages WHERE user_id = ?;",
-                user_id);
+    public Message[] getIncomingChatMessages(int user_id, int to_chat_id, int max_id) {
+        ResultSet results = session.execute("SELECT * FROM telegram.incoming_messages_by_chat WHERE user_id = ? AND to_chat_id = ? AND message_id < ?;",
+                user_id, to_chat_id, max_id);
 
         Message[] messages = new Message[results.getAvailableWithoutFetching()];
         int i = 0;
@@ -419,15 +474,55 @@ public class DatabaseConnection {
                 if (buff.remaining() > 0) {
                     buff.get(bytes);
                 }
+
                 if (bytes != null && bytes.length > 0) {
                     TLObject media = APIContext.getInstance().deserialize(new ProtocolBuffer(bytes));
+                    Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
+                            new PeerChat(to_chat_id), row.getInt("date"), "", (TLMessageMedia) media);
+                    messages[i] = m;
+                }
+            } else {
+                Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
+                        new PeerChat(to_chat_id), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
+                messages[i] = m;
+            }
+
+            i++;
+        }
+
+        return messages;
+    }
+
+    public Message[] getOutgoingMessages(int user_id) {
+        ResultSet results = session.execute("SELECT * FROM telegram.outgoing_messages WHERE user_id = ?;",
+                user_id);
+
+        Message[] messages = new Message[results.getAvailableWithoutFetching()];
+        int i = 0;
+        for (Row row : results) {
+            ByteBuffer buff = row.getBytes("media");
+            int to_chat_id = row.getInt("to_chat_id");
+            TLPeer peer;
+            if (to_chat_id != 0) {
+                peer = new PeerChat(to_chat_id);
+            } else {
+                peer = new PeerUser(row.getInt("to_user_id"));
+            }
+            if (buff != null) {
+                byte[] bytes = new byte[buff.remaining()];
+                if (buff.remaining() > 0) {
+                    buff.get(bytes);
+                }
+                if (bytes != null && bytes.length > 0) {
+                    TLObject media = APIContext.getInstance().deserialize(new ProtocolBuffer(bytes));
+
                     Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
-                            new PeerUser(row.getInt("to_user_id")), row.getInt("date"), "", (TLMessageMedia) media);
+                            peer, row.getInt("date"), "", (TLMessageMedia) media);
                     messages[i] = m;
                 }
             } else {
                 Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
-                        new PeerUser(row.getInt("to_user_id")), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
+                        peer, row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
                 messages[i] = m;
             }
 
@@ -468,10 +563,42 @@ public class DatabaseConnection {
         return messages;
     }
 
-    public void saveOutgoingMessage(int user_id, int to_user_id, int message_id, int peer_message_id, String message, int flags, int date) {
-        session.execute("INSERT INTO telegram.outgoing_messages (user_id, to_user_id, message_id, peer_message_id, message, flags, date) VALUES (?,?,?,?,?,?,?);",
+    public Message[] getOutgoingChatMessages(int user_id, int to_chat_id, int max_id) {
+        ResultSet results = session.execute("SELECT * FROM telegram.outgoing_messages WHERE user_id = ? AND to_chat_id = ? AND message_id < ?;",
+                user_id, to_chat_id, max_id);
+
+        Message[] messages = new Message[results.getAvailableWithoutFetching()];
+        int i = 0;
+        for (Row row : results) {
+            ByteBuffer buff = row.getBytes("media");
+            if (buff != null) {
+                byte[] bytes = new byte[buff.remaining()];
+                if (buff.remaining() > 0) {
+                    buff.get(bytes);
+                }
+                if (bytes != null && bytes.length > 0) {
+                    TLObject media = APIContext.getInstance().deserialize(new ProtocolBuffer(bytes));
+                    Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
+                            new PeerChat(to_chat_id), row.getInt("date"), "", (TLMessageMedia) media);
+                    messages[i] = m;
+                }
+            } else {
+                Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
+                        new PeerChat(to_chat_id), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
+                messages[i] = m;
+            }
+
+            i++;
+        }
+
+        return messages;
+    }
+
+    public void saveOutgoingMessage(int user_id, int to_user_id, int to_chat_id, int message_id, int peer_message_id, String message, int flags, int date) {
+        session.execute("INSERT INTO telegram.outgoing_messages (user_id, to_user_id, to_chat_id, message_id, peer_message_id, message, flags, date) VALUES (?,?,?,?,?,?,?,?);",
                 user_id,
                 to_user_id,
+                to_chat_id,
                 message_id,
                 peer_message_id,
                 message,
@@ -479,10 +606,11 @@ public class DatabaseConnection {
                 date);
     }
 
-    public void saveOutgoingMessage(int user_id, int to_user_id, int message_id, int peer_message_id, byte[] media, int flags, int date) {
-        session.execute("INSERT INTO telegram.outgoing_messages (user_id, to_user_id, message_id, peer_message_id, media, flags, date) VALUES (?,?,?,?,?,?,?);",
+    public void saveOutgoingMessage(int user_id, int to_user_id, int to_chat_id, int message_id, int peer_message_id, byte[] media, int flags, int date) {
+        session.execute("INSERT INTO telegram.outgoing_messages (user_id, to_user_id, to_chat_id, message_id, peer_message_id, media, flags, date) VALUES (?,?,?,?,?,?,?,?);",
                 user_id,
                 to_user_id,
+                to_chat_id,
                 message_id,
                 peer_message_id,
                 ByteBuffer.wrap(media),

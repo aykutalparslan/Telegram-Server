@@ -16,35 +16,26 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.tl.messages;
+package org.telegram.tl;
 
 import org.telegram.mtproto.ProtocolBuffer;
-import org.telegram.tl.*;
 
-public class ChatFull extends TLChatFull {
+public class ChatInviteExported extends TLExportedChatInvite {
 
-    public static final int ID = -438840932;
+    public static final int ID = 0xfc2e05bc;
 
-    public org.telegram.tl.TLChatFull full_chat;
-    public TLVector<TLChat> chats;
-    public TLVector<TLUser> users;
+    public String link;
 
-    public ChatFull() {
-        this.chats = new TLVector<>();
-        this.users = new TLVector<>();
+    public ChatInviteExported() {
     }
 
-    public ChatFull(org.telegram.tl.TLChatFull full_chat, TLVector<TLChat> chats, TLVector<TLUser> users) {
-        this.full_chat = full_chat;
-        this.chats = chats;
-        this.users = users;
+    public ChatInviteExported(String link) {
+        this.link = link;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        full_chat = (org.telegram.tl.TLChatFull) buffer.readTLObject(APIContext.getInstance());
-        chats = (TLVector<TLChat>) buffer.readTLObject(APIContext.getInstance());
-        users = (TLVector<TLUser>) buffer.readTLObject(APIContext.getInstance());
+        link = buffer.readString();
     }
 
     @Override
@@ -57,9 +48,7 @@ public class ChatFull extends TLChatFull {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
-        buff.writeTLObject(full_chat);
-        buff.writeTLObject(chats);
-        buff.writeTLObject(users);
+        buff.writeString(link);
     }
 
     public int getConstructor() {

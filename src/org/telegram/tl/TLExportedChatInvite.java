@@ -16,26 +16,8 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.data;
+package org.telegram.tl;
 
-import com.hazelcast.config.Config;
-import com.hazelcast.config.InterfacesConfig;
-import com.hazelcast.config.NetworkConfig;
-import com.hazelcast.config.SerializerConfig;
-import com.hazelcast.core.Hazelcast;
-import com.hazelcast.core.HazelcastInstance;
-import com.sun.deploy.config.ClientConfig;
+public abstract class TLExportedChatInvite extends TLObject {
 
-/**
- * Created by aykut on 09/11/15.
- */
-public class HazelcastConnection {
-    private static HazelcastInstance _instance;
-
-    public static HazelcastInstance getInstance() {
-        if (_instance == null) {
-            _instance = Hazelcast.newHazelcastInstance();
-        }
-        return _instance;
-    }
 }

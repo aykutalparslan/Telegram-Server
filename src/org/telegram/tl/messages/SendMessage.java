@@ -103,22 +103,27 @@ public class SendMessage extends TLObject implements TLMethod {
         int msg_id = 0;
         int pts = 0;
         if (context.isAuthorized()) {
-            int toUserId = ((InputPeerUser) peer).user_id;
-            UpdateShortMessage msg = (UpdateShortMessage) crateShortMessage(toUserId,
-                    context.getUserId(), this.message, this.entities);
+            if (peer instanceof InputPeerUser) {
+                int toUserId = ((InputPeerUser) peer).user_id;
+                UpdateShortMessage msg = (UpdateShortMessage) crateShortMessage(toUserId,
+                        context.getUserId(), this.message, this.entities);
 
-            UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
-            msg_id = um.sent_messages + um.received_messages + 1;
+                UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
+                msg_id = um.sent_messages + um.received_messages + 1;
 
-            DatabaseConnection.getInstance().saveIncomingMessage(toUserId, context.getUserId(), msg.id, msg_id,
-                    msg.message, msg.flags, msg.date);
+                DatabaseConnection.getInstance().saveIncomingMessage(toUserId, context.getUserId(), 0, msg.id, msg_id,
+                        msg.message, msg.flags, msg.date);
 
-            DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, msg_id, msg.id,
-                    msg.message, 2, msg.date);
+                DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, 0, msg_id, msg.id,
+                        msg.message, 2, msg.date);
 
-            pts = um.pts;
+                pts = um.pts;
 
-            return new SentMessage(msg_id, date, new MessageMediaEmpty(), new TLVector<TLMessageEntity>(), pts, 0, pts);
+                return new SentMessage(msg_id, date, new MessageMediaEmpty(), new TLVector<TLMessageEntity>(), pts, 0, pts);
+            } else if (peer instanceof InputPeerChat) {
+                int toChatId = ((InputPeerChat) peer).chat_id;
+
+            }
         }
 
         return rpc_error.UNAUTHORIZED();

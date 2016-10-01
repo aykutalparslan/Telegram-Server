@@ -30,6 +30,7 @@ import org.telegram.tl.*;
  */
 public class ChatStore {
     private IMap<Integer, TLChat> chatsShared;
+    private IMap<Integer, int[]> chatParticipantsShared;
     private DatabaseConnection db;
     IAtomicLong chatId;
 
@@ -38,6 +39,7 @@ public class ChatStore {
     private ChatStore() {
         db = DatabaseConnection.getInstance();
         chatsShared = HazelcastConnection.getInstance().getMap("telegram_chats");
+        chatParticipantsShared = HazelcastConnection.getInstance().getMap("telegram_chat_participants");
         chatId = HazelcastConnection.getInstance().getAtomicLong("chat_id");
         chatId.compareAndSet(0, db.getLastChatId());
     }
@@ -60,11 +62,22 @@ public class ChatStore {
         return chat;
     }
 
-    public TLChat createChat(TLChat chat, int[] users) {
+    public int[] getChatParticipants(int chat_id) {
+        int[] participants = chatParticipantsShared.get(chat_id);
+        if (participants == null) {
+            participants = db.getChatParticipants(chat_id);
+            if (participants != null) {
+                chatParticipantsShared.set(chat_id, participants);
+            }
+        }
+        return participants;
+    }
+
+    public TLChat createChat(TLChat chat, int[] users, int admin_id) {
         if (chat instanceof Chat) {
             ((Chat) chat).id = (int) chatId.incrementAndGet();
             db.createChat(((Chat) chat).id, ((Chat) chat).title, 0,
-                    ((Chat) chat).date, ((Chat) chat).version, users);
+                    ((Chat) chat).date, ((Chat) chat).version, users, admin_id);
 
             return getChat(((Chat) chat).id);
         }
