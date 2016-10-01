@@ -130,13 +130,13 @@ public class CreateChat extends TLObject implements TLMethod {
             int message_id = um.sent_messages + um.received_messages + 1;
             int flags = 259;
 
-            UpdateNewMessage chat_created = new UpdateNewMessage(new MessageService(flags, 0, context.getUserId(),
+            UpdateNewMessage chat_created = new UpdateNewMessage(new MessageService(flags, message_id, context.getUserId(),
                     new PeerChat(chat_id), date, new MessageActionChatCreate(title, usersVectorInteger)), um.pts, 1);
 
             updateTLVector.add(chat_created);
 
-            UpdateMessageID updateMessageID = new UpdateMessageID(message_id, rnd.nextLong());
-            updateTLVector.add(updateMessageID);
+            /*UpdateMessageID updateMessageID = new UpdateMessageID(message_id, rnd.nextLong());
+            updateTLVector.add(updateMessageID);*/
 
             UpdateChatParticipants ucp = new UpdateChatParticipants(new ChatParticipants(chat_id, context.getUserId(), participants, 1));
             updateTLVector.add(ucp);
@@ -149,11 +149,11 @@ public class CreateChat extends TLObject implements TLMethod {
                     TLVector<TLUpdate> updateTLVector2 = new TLVector<>();
                     int message_id2 = umc.sent_messages + umc.received_messages + 1;
                     int flags2 = 0;
-                    UpdateNewMessage chat_created2 = new UpdateNewMessage(new MessageService(flags2, 0, context.getUserId(),
+                    UpdateNewMessage chat_created2 = new UpdateNewMessage(new MessageService(flags2, message_id2, context.getUserId(),
                             new PeerChat(chat_id), date, new MessageActionChatCreate(title, usersVectorInteger)), umc.pts, 1);
 
-                    UpdateMessageID updateMessageID2 = new UpdateMessageID(message_id, rnd.nextLong());
-                    updateTLVector2.add(updateMessageID2);
+                    /*UpdateMessageID updateMessageID2 = new UpdateMessageID(message_id2, rnd.nextLong());
+                    updateTLVector2.add(updateMessageID2);*/
 
                     updateTLVector2.add(chat_created2);
                     updateTLVector2.add(ucp);

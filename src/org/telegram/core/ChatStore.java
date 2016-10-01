@@ -84,4 +84,20 @@ public class ChatStore {
 
         return new ChatEmpty();
     }
+
+    public TLChat addChatUser(int chat_id, int user_id) {
+        TLChat chat = getChat(chat_id);
+        if (chat != null) {
+            db.addChatUser(chat_id, user_id);
+        }
+        return chat;
+    }
+
+    public TLChat deleteChatUser(int chat_id, int user_id) {
+        TLChat chat = getChat(chat_id);
+        if (chat != null) {
+            db.deleteChatUser(chat_id, user_id);
+        }
+        return chat;
+    }
 }

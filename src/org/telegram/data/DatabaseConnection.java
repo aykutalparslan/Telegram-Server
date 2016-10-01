@@ -301,10 +301,20 @@ public class DatabaseConnection {
                 date,
                 version);
         for (int user_id : users) {
-            session.execute("INSERT INTO telegram.chat_users (chat_id, user_id) VALUES (?,?);",
-                    chat_id,
-                    user_id);
+            addChatUser(chat_id, user_id);
         }
+    }
+
+    public void addChatUser(int chat_id, int user_id) {
+        session.execute("INSERT INTO telegram.chat_users (chat_id, user_id) VALUES (?,?);",
+                chat_id,
+                user_id);
+    }
+
+    public void deleteChatUser(int chat_id, int user_id) {
+        session.execute("DELETE FROM telegram.chat_users WHERE chat_id = ? AND user_id =  ?;",
+                chat_id,
+                user_id);
     }
 
     public void saveProfilePhoto(int user_id, long file_id, String caption, double lat, double lon, double crop_left, double crop_top, double crop_width, int date) {
