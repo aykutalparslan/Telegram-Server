@@ -18,10 +18,7 @@
 
 package org.telegram.tl.messages;
 
-import org.telegram.core.Router;
-import org.telegram.core.TLContext;
-import org.telegram.core.TLMethod;
-import org.telegram.core.UserStore;
+import org.telegram.core.*;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
@@ -91,43 +88,75 @@ public class SendMediaL25 extends TLObject implements TLMethod {
         int date = (int) (System.currentTimeMillis() / 1000L);
         int msg_id = 0;
         if (context.isAuthorized()) {
-            int toUserId = 0;
-            int toChatId = 0;
-
-            if (peer instanceof InputPeerChat) {
-                toChatId = ((InputPeerChat) peer).chat_id;
-            } else if (peer instanceof InputPeerUser) {
-                toUserId = ((InputPeerUser) peer).user_id;
-            }
             TLMessageMedia messageMedia;
             messageMedia = createMessageMedia();
-            UpdateNewMessage msg = crateNewMessage(toUserId, context.getUserId(), messageMedia);
 
-            UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
-            msg_id = um.sent_messages + um.received_messages + 1;
+            if (peer instanceof InputPeerChat) {
+                int toChatId = ((InputPeerChat) peer).chat_id;
+                int[] users_ids = ChatStore.getInstance().getChatParticipants(toChatId);
+                for (int user_id : users_ids) {
+                    if (user_id != context.getUserId()) {
+                        UpdateNewMessage msg = crateNewChatMessage(user_id, toChatId, context.getUserId(), messageMedia);
 
-            byte[] mediaBytes = ((Message) msg.message).media.serialize().getBytes();
-            DatabaseConnection.getInstance().saveIncomingMessage(toUserId, context.getUserId(), toChatId, ((Message) msg.message).id, msg_id,
-                    mediaBytes, ((Message) msg.message).flags, ((Message) msg.message).date);
+                        UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
+                        msg_id = um.sent_messages + um.received_messages + 1;
 
-            DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, toChatId, msg_id, ((Message) msg.message).id,
-                    mediaBytes, 2, ((Message) msg.message).date);
+                        byte[] mediaBytes = ((Message) msg.message).media.serialize().getBytes();
+                        DatabaseConnection.getInstance().saveIncomingMessage(user_id, context.getUserId(), toChatId, ((Message) msg.message).id, msg_id,
+                                mediaBytes, ((Message) msg.message).flags, ((Message) msg.message).date);
 
-            Random rnd = new Random();
-            UpdateMessageID umi = new UpdateMessageID(msg_id, rnd.nextLong());
-            TLVector<TLUpdate> updateTLVector = new TLVector<>();
-            updateTLVector.add(umi);
-            msg.pts = um.pts;
-            UpdateNewMessage msg_self = new UpdateNewMessage(new Message(2, msg_id, context.getUserId(),
-                    new PeerUser(toUserId), date, "", messageMedia), um.pts, 0);
-            updateTLVector.add(msg_self);
-            TLVector<TLUser> userTLVector = new TLVector<>();
-            userTLVector.add(um.toUser());
-            UserModel uc = UserStore.getInstance().getUser(toUserId);
-            userTLVector.add(uc.toUser());
-            Updates updates = new Updates(updateTLVector, userTLVector, new TLVector<TLChat>(), date, um.pts);
+                        DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), user_id, toChatId, msg_id, ((Message) msg.message).id,
+                                mediaBytes, 2, ((Message) msg.message).date);
 
-            return updates;
+                        Random rnd = new Random();
+                        UpdateMessageID umi = new UpdateMessageID(msg_id, rnd.nextLong());
+                        TLVector<TLUpdate> updateTLVector = new TLVector<>();
+                        updateTLVector.add(umi);
+                        msg.pts = um.pts;
+                        UpdateNewMessage msg_self = new UpdateNewMessage(new Message(2, msg_id, context.getUserId(),
+                                new PeerChat(toChatId), date, "", messageMedia), um.pts, 0);
+                        updateTLVector.add(msg_self);
+                        TLVector<TLUser> userTLVector = new TLVector<>();
+                        userTLVector.add(um.toUser());
+                        TLVector<TLChat> chatsTLVector = new TLVector<>();
+                        TLChat c = ChatStore.getInstance().getChat(toChatId);
+                        chatsTLVector.add(c);
+                        Updates updates = new Updates(updateTLVector, userTLVector, chatsTLVector, date, um.pts);
+
+                        return updates;
+                    }
+                }
+            } else if (peer instanceof InputPeerUser) {
+                int toUserId = ((InputPeerUser) peer).user_id;
+
+                UpdateNewMessage msg = crateNewMessage(toUserId, context.getUserId(), messageMedia);
+
+                UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
+                msg_id = um.sent_messages + um.received_messages + 1;
+
+                byte[] mediaBytes = ((Message) msg.message).media.serialize().getBytes();
+                DatabaseConnection.getInstance().saveIncomingMessage(toUserId, context.getUserId(), 0, ((Message) msg.message).id, msg_id,
+                        mediaBytes, ((Message) msg.message).flags, ((Message) msg.message).date);
+
+                DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, 0, msg_id, ((Message) msg.message).id,
+                        mediaBytes, 2, ((Message) msg.message).date);
+
+                Random rnd = new Random();
+                UpdateMessageID umi = new UpdateMessageID(msg_id, rnd.nextLong());
+                TLVector<TLUpdate> updateTLVector = new TLVector<>();
+                updateTLVector.add(umi);
+                msg.pts = um.pts;
+                UpdateNewMessage msg_self = new UpdateNewMessage(new Message(2, msg_id, context.getUserId(),
+                        new PeerUser(toUserId), date, "", messageMedia), um.pts, 0);
+                updateTLVector.add(msg_self);
+                TLVector<TLUser> userTLVector = new TLVector<>();
+                userTLVector.add(um.toUser());
+                UserModel uc = UserStore.getInstance().getUser(toUserId);
+                userTLVector.add(uc.toUser());
+                Updates updates = new Updates(updateTLVector, userTLVector, new TLVector<TLChat>(), date, um.pts);
+
+                return updates;
+            }
         }
         return rpc_error.UNAUTHORIZED();
     }
@@ -251,6 +280,37 @@ public class SendMediaL25 extends TLObject implements TLMethod {
         userTLVector.add(uc.toUser());
 
         UpdatesCombined updatesCombined = new UpdatesCombined(updateTLVector, userTLVector, new TLVector<TLChat>(), date, um.pts, um.pts);
+
+        Router.getInstance().Route(to_user_id, updatesCombined, false);
+
+        return msg;
+    }
+
+    public UpdateNewMessage crateNewChatMessage(int to_user_id, int to_chat_id, int from_user_id, TLMessageMedia media) {
+        int date = (int) (System.currentTimeMillis() / 1000L);
+        int msg_id;
+
+        UserModel um = UserStore.getInstance().increment_pts_getUser(to_user_id, 1, 0, 1);
+        msg_id = um.sent_messages + um.received_messages + 1;
+
+        int flags_msg = 1;
+        UpdateNewMessage msg = new UpdateNewMessage(new Message(flags_msg, msg_id, from_user_id,
+                new PeerChat(to_chat_id), date, "", media), um.pts, 1);
+
+        TLVector<TLUpdate> updateTLVector = new TLVector<>();
+        updateTLVector.add(msg);
+
+        UserModel uc = UserStore.getInstance().getUser(from_user_id);
+
+        TLVector<TLUser> userTLVector = new TLVector<>();
+        userTLVector.add(um.toUser());
+        userTLVector.add(uc.toUser());
+
+        TLVector<TLChat> chatsTLVector = new TLVector<>();
+        TLChat c = ChatStore.getInstance().getChat(to_chat_id);
+        chatsTLVector.add(c);
+
+        UpdatesCombined updatesCombined = new UpdatesCombined(updateTLVector, userTLVector, chatsTLVector, date, um.pts, um.pts);
 
         Router.getInstance().Route(to_user_id, updatesCombined, false);
 
