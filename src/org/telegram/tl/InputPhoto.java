@@ -23,7 +23,7 @@ import org.telegram.tl.*;
 
 public class InputPhoto extends TLInputPhoto {
 
-    public static final int ID = -74070332;
+    public static final int ID = 0xfb95c6c4;
 
     public long id;
     public long access_hash;

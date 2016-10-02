@@ -26,6 +26,7 @@ import org.telegram.tl.*;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 public class DatabaseConnection {
     private Cluster cluster;
@@ -255,7 +256,14 @@ public class DatabaseConnection {
             chat = new Chat();
             chat.id = row.getInt("chat_id");
             chat.title = row.getString("title");
-            chat.photo = new ChatPhotoEmpty();
+            long photo = row.getLong("photo");
+            if (photo == 0) {
+                chat.photo = new ChatPhotoEmpty();
+            } else {
+                Random rnd = new Random();
+                chat.photo = new ChatPhoto(new FileLocation(ServerConfig.SERVER_ID, photo, rnd.nextInt(), photo),
+                        new FileLocation(ServerConfig.SERVER_ID, photo, rnd.nextInt(), photo));
+            }
             chat.date = row.getInt("date");
             chat.version = row.getInt("version");
             chat._admin_id = row.getInt("admin_id");
@@ -308,6 +316,12 @@ public class DatabaseConnection {
     public void editChatTitle(int chat_id, String title) {
         session.execute("UPDATE telegram.chats  SET title = ? WHERE chat_id = ?;",
                 title,
+                chat_id);
+    }
+
+    public void editChatPhoto(int chat_id, long photo) {
+        session.execute("UPDATE telegram.chats  SET photo = ? WHERE chat_id = ?;",
+                photo,
                 chat_id);
     }
 

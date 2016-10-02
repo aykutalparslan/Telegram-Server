@@ -115,4 +115,13 @@ public class ChatStore {
         chat = getChatFromDb(chat_id);
         return chat;
     }
+
+    public TLChat editChatPhoto(int chat_id, long photo) {
+        TLChat chat = getChat(chat_id);
+        if (chat != null) {
+            db.editChatPhoto(chat_id, photo);
+        }
+        chat = getChatFromDb(chat_id);
+        return chat;
+    }
 }

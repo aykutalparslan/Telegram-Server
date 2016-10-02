@@ -23,7 +23,7 @@ import org.telegram.tl.*;
 
 public class InputChatPhotoEmpty extends TLInputChatPhoto {
 
-    public static final int ID = 480546647;
+    public static final int ID = 0x1ca48f57;
 
 
     public InputChatPhotoEmpty(){

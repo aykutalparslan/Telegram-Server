@@ -23,7 +23,7 @@ import org.telegram.tl.*;
 
 public class InputFile extends TLInputFile {
 
-    public static final int ID = -181407105;
+    public static final int ID = 0xf52ff27f;
 
     public long id;
     public int parts;

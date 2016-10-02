@@ -22,9 +22,13 @@ import org.telegram.core.ChatStore;
 import org.telegram.core.TLContext;
 import org.telegram.core.TLMethod;
 import org.telegram.core.UserStore;
+import org.telegram.data.DatabaseConnection;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.server.ServerConfig;
 import org.telegram.tl.*;
+
+import java.util.Random;
 
 public class GetFullChat extends TLObject implements TLMethod {
 
@@ -79,10 +83,20 @@ public class GetFullChat extends TLObject implements TLMethod {
                 participants.add(new ChatParticipant(user_id, context.getUserId(), date));
             }
         }
-
+        TLPhoto chat_photo = new PhotoEmpty();
+        long photo_id = ((FileLocation) ((ChatPhoto) ((Chat) chat).photo).photo_big).secret;
+        if (photo_id != 0) {
+            int file_size = DatabaseConnection.getInstance().getFileSize(photo_id);
+            TLVector<TLPhotoSize> photoSizes = new TLVector<>();
+            Random rnd = new Random();
+            photoSizes.add(new PhotoSize("s", new FileLocation(ServerConfig.SERVER_ID, photo_id, rnd.nextInt(), photo_id), 96, 96, file_size));
+            photoSizes.add(new PhotoSize("m", new FileLocation(ServerConfig.SERVER_ID, photo_id, rnd.nextInt(), photo_id), 256, 256, file_size));
+            photoSizes.add(new PhotoSize("x", new FileLocation(ServerConfig.SERVER_ID, photo_id, rnd.nextInt(), photo_id), 512, 512, file_size));
+            chat_photo = new Photo(photo_id, photo_id, date, photoSizes);
+        }
         org.telegram.tl.ChatFull chatFull = new org.telegram.tl.ChatFull(chat_id,
                 new ChatParticipants(chat_id, ((Chat) chat)._admin_id, participants, 1),
-                new PhotoEmpty(),
+                chat_photo,
                 new PeerNotifySettingsEmpty(),
                 new ChatInviteEmpty(),
                 new TLVector<TLBotInfo>());

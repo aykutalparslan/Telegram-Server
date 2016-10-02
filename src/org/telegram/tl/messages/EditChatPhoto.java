@@ -18,12 +18,19 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.core.*;
+import org.telegram.data.DatabaseConnection;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.server.ServerConfig;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
-public class EditChatPhoto extends TLObject {
+import java.util.Random;
 
-    public static final int ID = -662601187;
+public class EditChatPhoto extends TLObject implements TLMethod {
+
+    public static final int ID = 0xca4c79d8;
 
     public int chat_id;
     public TLInputChatPhoto photo;
@@ -58,5 +65,66 @@ public class EditChatPhoto extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (context.isAuthorized()) {
+            int date = (int) (System.currentTimeMillis() / 1000L);
+            long photo_id = 0;
+
+            if (photo instanceof InputChatUploadedPhoto) {
+                photo_id = ((InputFile) ((InputChatUploadedPhoto) photo).file).id;
+            }
+
+            TLChat chat = ChatStore.getInstance().editChatPhoto(chat_id, photo_id);
+
+            UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 1, 1, 0);
+            int message_id = um.sent_messages + um.received_messages + 1;
+            int flags = 259;
+
+            TLVector<TLChat> chatTLVector = new TLVector<>();
+            if (chat != null) {
+                chatTLVector.add(chat);
+            }
+            TLVector<TLUser> userTLVector = new TLVector<>();
+
+            userTLVector.add(um.toUser());
+            TLVector<TLUpdate> updateTLVector = new TLVector<>();
+            int file_size = DatabaseConnection.getInstance().getFileSize(photo_id);
+            TLVector<TLPhotoSize> photoSizes = new TLVector<>();
+            Random rnd = new Random();
+            photoSizes.add(new PhotoSize("s", new FileLocation(ServerConfig.SERVER_ID, photo_id, rnd.nextInt(), photo_id), 96, 96, file_size));
+            photoSizes.add(new PhotoSize("m", new FileLocation(ServerConfig.SERVER_ID, photo_id, rnd.nextInt(), photo_id), 256, 256, file_size));
+            photoSizes.add(new PhotoSize("x", new FileLocation(ServerConfig.SERVER_ID, photo_id, rnd.nextInt(), photo_id), 512, 512, file_size));
+            UpdateNewMessage title_changed = new UpdateNewMessage(new MessageService(flags, message_id, context.getUserId(),
+                    new PeerChat(chat_id), date, new MessageActionChatEditPhoto(new Photo(photo_id, photo_id, date, photoSizes))), um.pts, 1);
+
+            updateTLVector.add(title_changed);
+
+
+            Updates updates = new Updates(updateTLVector, userTLVector, chatTLVector, date, 0);
+            int[] users_ids = ChatStore.getInstance().getChatParticipants(chat_id);
+
+            for (int user_id : users_ids) {
+                if (user_id != context.getUserId() && user_id != 0) {
+                    UserModel umc2 = UserStore.getInstance().increment_pts_getUser(user_id, 1, 1, 0);
+                    TLVector<TLUpdate> updateTLVector2 = new TLVector<>();
+                    int message_id2 = umc2.sent_messages + umc2.received_messages + 1;
+                    int flags2 = 0;
+
+                    UpdateNewMessage title_changed2 = new UpdateNewMessage(new MessageService(flags2, message_id, context.getUserId(),
+                            new PeerChat(chat_id), date, new MessageActionChatEditPhoto(new Photo(photo_id, 0, date, photoSizes))), umc2.pts, 1);
+
+                    updateTLVector2.add(title_changed2);
+
+                    Updates updates2 = new Updates(updateTLVector2, userTLVector, chatTLVector, date, 0);
+                    Router.getInstance().Route(user_id, updates2, false);
+                }
+            }
+
+            return updates;
+        }
+        return rpc_error.UNAUTHORIZED();
     }
 }

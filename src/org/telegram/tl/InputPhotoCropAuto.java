@@ -23,7 +23,7 @@ import org.telegram.tl.*;
 
 public class InputPhotoCropAuto extends TLInputPhotoCrop {
 
-    public static final int ID = -1377390588;
+    public static final int ID = 0xade6b004;
 
 
     public InputPhotoCropAuto(){
