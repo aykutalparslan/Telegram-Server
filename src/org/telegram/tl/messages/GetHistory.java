@@ -18,6 +18,7 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.core.ChatStore;
 import org.telegram.core.TLContext;
 import org.telegram.core.TLMethod;
 import org.telegram.core.UserStore;
@@ -92,14 +93,23 @@ public class GetHistory extends TLObject implements TLMethod {
                 Message[] messages_out = DatabaseConnection.getInstance().getOutgoingMessages(context.getUserId(), ((InputPeerUser) peer).user_id, max_id);
                 for (Message m : messages_in) {
                     m.flags = 0;
-                    processMessage(tlMessages, tlUsers, m);
+                    processMessage(tlMessages, tlUsers, tlChats, m);
                 }
                 for (Message m : messages_out) {
                     m.flags = 2;
-                    processMessage(tlMessages, tlUsers, m);
+                    processMessage(tlMessages, tlUsers, tlChats, m);
                 }
             } else if (peer instanceof InputPeerChat) {
-
+                Message[] messages_in = DatabaseConnection.getInstance().getIncomingChatMessages(context.getUserId(), ((InputPeerChat) peer).chat_id, max_id);
+                Message[] messages_out = DatabaseConnection.getInstance().getOutgoingChatMessages(context.getUserId(), ((InputPeerChat) peer).chat_id, max_id);
+                for (Message m : messages_in) {
+                    m.flags = 0;
+                    processMessage(tlMessages, tlUsers, tlChats, m);
+                }
+                for (Message m : messages_out) {
+                    m.flags = 2;
+                    processMessage(tlMessages, tlUsers, tlChats, m);
+                }
             }
 
         }
@@ -114,7 +124,7 @@ public class GetHistory extends TLObject implements TLMethod {
         return new Messages(tlMessages, tlChats, tlUsers);
     }
 
-    private void processMessage(TLVector<TLMessage> tlMessages, TLVector<TLUser> tlUsers, Message m) {
+    private void processMessage(TLVector<TLMessage> tlMessages, TLVector<TLUser> tlUsers, TLVector<TLChat> tlChats, Message m) {
         tlMessages.add(m);
         boolean user_exists_from = false;
         boolean user_exists_to = false;
@@ -135,10 +145,18 @@ public class GetHistory extends TLObject implements TLMethod {
             }
         }
         if (!user_exists_to) {
-            UserModel uc = UserStore.getInstance().getUser(((PeerUser) m.to_id).user_id);
-            if (uc != null) {
-                tlUsers.add(uc.toUser());
+            if (m.to_id instanceof PeerUser) {
+                UserModel uc = UserStore.getInstance().getUser(((PeerUser) m.to_id).user_id);
+                if (uc != null) {
+                    tlUsers.add(uc.toUser());
+                }
+            } else if (m.to_id instanceof PeerChat) {
+                TLChat c = ChatStore.getInstance().getChat(((PeerChat) m.to_id).chat_id);
+                if (c != null) {
+                    tlChats.add(c);
+                }
             }
+
         }
     }
 }

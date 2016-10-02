@@ -122,7 +122,26 @@ public class SendMessage extends TLObject implements TLMethod {
                 return new SentMessage(msg_id, date, new MessageMediaEmpty(), new TLVector<TLMessageEntity>(), pts, 0, pts);
             } else if (peer instanceof InputPeerChat) {
                 int toChatId = ((InputPeerChat) peer).chat_id;
+                int[] users_ids = ChatStore.getInstance().getChatParticipants(toChatId);
+                for (int user_id : users_ids) {
+                    if (user_id != context.getUserId()) {
+                        UpdateShortChatMessage msg = (UpdateShortChatMessage) crateShortChatMessage(user_id, toChatId,
+                                context.getUserId(), this.message, this.entities);
 
+                        DatabaseConnection.getInstance().saveIncomingMessage(user_id, context.getUserId(), toChatId, msg.id, msg_id,
+                                msg.message, msg.flags, msg.date);
+                    }
+                }
+
+                UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
+                msg_id = um.sent_messages + um.received_messages + 1;
+
+                DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), 0, toChatId, msg_id, 0,
+                        this.message, 2, date);
+
+                pts = um.pts;
+
+                return new SentMessage(msg_id, date, new MessageMediaEmpty(), new TLVector<TLMessageEntity>(), pts, 0, pts);
             }
         }
 
@@ -139,6 +158,23 @@ public class SendMessage extends TLObject implements TLMethod {
         int flags_msg = 1;
         UpdateShortMessage msg = new UpdateShortMessage(flags_msg, msg_id,
                 from_user_id, message, um.pts, 1,
+                date, 0, 0, 0, entities);
+
+        Router.getInstance().Route(to_user_id, msg, false);
+
+        return msg;
+    }
+
+    public TLUpdates crateShortChatMessage(int to_user_id, int to_chat_id, int from_user_id, String message, TLVector<TLMessageEntity> entities) {
+        int date = (int) (System.currentTimeMillis() / 1000L);
+        int msg_id;
+
+        UserModel um = UserStore.getInstance().increment_pts_getUser(to_user_id, 1, 0, 1);
+        msg_id = um.sent_messages + um.received_messages + 1;
+
+        int flags_msg = 1;
+        UpdateShortChatMessage msg = new UpdateShortChatMessage(flags_msg, msg_id,
+                from_user_id, to_chat_id, message, um.pts, 1,
                 date, 0, 0, 0, entities);
 
         Router.getInstance().Route(to_user_id, msg, false);

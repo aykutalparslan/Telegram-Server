@@ -61,6 +61,8 @@ public class DatabaseConnection {
         //session.execute("DROP TABLE telegramfs.files;");
         //session.execute("DROP TABLE telegramfs.file_parts;");
         //session.execute("DROP KEYSPACE telegramfs;");
+        //session.execute("DROP MATERIALIZED VIEW telegram.incoming_messages_by_chat;");
+        //session.execute("DROP MATERIALIZED VIEW telegram.outgoing_messages_by_chat;");
 
         session.execute("CREATE KEYSPACE IF NOT EXISTS telegram WITH replication " +
                 "= {'class':'SimpleStrategy', 'replication_factor':1};");
@@ -173,6 +175,18 @@ public class DatabaseConnection {
                         "SELECT * FROM telegram.outgoing_messages " +
                         "WHERE user_id IS NOT NULL AND to_user_id IS NOT NULL AND to_chat_id IS NOT NULL AND message_id IS NOT NULL " +
                         "PRIMARY KEY (user_id, to_chat_id, to_user_id, message_id);");
+        session.execute(
+                "CREATE TABLE IF NOT EXISTS telegram.chat_messages (" +
+                        "to_chat_id int," +
+                        "user_id int," +
+                        "message text," +
+                        "media blob," +
+                        "date int," +
+                        "fwd_from_id int," +
+                        "fwd_date int," +
+                        "reply_to_msg_id int," +
+                        "entities blob," +
+                        "PRIMARY KEY (to_chat_id));");
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.contacts (" +
                         "user_id int," +
@@ -492,8 +506,8 @@ public class DatabaseConnection {
     }
 
     public Message[] getIncomingChatMessages(int user_id, int to_chat_id, int max_id) {
-        ResultSet results = session.execute("SELECT * FROM telegram.incoming_messages_by_chat WHERE user_id = ? AND to_chat_id = ? AND message_id < ?;",
-                user_id, to_chat_id, max_id);
+        ResultSet results = session.execute("SELECT * FROM telegram.incoming_messages_by_chat WHERE user_id = ? AND to_chat_id = ?;",
+                user_id, to_chat_id);
 
         Message[] messages = new Message[results.getAvailableWithoutFetching()];
         int i = 0;
@@ -594,8 +608,8 @@ public class DatabaseConnection {
     }
 
     public Message[] getOutgoingChatMessages(int user_id, int to_chat_id, int max_id) {
-        ResultSet results = session.execute("SELECT * FROM telegram.outgoing_messages WHERE user_id = ? AND to_chat_id = ? AND message_id < ?;",
-                user_id, to_chat_id, max_id);
+        ResultSet results = session.execute("SELECT * FROM telegram.outgoing_messages_by_chat WHERE user_id = ? AND to_chat_id = ?;",
+                user_id, to_chat_id);
 
         Message[] messages = new Message[results.getAvailableWithoutFetching()];
         int i = 0;

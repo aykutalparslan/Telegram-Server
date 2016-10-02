@@ -18,6 +18,7 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.core.ChatStore;
 import org.telegram.core.TLContext;
 import org.telegram.core.TLMethod;
 import org.telegram.core.UserStore;
@@ -95,17 +96,44 @@ public class GetDialogs extends TLObject implements TLMethod {
 
                 boolean dialog_exists = false;
                 for (TLDialog d : tlDialogs) {
-                    if (((PeerUser) ((Dialog) d).peer).user_id == m.from_id && m.flags != 2) {
+                    int uid_d = 0;
+                    int uid_m = 0;
+                    if (((Dialog) d).peer instanceof PeerUser) {
+                        uid_d = ((PeerUser) ((Dialog) d).peer).user_id;
+                    } else if (((Dialog) d).peer instanceof PeerChat) {
+                        uid_d = ((PeerChat) ((Dialog) d).peer).chat_id;
+                    }
+                    if (m.to_id instanceof PeerUser) {
+                        uid_m = ((PeerUser) m.to_id).user_id;
+                    } else if (m.to_id instanceof PeerChat) {
+                        uid_m = ((PeerChat) m.to_id).chat_id;
+                    }
+
+                    if (uid_d == m.from_id && m.flags != 2) {
+                        dialog_exists = true;
+                    }
+
+                    if (uid_d == uid_m) {
                         dialog_exists = true;
                     }
                 }
                 if (!dialog_exists) {
-                    PeerUser pu = new PeerUser(m.from_id);
-                    Dialog d = new Dialog(pu, m.id, m.id, 0, new PeerNotifySettingsEmpty());
-                    tlDialogs.add(d);
-                    UserModel uc = UserStore.getInstance().getUser(pu.user_id);
-                    if (uc != null) {
-                        tlUsers.add(uc.toUser());
+                    if (m.to_id instanceof PeerChat) {
+                        PeerChat pc = (PeerChat) m.to_id;
+                        Dialog d = new Dialog(pc, m.id, m.id, 0, new PeerNotifySettingsEmpty());
+                        tlDialogs.add(d);
+                        TLChat c = ChatStore.getInstance().getChat(pc.chat_id);
+                        if (c != null) {
+                            tlChats.add(c);
+                        }
+                    } else if (m.to_id instanceof PeerUser) {
+                        PeerUser pu = new PeerUser(m.from_id);
+                        Dialog d = new Dialog(pu, m.id, m.id, 0, new PeerNotifySettingsEmpty());
+                        tlDialogs.add(d);
+                        UserModel uc = UserStore.getInstance().getUser(pu.user_id);
+                        if (uc != null) {
+                            tlUsers.add(uc.toUser());
+                        }
                     }
                 } else {
                     for (TLDialog d : tlDialogs) {
@@ -128,23 +156,54 @@ public class GetDialogs extends TLObject implements TLMethod {
 
                 boolean dialog_exists = false;
                 for (TLDialog d : tlDialogs) {
-                    if (((PeerUser) ((Dialog) d).peer).user_id == ((PeerUser) m.to_id).user_id) {
+                    int uid_d = 0;
+                    int uid_m = 0;
+                    if (((Dialog) d).peer instanceof PeerUser) {
+                        uid_d = ((PeerUser) ((Dialog) d).peer).user_id;
+                    } else if (((Dialog) d).peer instanceof PeerChat) {
+                        uid_d = ((PeerChat) ((Dialog) d).peer).chat_id;
+                    }
+                    if (m.to_id instanceof PeerUser) {
+                        uid_m = ((PeerUser) m.to_id).user_id;
+                    } else if (m.to_id instanceof PeerChat) {
+                        uid_m = ((PeerChat) m.to_id).chat_id;
+                    }
+                    if (uid_d == uid_m) {
                         dialog_exists = true;
                     }
                 }
                 if (!dialog_exists) {
-                    PeerUser pu = (PeerUser) m.to_id;
-                    Dialog d = new Dialog(pu, m.id, m.id, 0, new PeerNotifySettingsEmpty());
-                    tlDialogs.add(d);
-                    UserModel uc = UserStore.getInstance().getUser(pu.user_id);
-                    if (uc != null) {
-                        tlUsers.add(uc.toUser());
+                    if (m.to_id instanceof PeerChat) {
+                        PeerChat pc = (PeerChat) m.to_id;
+                        Dialog d = new Dialog(pc, m.id, m.id, 0, new PeerNotifySettingsEmpty());
+                        tlDialogs.add(d);
+                        TLChat c = ChatStore.getInstance().getChat(pc.chat_id);
+                        if (c != null) {
+                            tlChats.add(c);
+                        }
+                    } else if (m.to_id instanceof PeerUser) {
+                        PeerUser pu = (PeerUser) m.to_id;
+                        Dialog d = new Dialog(pu, m.id, m.id, 0, new PeerNotifySettingsEmpty());
+                        tlDialogs.add(d);
+                        UserModel uc = UserStore.getInstance().getUser(pu.user_id);
+                        if (uc != null) {
+                            tlUsers.add(uc.toUser());
+                        }
                     }
+
                 } else {
                     for (TLDialog d : tlDialogs) {
-                        if (((PeerUser) ((Dialog) d).peer).user_id == ((PeerUser) m.to_id).user_id) {
-                            if (((Dialog) d).top_message < m.id) {
-                                ((Dialog) d).top_message = m.id;
+                        if (((Dialog) d).peer instanceof PeerChat && m.to_id instanceof PeerChat) {
+                            if (((PeerChat) ((Dialog) d).peer).chat_id == ((PeerChat) m.to_id).chat_id) {
+                                if (((Dialog) d).top_message < m.id) {
+                                    ((Dialog) d).top_message = m.id;
+                                }
+                            }
+                        } else if (((Dialog) d).peer instanceof PeerUser && m.to_id instanceof PeerUser) {
+                            if (((PeerUser) ((Dialog) d).peer).user_id == ((PeerUser) m.to_id).user_id) {
+                                if (((Dialog) d).top_message < m.id) {
+                                    ((Dialog) d).top_message = m.id;
+                                }
                             }
                         }
                     }

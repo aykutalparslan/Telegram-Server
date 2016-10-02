@@ -73,6 +73,14 @@ public class SetTyping extends TLObject implements TLMethod {
                 UpdateShort updateShort = new UpdateShort(typing, date);
                 Router.getInstance().Route(((InputPeerUser) peer).user_id, updateShort, false);
                 return new BoolTrue();
+            } else if (peer instanceof InputPeerChat) {
+                int date = (int) (System.currentTimeMillis() / 1000L);
+                UpdateUserTyping typing = new UpdateUserTyping(context.getUserId(), new SendMessageTypingAction());
+                UpdateShort updateShort = new UpdateShort(typing, date);
+                /*
+
+                 */
+                return new BoolTrue();
             }
         }
         return rpc_error.UNAUTHORIZED();
