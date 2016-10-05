@@ -127,12 +127,34 @@ public class UserStore {
                 usernameToId.set(user.username, user_id);
             }
         }
+        if (user == null) {
+            return null;
+        }
         user.pts += pts_inc;
         user.sent_messages += sent_message_inc;
         user.received_messages += received_message_inc;
 
         usersShared.set(user_id, user);
         db.updateUser_pts(user_id, user.pts, user.sent_messages, user.received_messages);
+
+
+        return user;
+    }
+
+    public UserModel increment_qts_getUser(int user_id, int pts_inc) {
+        UserModel user = usersShared.get(user_id);
+        if (user == null) {
+            user = db.getUser(user_id);
+            if (user != null) {
+                usersShared.set(user_id, user);
+                userPhoneToId.set(user.phone, user_id);
+                usernameToId.set(user.username, user_id);
+            }
+        }
+        user.pts += pts_inc;
+
+        usersShared.set(user_id, user);
+        db.updateUser_qts(user_id, user.qts);
 
 
         return user;

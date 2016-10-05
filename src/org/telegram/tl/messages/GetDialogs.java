@@ -137,16 +137,19 @@ public class GetDialogs extends TLObject implements TLMethod {
                     }
                 } else {
                     for (TLDialog d : tlDialogs) {
-                        if (((PeerUser) ((Dialog) d).peer).user_id == m.from_id) {
+                        if (((Dialog) d).peer instanceof PeerUser) {
                             if (((PeerUser) ((Dialog) d).peer).user_id == m.from_id) {
-                                if (((Dialog) d).read_inbox_max_id < m.id) {
-                                    ((Dialog) d).read_inbox_max_id = m.id;
-                                }
-                                if (((Dialog) d).top_message < m.id) {
-                                    ((Dialog) d).top_message = m.id;
+                                if (((PeerUser) ((Dialog) d).peer).user_id == m.from_id) {
+                                    if (((Dialog) d).read_inbox_max_id < m.id) {
+                                        ((Dialog) d).read_inbox_max_id = m.id;
+                                    }
+                                    if (((Dialog) d).top_message < m.id) {
+                                        ((Dialog) d).top_message = m.id;
+                                    }
                                 }
                             }
                         }
+
                     }
                 }
             }

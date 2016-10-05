@@ -18,12 +18,18 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.core.Router;
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.core.UserStore;
+import org.telegram.data.DatabaseConnection;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class RequestEncryption extends TLObject {
+public class RequestEncryption extends TLObject implements TLMethod {
 
-    public static final int ID = -162681021;
+    public static final int ID = 0xf64daf43;
 
     public TLInputUser user_id;
     public int random_id;
@@ -62,5 +68,29 @@ public class RequestEncryption extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        int date = (int) (System.currentTimeMillis() / 1000L);
+
+        DatabaseConnection.getInstance().addSecretChat(random_id, context.getUserId(), ((InputUser) user_id).user_id);
+
+        EncryptedChatRequested encryptedChatRequested = new EncryptedChatRequested(random_id, random_id, date, context.getUserId(), ((InputUser) user_id).user_id, g_a);
+        UpdateEncryption updateEncryption = new UpdateEncryption(encryptedChatRequested, date);
+
+        TLVector<TLUser> userTLVector = new TLVector<>();
+        UserModel um = UserStore.getInstance().getUser(context.getUserId());
+        userTLVector.add(um.toUser());
+        UserModel umc = UserStore.getInstance().increment_pts_getUser(((InputUser) user_id).user_id, 1, 1, 0);
+        userTLVector.add(umc.toUser());
+        TLVector<TLUpdate> updateTLVector = new TLVector<>();
+        updateTLVector.add(updateEncryption);
+        TLVector<TLChat> chatTLVector = new TLVector<>();
+
+        Updates updates = new Updates(updateTLVector, userTLVector, chatTLVector, date, 0);
+        Router.getInstance().Route(((InputUser) user_id).user_id, updates, false);
+
+        return new EncryptedChatWaiting(random_id, random_id, date, context.getUserId(), ((InputUser) user_id).user_id);
     }
 }

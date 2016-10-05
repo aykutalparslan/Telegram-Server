@@ -52,6 +52,7 @@ public class DatabaseConnection {
 
     public void createSchema() {
         //session.execute("DROP TABLE telegram.auth_keys;");
+        //session.execute("DROP MATERIALIZED VIEW telegram.sessions_by_user;");
         //session.execute("DROP TABLE telegram.sessions;");
         //session.execute("DROP TABLE telegram.server_salts;");
         //session.execute("DROP MATERIALIZED VIEW telegram.users_by_phone;");
@@ -101,6 +102,7 @@ public class DatabaseConnection {
                         "access_hash bigint," +
                         "phone text," +
                         "pts int," +
+                        "qts int," +
                         "sent_messages int," +
                         "received_messages int," +
                         "PRIMARY KEY (user_id));");
@@ -216,6 +218,12 @@ public class DatabaseConnection {
                         "user_id int," +
                         "PRIMARY KEY (chat_id));");
         session.execute(
+                "CREATE TABLE IF NOT EXISTS telegram.secret_chats (" +
+                        "chat_id int," +
+                        "admin_id int," +
+                        "participant_id int," +
+                        "PRIMARY KEY (chat_id));");
+        session.execute(
                 "CREATE MATERIALIZED VIEW IF NOT EXISTS telegram.user_chats AS " +
                         "SELECT * FROM telegram.chat_users " +
                         "WHERE chat_id IS NOT NULL AND user_id IS NOT NULL " +
@@ -251,11 +259,6 @@ public class DatabaseConnection {
                         "bytes blob," +
                         "size int," +
                         "PRIMARY KEY (file_id, part_num)) WITH CLUSTERING ORDER BY (part_num ASC);");
-    }
-
-    public int[] getChatUsers() {
-
-        return null;
     }
 
     public TLChat getChat(int chat_id) {
@@ -349,6 +352,25 @@ public class DatabaseConnection {
         session.execute("DELETE FROM telegram.chat_users WHERE chat_id = ? AND user_id =  ?;",
                 chat_id,
                 user_id);
+    }
+
+    public void addSecretChat(int chat_id, int admin_id, int participant_id) {
+        session.execute("INSERT INTO telegram.secret_chats (chat_id, admin_id, participant_id) VALUES (?,?,?);",
+                chat_id,
+                admin_id,
+                participant_id);
+    }
+
+    public SecretChatModel getSecretChat(int chat_id) {
+        if (chat_id == 0) {
+            return null;
+        }
+        ResultSet results = session.execute("SELECT * FROM telegram.secret_chats WHERE chat_id = ?;",
+                chat_id);
+
+        Row row = results.one();
+
+        return new SecretChatModel(chat_id, row.getInt("admin_id"), row.getInt("participant_id"));
     }
 
     public void saveProfilePhoto(int user_id, long file_id, String caption, double lat, double lon, double crop_left, double crop_top, double crop_width, int date) {
@@ -679,7 +701,7 @@ public class DatabaseConnection {
     }
 
     public void saveFilePart(long file_id, int part_num, byte[] bytes) {
-        if (part_num == 1) {
+        if (part_num == 1 || part_num == 0) {
             saveFile(file_id, bytes.length);
         }
 
@@ -798,7 +820,8 @@ public class DatabaseConnection {
         return contacts;
     }
 
-    public void saveUser(int user_id, String first_name, String last_name, String username, long access_hash, String phone, int pts, int sent_messages, int received_messages) {
+    public void saveUser(int user_id, String first_name, String last_name, String username, long access_hash,
+                         String phone, int pts, int sent_messages, int received_messages) {
         session.execute("INSERT INTO telegram.users (user_id, first_name, last_name, username, access_hash, phone, pts, sent_messages, received_messages) VALUES (?,?,?,?,?,?,?,?,?);",
                 user_id,
                 first_name,
@@ -825,6 +848,12 @@ public class DatabaseConnection {
                 pts,
                 sent_messages,
                 received_messages,
+                user_id);
+    }
+
+    public void updateUser_qts(int user_id, int qts) {
+        session.execute("UPDATE telegram.users SET qts = ? WHERE user_id = ?;",
+                qts,
                 user_id);
     }
 
@@ -865,6 +894,7 @@ public class DatabaseConnection {
             userModel.access_hash = row.getLong("access_hash");
             userModel.phone = row.getString("phone");
             userModel.pts = row.getInt("pts");
+            userModel.qts = row.getInt("qts");
             userModel.sent_messages = row.getInt("sent_messages");
             userModel.received_messages = row.getInt("received_messages");
         }
@@ -885,6 +915,7 @@ public class DatabaseConnection {
             userModel.access_hash = row.getLong("access_hash");
             userModel.phone = row.getString("phone");
             userModel.pts = row.getInt("pts");
+            userModel.qts = row.getInt("qts");
             userModel.sent_messages = row.getInt("sent_messages");
             userModel.received_messages = row.getInt("received_messages");
         }
@@ -905,6 +936,7 @@ public class DatabaseConnection {
             userModel.access_hash = row.getLong("access_hash");
             userModel.phone = row.getString("phone");
             userModel.pts = row.getInt("pts");
+            userModel.qts = row.getInt("qts");
             userModel.sent_messages = row.getInt("sent_messages");
             userModel.received_messages = row.getInt("received_messages");
         }

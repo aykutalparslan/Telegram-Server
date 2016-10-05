@@ -69,8 +69,13 @@ public class DeleteChatUser extends TLObject implements TLMethod {
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
         if (context.isAuthorized()) {
             int date = (int) (System.currentTimeMillis() / 1000L);
+            UserModel umc = null;
+            if (user_id instanceof InputUser) {
+                umc = UserStore.getInstance().getUser(((InputUser) user_id).user_id);
+            } else if (user_id instanceof InputUserSelf) {
+                umc = UserStore.getInstance().getUser(context.getUserId());
+            }
 
-            UserModel umc = UserStore.getInstance().getUser(((InputUser) user_id).user_id);
             TLChat chat = null;
             if (umc != null) {
                 chat = ChatStore.getInstance().deleteChatUser(chat_id, umc.user_id);
@@ -107,6 +112,9 @@ public class DeleteChatUser extends TLObject implements TLMethod {
             for (int user_id : users_ids) {
                 if (user_id != context.getUserId() && user_id != 0) {
                     UserModel umc2 = UserStore.getInstance().increment_pts_getUser(user_id, 1, 1, 0);
+                    if (umc2 == null) {
+                        continue;
+                    }
                     TLVector<TLUpdate> updateTLVector2 = new TLVector<>();
                     int message_id2 = umc2.sent_messages + umc2.received_messages + 1;
                     int flags2 = 0;

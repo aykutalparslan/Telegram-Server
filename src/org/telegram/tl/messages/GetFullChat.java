@@ -84,15 +84,17 @@ public class GetFullChat extends TLObject implements TLMethod {
             }
         }
         TLPhoto chat_photo = new PhotoEmpty();
-        long photo_id = ((FileLocation) ((ChatPhoto) ((Chat) chat).photo).photo_big).secret;
-        if (photo_id != 0) {
-            int file_size = DatabaseConnection.getInstance().getFileSize(photo_id);
-            TLVector<TLPhotoSize> photoSizes = new TLVector<>();
-            Random rnd = new Random();
-            photoSizes.add(new PhotoSize("s", new FileLocation(ServerConfig.SERVER_ID, photo_id, rnd.nextInt(), photo_id), 96, 96, file_size));
-            photoSizes.add(new PhotoSize("m", new FileLocation(ServerConfig.SERVER_ID, photo_id, rnd.nextInt(), photo_id), 256, 256, file_size));
-            photoSizes.add(new PhotoSize("x", new FileLocation(ServerConfig.SERVER_ID, photo_id, rnd.nextInt(), photo_id), 512, 512, file_size));
-            chat_photo = new Photo(photo_id, photo_id, date, photoSizes);
+        if (((Chat) chat).photo instanceof ChatPhoto) {
+            long photo_id = ((FileLocation) ((ChatPhoto) ((Chat) chat).photo).photo_big).secret;
+            if (photo_id != 0) {
+                int file_size = DatabaseConnection.getInstance().getFileSize(photo_id);
+                TLVector<TLPhotoSize> photoSizes = new TLVector<>();
+                Random rnd = new Random();
+                photoSizes.add(new PhotoSize("s", new FileLocation(ServerConfig.SERVER_ID, photo_id, rnd.nextInt(), photo_id), 96, 96, file_size));
+                photoSizes.add(new PhotoSize("m", new FileLocation(ServerConfig.SERVER_ID, photo_id, rnd.nextInt(), photo_id), 256, 256, file_size));
+                photoSizes.add(new PhotoSize("x", new FileLocation(ServerConfig.SERVER_ID, photo_id, rnd.nextInt(), photo_id), 512, 512, file_size));
+                chat_photo = new Photo(photo_id, photo_id, date, photoSizes);
+            }
         }
         org.telegram.tl.ChatFull chatFull = new org.telegram.tl.ChatFull(chat_id,
                 new ChatParticipants(chat_id, ((Chat) chat)._admin_id, participants, 1),

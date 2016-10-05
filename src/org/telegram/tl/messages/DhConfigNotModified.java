@@ -23,7 +23,7 @@ import org.telegram.tl.*;
 
 public class DhConfigNotModified extends TLDhConfig {
 
-    public static final int ID = -1058912715;
+    public static final int ID = 0xc0e24635;
 
     public byte[] random;
 

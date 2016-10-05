@@ -23,7 +23,7 @@ import org.telegram.tl.*;
 
 public class EncryptedChatWaiting extends TLEncryptedChat {
 
-    public static final int ID = 1006044124;
+    public static final int ID = 0x3bf703dc;
 
     public int id;
     public long access_hash;

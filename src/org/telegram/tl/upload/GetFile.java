@@ -83,6 +83,8 @@ public class GetFile extends TLObject implements TLMethod {
                 file_id = ((InputAudioFileLocation) location).id;
             } else if (location instanceof InputDocumentFileLocation) {
                 file_id = ((InputDocumentFileLocation) location).id;
+            } else if (location instanceof InputEncryptedFileLocation) {
+                file_id = ((InputEncryptedFileLocation) location).id;
             }
             if (file_id == 0) {
                 return rpc_error.BAD_REQUEST();
@@ -95,20 +97,26 @@ public class GetFile extends TLObject implements TLMethod {
                 last_part_num++;
             }
             ProtocolBuffer buffer = new ProtocolBuffer(limit);
-            for (int i = first_part_num; i <= last_part_num; i++) {
-                int offset_for_part = 0;
-                if (i == first_part_num && offset % part_size != 0) {
-                    offset_for_part = offset % part_size;
-                }
-                int limit_for_part = part_size;
-                if (i == last_part_num && limit % part_size != 0) {
-                    limit_for_part = limit % part_size;
-                }
+            if (first_part_num == 0) {
+                byte[] bytes = DatabaseConnection.getInstance().getFilePart(file_id, 0);
+                buffer.write(bytes, 0, bytes.length);
+            } else {
+                for (int i = first_part_num; i <= last_part_num; i++) {
+                    int offset_for_part = 0;
+                    if (i == first_part_num && offset % part_size != 0) {
+                        offset_for_part = offset % part_size;
+                    }
+                    int limit_for_part = part_size;
+                    if (i == last_part_num && limit % part_size != 0) {
+                        limit_for_part = limit % part_size;
+                    }
 
-                byte[] bytes = DatabaseConnection.getInstance().getFilePart(file_id, i);
-                limit_for_part = Math.min(limit_for_part, bytes.length);
-                buffer.write(bytes, offset_for_part, limit_for_part);
+                    byte[] bytes = DatabaseConnection.getInstance().getFilePart(file_id, i);
+                    limit_for_part = Math.min(limit_for_part, bytes.length);
+                    buffer.write(bytes, offset_for_part, limit_for_part);
+                }
             }
+
             return new File(new FileUnknown(), 0, buffer.getBytes());
         }
         return rpc_error.UNAUTHORIZED();

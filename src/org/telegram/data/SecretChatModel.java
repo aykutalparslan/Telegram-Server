@@ -16,16 +16,21 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.server;
+package org.telegram.data;
+
+import java.io.Serializable;
 
 /**
- * Created by aykut on 08/11/15.
+ * Created by aykut on 04/10/16.
  */
-public class ServerConfig {
-    public static final int SERVER_ID = 2;
-    //public static final String SERVER_HOSTNAME = "127.0.0.1";
-    //public static final String SERVER_IP = "127.0.0.1";
-    public static final String SERVER_HOSTNAME = "10.0.2.2";
-    public static final String SERVER_IP = "10.0.2.2";
-    public static final int SERVER_PORT = 11235;
+public class SecretChatModel implements Serializable {
+    public int chat_id;
+    public int admin_id;
+    public int participant_id;
+
+    public SecretChatModel(int chat_id, int admin_id, int participant_id) {
+        this.chat_id = chat_id;
+        this.admin_id = admin_id;
+        this.participant_id = participant_id;
+    }
 }

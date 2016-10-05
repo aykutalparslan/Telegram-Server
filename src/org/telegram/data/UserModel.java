@@ -34,6 +34,7 @@ public class UserModel implements Serializable {
     public String phone;
     public TLUserStatus status;
     public int pts;
+    public int qts;
     public int sent_messages;
     public int received_messages;
 

@@ -18,10 +18,18 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.core.Router;
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.core.UserStore;
+import org.telegram.data.DatabaseConnection;
+import org.telegram.data.SecretChatModel;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.server.ServerConfig;
 import org.telegram.tl.*;
 
-public class SendEncryptedFile extends TLObject {
+public class SendEncryptedFile extends TLObject implements TLMethod {
 
     public static final int ID = -1701831834;
 
@@ -66,5 +74,60 @@ public class SendEncryptedFile extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        int date = (int) (System.currentTimeMillis() / 1000L);
+
+        int chat_id = ((InputEncryptedChat) peer).chat_id;
+        SecretChatModel sc = DatabaseConnection.getInstance().getSecretChat(chat_id);
+
+        int user_id = 0;
+        if (context.getUserId() == sc.admin_id) {
+            user_id = sc.participant_id;
+        } else if (context.getUserId() == sc.participant_id) {
+            user_id = sc.admin_id;
+        }
+
+        TLVector<TLUser> userTLVector = new TLVector<>();
+        UserModel um = UserStore.getInstance().getUser(context.getUserId());
+        userTLVector.add(um.toUser());
+        UserModel umc = UserStore.getInstance().increment_qts_getUser(user_id, 1);
+        userTLVector.add(umc.toUser());
+        TLVector<TLUpdate> updateTLVector = new TLVector<>();
+        EncryptedFile encryptedFile = null;
+        if (file instanceof InputEncryptedFileUploaded) {
+            long file_id = ((InputEncryptedFileUploaded) file).id;
+
+            int file_size = DatabaseConnection.getInstance().getFileSize(file_id);
+            encryptedFile = new EncryptedFile(file_id, ((InputEncryptedFileUploaded) file).id, file_size, ServerConfig.SERVER_ID,
+                    ((InputEncryptedFileUploaded) file).key_fingerprint);
+            EncryptedMessage encryptedMessage = new EncryptedMessage(random_id, chat_id, date, data,
+                    encryptedFile);
+            UpdateNewEncryptedMessage updateNewEncryptedMessage = new UpdateNewEncryptedMessage(encryptedMessage, umc.qts);
+            updateTLVector.add(updateNewEncryptedMessage);
+            TLVector<TLChat> chatTLVector = new TLVector<>();
+
+            Updates updates = new Updates(updateTLVector, userTLVector, chatTLVector, date, 0);
+            Router.getInstance().Route(user_id, updates, false);
+        } else if (file instanceof InputEncryptedFileBigUploaded) {
+            long file_id = ((InputEncryptedFileBigUploaded) file).id;
+
+            int file_size = DatabaseConnection.getInstance().getFileSize(file_id);
+            encryptedFile = new EncryptedFile(file_id, ((InputEncryptedFileBigUploaded) file).id, file_size, ServerConfig.SERVER_ID,
+                    ((InputEncryptedFileBigUploaded) file).key_fingerprint);
+            EncryptedMessage encryptedMessage = new EncryptedMessage(random_id, chat_id, date, data,
+                    encryptedFile);
+            UpdateNewEncryptedMessage updateNewEncryptedMessage = new UpdateNewEncryptedMessage(encryptedMessage, umc.qts);
+            updateTLVector.add(updateNewEncryptedMessage);
+            TLVector<TLChat> chatTLVector = new TLVector<>();
+
+            Updates updates = new Updates(updateTLVector, userTLVector, chatTLVector, date, 0);
+            Router.getInstance().Route(user_id, updates, false);
+        }
+
+
+        return new SentEncryptedFile(date, encryptedFile);
     }
 }

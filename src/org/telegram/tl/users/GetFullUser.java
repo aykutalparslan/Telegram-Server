@@ -81,8 +81,9 @@ public class GetFullUser extends TLObject implements TLMethod {
         }
         UserModel um = UserStore.getInstance().getUser(user_id);
         if (um != null) {
-            return new UserFull(um.toUser(), new Link(new MyLinkContact(), new ForeignLinkMutual(), um.toUser()),
+            UserFull userFull = new UserFull(um.toUser(), new Link(new MyLinkContact(), new ForeignLinkMutual(), um.toUser()),
                     new PhotoEmpty(), new PeerNotifySettingsEmpty(), false, new BotInfoEmpty());
+            return userFull;
         }
         return null;
     }

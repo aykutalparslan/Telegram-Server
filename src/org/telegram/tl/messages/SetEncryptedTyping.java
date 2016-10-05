@@ -18,10 +18,17 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.core.Router;
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.core.UserStore;
+import org.telegram.data.DatabaseConnection;
+import org.telegram.data.SecretChatModel;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class SetEncryptedTyping extends TLObject {
+public class SetEncryptedTyping extends TLObject implements TLMethod {
 
     public static final int ID = 2031374829;
 
@@ -58,5 +65,34 @@ public class SetEncryptedTyping extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        int date = (int) (System.currentTimeMillis() / 1000L);
+
+        int chat_id = ((InputEncryptedChat) peer).chat_id;
+        SecretChatModel sc = DatabaseConnection.getInstance().getSecretChat(chat_id);
+        UpdateEncryptedChatTyping updateEncryptedChatTyping = new UpdateEncryptedChatTyping(chat_id);
+        int user_id = 0;
+        if (context.getUserId() == sc.admin_id) {
+            user_id = sc.participant_id;
+        } else if (context.getUserId() == sc.participant_id) {
+            user_id = sc.admin_id;
+        }
+
+        TLVector<TLUser> userTLVector = new TLVector<>();
+        UserModel um = UserStore.getInstance().getUser(context.getUserId());
+        userTLVector.add(um.toUser());
+        UserModel umc = UserStore.getInstance().getUser(user_id);
+        userTLVector.add(umc.toUser());
+        TLVector<TLUpdate> updateTLVector = new TLVector<>();
+        updateTLVector.add(updateEncryptedChatTyping);
+        TLVector<TLChat> chatTLVector = new TLVector<>();
+
+        Updates updates = new Updates(updateTLVector, userTLVector, chatTLVector, date, 0);
+        Router.getInstance().Route(user_id, updates, false);
+
+        return new BoolTrue();
     }
 }

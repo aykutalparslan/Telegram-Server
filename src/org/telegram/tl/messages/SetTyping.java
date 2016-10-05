@@ -21,6 +21,8 @@ package org.telegram.tl.messages;
 import org.telegram.core.Router;
 import org.telegram.core.TLContext;
 import org.telegram.core.TLMethod;
+import org.telegram.core.UserStore;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 import org.telegram.tl.service.rpc_error;
@@ -69,9 +71,19 @@ public class SetTyping extends TLObject implements TLMethod {
         if (context.isAuthorized()) {
             if (peer instanceof InputPeerUser) {
                 int date = (int) (System.currentTimeMillis() / 1000L);
+
                 UpdateUserTyping typing = new UpdateUserTyping(context.getUserId(), new SendMessageTypingAction());
-                UpdateShort updateShort = new UpdateShort(typing, date);
-                Router.getInstance().Route(((InputPeerUser) peer).user_id, updateShort, false);
+                TLVector<TLUser> userTLVector = new TLVector<>();
+                UserModel um = UserStore.getInstance().getUser(context.getUserId());
+                userTLVector.add(um.toUser());
+                UserModel umc = UserStore.getInstance().getUser(((InputPeerUser) peer).user_id);
+                userTLVector.add(umc.toUser());
+                TLVector<TLUpdate> updateTLVector = new TLVector<>();
+                updateTLVector.add(typing);
+                TLVector<TLChat> chatTLVector = new TLVector<>();
+
+                Updates updates = new Updates(updateTLVector, userTLVector, chatTLVector, date, 0);
+                Router.getInstance().Route(((InputPeerUser) peer).user_id, updates, false);
                 return new BoolTrue();
             } else if (peer instanceof InputPeerChat) {
                 int date = (int) (System.currentTimeMillis() / 1000L);

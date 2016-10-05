@@ -91,6 +91,8 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         } else {
             if (tlContext.getAuthKeyId() == 0) {
                 tlContext.setAuthKeyId(keyId);
+                tlContext.isAuthorized();
+                UserStore.getInstance().updateUserStatus(tlContext.getUserId(), new UserStatusOnline(120));
             }
             byte[] message_key = data.read(16);
             byte[] encrypted_bytes = data.read(data.length() - (8 + 16));

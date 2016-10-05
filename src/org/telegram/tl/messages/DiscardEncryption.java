@@ -18,10 +18,12 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class DiscardEncryption extends TLObject {
+public class DiscardEncryption extends TLObject implements TLMethod {
 
     public static final int ID = -304536635;
 
@@ -54,5 +56,10 @@ public class DiscardEncryption extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new BoolTrue();
     }
 }

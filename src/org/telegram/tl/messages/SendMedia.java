@@ -170,6 +170,7 @@ public class SendMedia extends TLObject implements TLMethod {
     }
 
     private TLMessageMedia createMessageMedia() {
+        int date = (int) (System.currentTimeMillis() / 1000L);
         if (media instanceof InputMediaContact) {
             String phone = stripPhone(((InputMediaContact) media).phone_number);
             int user_id = 0;
@@ -223,8 +224,8 @@ public class SendMedia extends TLObject implements TLMethod {
         } else if (media instanceof InputMediaUploadedAudio) {//TODO: save audio info to database
             long file_id = ((InputFile) ((InputMediaUploadedAudio) media).file).id;
             int file_size = DatabaseConnection.getInstance().getFileSize(file_id);
-            return new MessageMediaAudio(new Audio(file_id, ((InputAudio) ((InputMediaAudio) media).audio_id).access_hash,
-                    0, ((InputMediaUploadedAudio) media).duration, ((InputMediaUploadedAudio) media).mime_type,
+            return new MessageMediaAudio(new Audio(file_id, file_id,
+                    date, ((InputMediaUploadedAudio) media).duration, ((InputMediaUploadedAudio) media).mime_type,
                     file_size, ServerConfig.SERVER_ID));
         } else if (media instanceof InputMediaAudio) {//TODO: get audio info from database
             long file_id = ((InputAudio) ((InputMediaAudio) media).audio_id).id;
