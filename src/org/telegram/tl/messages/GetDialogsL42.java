@@ -28,31 +28,33 @@ import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 import org.telegram.tl.service.rpc_error;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 
-public class GetDialogs extends TLObject implements TLMethod {
+public class GetDialogsL42 extends TLObject implements TLMethod {
 
-    public static final int ID = -321970698;
+    public static final int ID = 0x6b47f94d;
 
-    public int offset;
-    public int max_id;
+    public int offset_date;
+    public int offset_id;
+    public TLInputPeer offset_peer;
     public int limit;
 
-    public GetDialogs() {
+    public GetDialogsL42() {
     }
 
-    public GetDialogs(int offset, int max_id, int limit){
-        this.offset = offset;
-        this.max_id = max_id;
+    public GetDialogsL42(int offset_date, int offset_id, TLInputPeer offset_peer, int limit) {
+        this.offset_date = offset_date;
+        this.offset_id = offset_id;
+        this.offset_peer = offset_peer;
         this.limit = limit;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        offset = buffer.readInt();
-        max_id = buffer.readInt();
+        offset_date = buffer.readInt();
+        offset_id = buffer.readInt();
+        offset_peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         limit = buffer.readInt();
     }
 
@@ -66,8 +68,9 @@ public class GetDialogs extends TLObject implements TLMethod {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
-        buff.writeInt(offset);
-        buff.writeInt(max_id);
+        buff.writeInt(offset_date);
+        buff.writeInt(offset_id);
+        buff.writeTLObject(offset_peer);
         buff.writeInt(limit);
     }
 

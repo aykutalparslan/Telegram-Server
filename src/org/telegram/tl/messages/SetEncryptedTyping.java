@@ -83,9 +83,9 @@ public class SetEncryptedTyping extends TLObject implements TLMethod {
 
         TLVector<TLUser> userTLVector = new TLVector<>();
         UserModel um = UserStore.getInstance().getUser(context.getUserId());
-        userTLVector.add(um.toUser());
+        userTLVector.add(um.toUser(context.getApiLayer()));
         UserModel umc = UserStore.getInstance().getUser(user_id);
-        userTLVector.add(umc.toUser());
+        userTLVector.add(umc.toUser(context.getApiLayer()));
         TLVector<TLUpdate> updateTLVector = new TLVector<>();
         updateTLVector.add(updateEncryptedChatTyping);
         TLVector<TLChat> chatTLVector = new TLVector<>();

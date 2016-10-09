@@ -75,9 +75,9 @@ public class SetTyping extends TLObject implements TLMethod {
                 UpdateUserTyping typing = new UpdateUserTyping(context.getUserId(), new SendMessageTypingAction());
                 TLVector<TLUser> userTLVector = new TLVector<>();
                 UserModel um = UserStore.getInstance().getUser(context.getUserId());
-                userTLVector.add(um.toUser());
+                userTLVector.add(um.toUser(context.getApiLayer()));
                 UserModel umc = UserStore.getInstance().getUser(((InputPeerUser) peer).user_id);
-                userTLVector.add(umc.toUser());
+                userTLVector.add(umc.toUser(context.getApiLayer()));
                 TLVector<TLUpdate> updateTLVector = new TLVector<>();
                 updateTLVector.add(typing);
                 TLVector<TLChat> chatTLVector = new TLVector<>();

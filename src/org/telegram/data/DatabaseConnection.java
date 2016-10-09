@@ -73,6 +73,7 @@ public class DatabaseConnection {
                         "auth_key blob," +
                         "phone text," +
                         "user_id int," +
+                        "api_layer int," +
                         "PRIMARY KEY (auth_key_id));");
         session.execute(
                 "CREATE TABLE IF NOT EXISTS telegram.server_salts (" +
@@ -976,6 +977,12 @@ public class DatabaseConnection {
                 auth_key_id);
     }
 
+    public void saveApiLayer(long auth_key_id, int api_layer) {
+        session.execute("UPDATE telegram.auth_keys SET api_layer = ? WHERE auth_key_id = ?;",
+                api_layer,
+                auth_key_id);
+    }
+
     public void saveServerSalt(long auth_key_id, long valid_since, long server_salt, int TTL){
         session.execute("INSERT INTO telegram.server_salts (auth_key_id, valid_since, server_salt) VALUES (?,?,?) USING TTL "+String.valueOf(TTL)+";",
                 auth_key_id,
@@ -995,6 +1002,7 @@ public class DatabaseConnection {
             authKeyModel.auth_key_id = auth_key_id;
             authKeyModel.phone = row.getString("phone");
             authKeyModel.user_id = row.getInt("user_id");
+            authKeyModel.api_layer = row.getInt("api_layer");
         }
 
         return authKeyModel;

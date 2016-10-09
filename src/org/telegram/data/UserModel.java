@@ -50,7 +50,7 @@ public class UserModel implements Serializable {
         return new UserContact(user_id, first_name, last_name, username, access_hash, phone, new UserProfilePhotoEmpty(), status);
     }*/
 
-    public User toUser() {
+    public TLUser toUser(int api_layer) {
         int flags = 0x00000001;
         flags |= 0x00000002;
         flags |= 0x00000004;
@@ -58,18 +58,12 @@ public class UserModel implements Serializable {
         flags |= 0x00000010;
         flags |= 0x00000020;
         flags |= 0x00000040;
-        return new User(flags, user_id, access_hash, first_name, last_name, username, phone, new UserProfilePhotoEmpty(), status, 0);
-    }
+        if (api_layer >= 45) {
+            return new UserL45(flags, user_id, access_hash, first_name, last_name, username, phone, new UserProfilePhotoEmpty(), status, 0, "", "");
+        } else {
+            return new User(flags, user_id, access_hash, first_name, last_name, username, phone, new UserProfilePhotoEmpty(), status, 0);
+        }
 
-    public User toUser(int flags) {
-        flags |= 0x00000001;
-        flags |= 0x00000002;
-        flags |= 0x00000004;
-        flags |= 0x00000008;
-        flags |= 0x00000010;
-        flags |= 0x00000020;
-        flags |= 0x00000040;
-        return new User(flags, user_id, access_hash, first_name, last_name, username, phone, new UserProfilePhotoEmpty(), status, 0);
     }
 
     public PeerUser toPeerUser() {

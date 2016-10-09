@@ -80,7 +80,7 @@ public class EditChatTitle extends TLObject implements TLMethod {
             }
             TLVector<TLUser> userTLVector = new TLVector<>();
 
-            userTLVector.add(um.toUser());
+            userTLVector.add(um.toUser(context.getApiLayer()));
             TLVector<TLUpdate> updateTLVector = new TLVector<>();
 
             UpdateNewMessage title_changed = new UpdateNewMessage(new MessageService(flags, message_id, context.getUserId(),

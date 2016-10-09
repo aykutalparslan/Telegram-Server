@@ -74,14 +74,14 @@ public class GetFullUser extends TLObject implements TLMethod {
             user_id = ((InputUserForeign) this.id).user_id;
         } else if (this.id instanceof InputUserSelf) {
             UserModel um = UserStore.getInstance().getUser(context.getUserId());
-            return new UserFull(um.toUser(), new Link(new MyLinkContact(), new ForeignLinkMutual(), um.toUser()),
+            return new UserFull(um.toUser(context.getApiLayer()), new Link(new MyLinkContact(), new ForeignLinkMutual(), um.toUser(context.getApiLayer())),
                     new PhotoEmpty(), new PeerNotifySettingsEmpty(), false, new BotInfoEmpty());
         } else if (this.id instanceof InputUser) {
             user_id = ((InputUser) this.id).user_id;
         }
         UserModel um = UserStore.getInstance().getUser(user_id);
         if (um != null) {
-            UserFull userFull = new UserFull(um.toUser(), new Link(new MyLinkContact(), new ForeignLinkMutual(), um.toUser()),
+            UserFull userFull = new UserFull(um.toUser(context.getApiLayer()), new Link(new MyLinkContact(), new ForeignLinkMutual(), um.toUser(context.getApiLayer())),
                     new PhotoEmpty(), new PeerNotifySettingsEmpty(), false, new BotInfoEmpty());
             return userFull;
         }

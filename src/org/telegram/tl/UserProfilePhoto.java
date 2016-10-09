@@ -23,7 +23,7 @@ import org.telegram.tl.*;
 
 public class UserProfilePhoto extends TLUserProfilePhoto {
 
-    public static final int ID = -715532088;
+    public static final int ID = 0xd559d8c8;
 
     public long photo_id;
     public TLFileLocation photo_small;

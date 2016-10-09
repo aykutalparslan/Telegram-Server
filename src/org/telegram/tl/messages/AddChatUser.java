@@ -89,8 +89,8 @@ public class AddChatUser extends TLObject implements TLMethod {
                 chatTLVector.add(chat);
             }
             TLVector<TLUser> userTLVector = new TLVector<>();
-            userTLVector.add(umc.toUser());
-            userTLVector.add(um.toUser());
+            userTLVector.add(umc.toUser(context.getApiLayer()));
+            userTLVector.add(um.toUser(context.getApiLayer()));
             TLVector<TLUpdate> updateTLVector = new TLVector<>();
 
             UpdateNewMessage user_added = new UpdateNewMessage(new MessageService(flags, message_id, context.getUserId(),

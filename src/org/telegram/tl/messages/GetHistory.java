@@ -84,7 +84,7 @@ public class GetHistory extends TLObject implements TLMethod {
         TLVector<TLUser> tlUsers = new TLVector<>();
         UserModel um = UserStore.getInstance().getUser(context.getUserId());
         if (um != null) {
-            tlUsers.add(um.toUser());
+            tlUsers.add(um.toUser(context.getApiLayer()));
         }
         if (context.isAuthorized()) {
             int peer_id = 0;
@@ -93,22 +93,22 @@ public class GetHistory extends TLObject implements TLMethod {
                 Message[] messages_out = DatabaseConnection.getInstance().getOutgoingMessages(context.getUserId(), ((InputPeerUser) peer).user_id, max_id);
                 for (Message m : messages_in) {
                     m.flags = 0;
-                    processMessage(tlMessages, tlUsers, tlChats, m);
+                    processMessage(context, tlMessages, tlUsers, tlChats, m);
                 }
                 for (Message m : messages_out) {
                     m.flags = 2;
-                    processMessage(tlMessages, tlUsers, tlChats, m);
+                    processMessage(context, tlMessages, tlUsers, tlChats, m);
                 }
             } else if (peer instanceof InputPeerChat) {
                 Message[] messages_in = DatabaseConnection.getInstance().getIncomingChatMessages(context.getUserId(), ((InputPeerChat) peer).chat_id, max_id);
                 Message[] messages_out = DatabaseConnection.getInstance().getOutgoingChatMessages(context.getUserId(), ((InputPeerChat) peer).chat_id, max_id);
                 for (Message m : messages_in) {
                     m.flags = 0;
-                    processMessage(tlMessages, tlUsers, tlChats, m);
+                    processMessage(context, tlMessages, tlUsers, tlChats, m);
                 }
                 for (Message m : messages_out) {
                     m.flags = 2;
-                    processMessage(tlMessages, tlUsers, tlChats, m);
+                    processMessage(context, tlMessages, tlUsers, tlChats, m);
                 }
             }
 
@@ -124,7 +124,7 @@ public class GetHistory extends TLObject implements TLMethod {
         return new Messages(tlMessages, tlChats, tlUsers);
     }
 
-    private void processMessage(TLVector<TLMessage> tlMessages, TLVector<TLUser> tlUsers, TLVector<TLChat> tlChats, Message m) {
+    private void processMessage(TLContext context, TLVector<TLMessage> tlMessages, TLVector<TLUser> tlUsers, TLVector<TLChat> tlChats, Message m) {
         tlMessages.add(m);
         boolean user_exists_from = false;
         boolean user_exists_to = false;
@@ -141,14 +141,14 @@ public class GetHistory extends TLObject implements TLMethod {
         if (!user_exists_from) {
             UserModel uc = UserStore.getInstance().getUser(m.from_id);
             if (uc != null) {
-                tlUsers.add(uc.toUser());
+                tlUsers.add(uc.toUser(context.getApiLayer()));
             }
         }
         if (!user_exists_to) {
             if (m.to_id instanceof PeerUser) {
                 UserModel uc = UserStore.getInstance().getUser(((PeerUser) m.to_id).user_id);
                 if (uc != null) {
-                    tlUsers.add(uc.toUser());
+                    tlUsers.add(uc.toUser(context.getApiLayer()));
                 }
             } else if (m.to_id instanceof PeerChat) {
                 TLChat c = ChatStore.getInstance().getChat(((PeerChat) m.to_id).chat_id);

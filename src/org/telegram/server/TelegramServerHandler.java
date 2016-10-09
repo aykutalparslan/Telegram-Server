@@ -21,6 +21,7 @@ package org.telegram.server;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import org.telegram.core.*;
+import org.telegram.data.DatabaseConnection;
 import org.telegram.mtproto.MTProtoAuth;
 import org.telegram.mtproto.MessageKeyData;
 import org.telegram.mtproto.ProtocolBuffer;
@@ -91,8 +92,6 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         } else {
             if (tlContext.getAuthKeyId() == 0) {
                 tlContext.setAuthKeyId(keyId);
-                tlContext.isAuthorized();
-                UserStore.getInstance().updateUserStatus(tlContext.getUserId(), new UserStatusOnline(120));
             }
             byte[] message_key = data.read(16);
             byte[] encrypted_bytes = data.read(data.length() - (8 + 16));
@@ -146,6 +145,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         }
 
         if (rpc instanceof InvokeWithLayer) {
+            tlContext.updateApiLayer(((InvokeWithLayer) rpc).layer);
             processRPC(ctx, ((InvokeWithLayer) rpc).query, messageId);
         } else if (rpc instanceof InitConnection) {
             processRPC(ctx, ((InitConnection) rpc).query, messageId);
@@ -187,8 +187,14 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
                 System.out.println("TLMethod: " + response.toString());
 
                 if (rpc instanceof SignIn && response instanceof Authorization) {
-                    tlContext.setUserId(((User) ((Authorization) response).user).id);
-                    tlContext.setPhone(((User) ((Authorization) response).user).phone);
+                    if (((Authorization) response).user instanceof User) {
+                        tlContext.setUserId(((User) ((Authorization) response).user).id);
+                        tlContext.setPhone(((User) ((Authorization) response).user).phone);
+                    } else if (((Authorization) response).user instanceof UserL45) {
+                        tlContext.setUserId(((UserL45) ((Authorization) response).user).id);
+                        tlContext.setPhone(((UserL45) ((Authorization) response).user).phone);
+                    }
+
                     tlContext.setAuthorized(true);
                     System.out.println("SignIn");
                 }

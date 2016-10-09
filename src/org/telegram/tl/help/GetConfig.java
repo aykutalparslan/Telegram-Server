@@ -60,7 +60,12 @@ public class GetConfig extends TLObject implements TLMethod {
 
         TLVector<TLDisabledFeature> disabledFeatures = new TLVector<>();
 
-        return new Config((int) (System.currentTimeMillis() / 1000L), (int) (System.currentTimeMillis() / 1000L) + 860000,
-                false, 1, dcOptions, 200, 100, 100, 120000, 5000, 30000, 300000, 30000, 1500, 10, 60000, 2, disabledFeatures);
+        if (context.getApiLayer() >= 48) {
+            return new ConfigL48((int) (System.currentTimeMillis() / 1000L), (int) (System.currentTimeMillis() / 1000L) + 860000,
+                    false, 1, dcOptions, 200, 100, 100, 120000, 5000, 30000, 300000, 30000, 1500, 10, 60000, 2, 100, 6000, disabledFeatures);
+        } else {
+            return new Config((int) (System.currentTimeMillis() / 1000L), (int) (System.currentTimeMillis() / 1000L) + 860000,
+                    false, 1, dcOptions, 200, 100, 100, 120000, 5000, 30000, 300000, 30000, 1500, 10, 60000, 2, disabledFeatures);
+        }
     }
 }

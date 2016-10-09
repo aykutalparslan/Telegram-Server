@@ -86,7 +86,7 @@ public class SignIn extends TLObject implements TLMethod {
 
             UserStatusOnline online = new UserStatusOnline(120);
             UserStore.getInstance().updateUserStatus(userModel.user_id, online);
-            return new Authorization(Integer.MAX_VALUE, userModel.toUser());
+            return new Authorization(Integer.MAX_VALUE, userModel.toUser(context.getApiLayer()));
         } else {
             return new rpc_error(400, "PHONE_NUMBER_UNOCCUPIED");
         }

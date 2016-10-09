@@ -16,17 +16,42 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.data;
+package org.telegram.tl;
 
-import java.io.Serializable;
+import org.telegram.mtproto.ProtocolBuffer;
 
-/**
- * Created by aykut on 03/12/15.
- */
-public class AuthKeyModel implements Serializable {
-    public long auth_key_id;
-    public byte[] auth_key;
-    public String phone;
-    public int user_id;
-    public int api_layer;
+public class SchemeNotModified extends TLScheme {
+
+    public static final int ID = 0x263c9c58;
+
+    public long id;
+
+    public SchemeNotModified() {
+    }
+
+    public SchemeNotModified(long id) {
+        this.id = id;
+    }
+
+    @Override
+    public void deserialize(ProtocolBuffer buffer) {
+        id = buffer.readLong();
+    }
+
+    @Override
+    public ProtocolBuffer serialize() {
+        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        serializeTo(buffer);
+        return buffer;
+    }
+
+    @Override
+    public void serializeTo(ProtocolBuffer buff) {
+        buff.writeInt(getConstructor());
+        buff.writeLong(id);
+    }
+
+    public int getConstructor() {
+        return ID;
+    }
 }

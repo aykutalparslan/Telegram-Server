@@ -122,7 +122,7 @@ public class CreateChat extends TLObject implements TLMethod {
                 usersVectorInteger.add(user_id);
                 UserModel umc = UserStore.getInstance().getUser(user_id);
                 if (umc != null) {
-                    userTLVector.add(umc.toUser());
+                    userTLVector.add(umc.toUser(context.getApiLayer()));
                     participants.add(new ChatParticipant(user_id, context.getUserId(), date));
                 }
             }

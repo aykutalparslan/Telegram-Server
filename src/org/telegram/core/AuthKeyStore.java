@@ -56,4 +56,10 @@ public class AuthKeyStore {
         AuthKeyModel authKey = DatabaseConnection.getInstance().getAuthKey(authKeyId);
         authKeysShared.set(authKeyId, authKey);
     }
+
+    public void updateApiLayer(long authKeyId, int api_layer) {
+        DatabaseConnection.getInstance().saveApiLayer(authKeyId, api_layer);
+        AuthKeyModel authKey = DatabaseConnection.getInstance().getAuthKey(authKeyId);
+        authKeysShared.set(authKeyId, authKey);
+    }
 }

@@ -50,6 +50,8 @@ public class APIContext implements DeserializationContext {
     private HashMap<Integer, Class> schema;
 
     private APIContext(){
+        addToSchema(GetDialogsL42.class);
+        addToSchema(GetScheme.class);
         addToSchema(TLVector.class);
         addToSchema(message.class);
         addToSchema(msgs_ack.class);

@@ -23,9 +23,9 @@ package org.telegram.server;
  */
 public class ServerConfig {
     public static final int SERVER_ID = 2;
-    //public static final String SERVER_HOSTNAME = "127.0.0.1";
-    //public static final String SERVER_IP = "127.0.0.1";
-    public static final String SERVER_HOSTNAME = "10.0.2.2";
-    public static final String SERVER_IP = "10.0.2.2";
+    public static final String SERVER_HOSTNAME = "127.0.0.1";
+    public static final String SERVER_IP = "127.0.0.1";
+    //public static final String SERVER_HOSTNAME = "10.0.2.2";
+    //public static final String SERVER_IP = "10.0.2.2";
     public static final int SERVER_PORT = 11235;
 }

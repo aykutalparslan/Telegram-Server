@@ -16,35 +16,28 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.tl.contacts;
+package org.telegram.tl;
 
-import org.telegram.core.SessionStore;
 import org.telegram.core.TLContext;
 import org.telegram.core.TLMethod;
-import org.telegram.core.UserStore;
-import org.telegram.data.DatabaseConnection;
-import org.telegram.data.SessionModel;
-import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
-import org.telegram.tl.*;
-import org.telegram.tl.service.rpc_error;
+import org.telegram.server.ServerConfig;
 
-public class DeleteContact extends TLObject implements TLMethod {
+public class GetScheme extends TLObject implements TLMethod {
 
-    public static final int ID = -1902823612;
+    public static final int ID = 0xdbb69a9e;
 
-    public TLInputUser id;
+    public int version;
 
-    public DeleteContact() {
+    public GetScheme() {
     }
 
-    public DeleteContact(TLInputUser id){
-        this.id = id;
+    public GetScheme(int version) {
+        this.version = version;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        id = (TLInputUser) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
@@ -57,7 +50,6 @@ public class DeleteContact extends TLObject implements TLMethod {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
-        buff.writeTLObject(id);
     }
 
     public int getConstructor() {
@@ -66,18 +58,6 @@ public class DeleteContact extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        if (id instanceof InputUserContact) {
-            SessionModel sm = SessionStore.getInstance().getSession(context.getSessionId());
-            if (sm != null) {
-                UserModel um = UserStore.getInstance().getUser(sm.phone);
-                if (um != null) {
-                    UserModel umc = UserStore.getInstance().getUser(((InputUserContact) id).user_id);
-                    DatabaseConnection.getInstance().deleteContact(um.user_id, umc.phone);
-                    return new Link(new MyLinkContact(), new ForeignLinkUnknown(), umc.toUser(context.getApiLayer()));
-                }
-            }
-
-        }
-        return new rpc_error(500, "INTERNAL_SERVER_ERROR");
+        return new SchemeNotModified();
     }
 }

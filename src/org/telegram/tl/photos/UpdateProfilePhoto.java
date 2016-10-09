@@ -75,7 +75,7 @@ public class UpdateProfilePhoto extends TLObject implements TLMethod {
             photoSizes.add(new PhotoSize("s", new FileLocation(0, 0, 0, ((InputPhoto) id).id), 128, 128, 5092));
             org.telegram.tl.Photo photo = new org.telegram.tl.Photo(((InputPhoto) id).id, ((InputPhoto) id).id, date, photoSizes);
             TLVector<TLUser> users = new TLVector<>();
-            users.add(UserStore.getInstance().getUser(context.getUserId()).toUser());
+            users.add(UserStore.getInstance().getUser(context.getUserId()).toUser(context.getApiLayer()));
 
             return new org.telegram.tl.photos.Photo(photo, users);
         }

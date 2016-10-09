@@ -16,17 +16,8 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.data;
+package org.telegram.tl;
 
-import java.io.Serializable;
+public abstract class TLScheme extends TLObject {
 
-/**
- * Created by aykut on 03/12/15.
- */
-public class AuthKeyModel implements Serializable {
-    public long auth_key_id;
-    public byte[] auth_key;
-    public String phone;
-    public int user_id;
-    public int api_layer;
 }

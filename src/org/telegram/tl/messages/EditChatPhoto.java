@@ -89,7 +89,7 @@ public class EditChatPhoto extends TLObject implements TLMethod {
             }
             TLVector<TLUser> userTLVector = new TLVector<>();
 
-            userTLVector.add(um.toUser());
+            userTLVector.add(um.toUser(context.getApiLayer()));
             TLVector<TLUpdate> updateTLVector = new TLVector<>();
             int file_size = DatabaseConnection.getInstance().getFileSize(photo_id);
             TLVector<TLPhotoSize> photoSizes = new TLVector<>();

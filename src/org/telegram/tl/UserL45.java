@@ -1,0 +1,142 @@
+/*
+ *     This file is part of Telegram Server
+ *     Copyright (C) 2015  Aykut Alparslan KOÇ
+ *
+ *     Telegram Server is free software: you can redistribute it and/or modify
+ *     it under the terms of the GNU General Public License as published by
+ *     the Free Software Foundation, either version 3 of the License, or
+ *     (at your option) any later version.
+ *
+ *     Telegram Server is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *     GNU General Public License for more details.
+ *
+ *     You should have received a copy of the GNU General Public License
+ *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package org.telegram.tl;
+
+import org.telegram.mtproto.ProtocolBuffer;
+
+public class UserL45 extends TLUser {
+
+    public static final int ID = 0xd10d979a;
+
+    public int flags;
+    public int id;
+    public long access_hash;
+    public String first_name;
+    public String last_name;
+    public String username;
+    public String phone;
+    public TLUserProfilePhoto photo;
+    public TLUserStatus status;
+    public int bot_info_version;
+    public String restriction_reason;
+    public String bot_inline_placeholder;
+
+    public UserL45() {
+    }
+
+    public UserL45(int flags, int id, long access_hash, String first_name, String last_name, String username,
+                   String phone, TLUserProfilePhoto photo, TLUserStatus status, int bot_info_version, String restriction_reason, String bot_inline_placeholder) {
+        this.flags = flags;
+        this.id = id;
+        this.first_name = first_name;
+        this.last_name = last_name;
+        this.username = username;
+        this.access_hash = access_hash;
+        this.phone = phone;
+        this.photo = photo;
+        this.status = status;
+        this.bot_info_version = bot_info_version;
+        this.restriction_reason = restriction_reason;
+        this.bot_inline_placeholder = bot_inline_placeholder;
+    }
+
+    @Override
+    public void deserialize(ProtocolBuffer buffer) {
+        flags = buffer.readInt();
+        id = buffer.readInt();
+        if ((flags & (1L << 0)) != 0) {
+            access_hash = buffer.readLong();
+        }
+        if ((flags & (1L << 1)) != 0) {
+            first_name = buffer.readString();
+        }
+        if ((flags & (1L << 2)) != 0) {
+            last_name = buffer.readString();
+        }
+        if ((flags & (1L << 3)) != 0) {
+            username = buffer.readString();
+        }
+        if ((flags & (1L << 4)) != 0) {
+            phone = buffer.readString();
+        }
+        if ((flags & (1L << 5)) != 0) {
+            photo = (TLUserProfilePhoto) buffer.readTLObject(APIContext.getInstance());
+        }
+        if ((flags & (1L << 6)) != 0) {
+            status = (TLUserStatus) buffer.readTLObject(APIContext.getInstance());
+        }
+        if ((flags & (1L << 14)) != 0) {
+            bot_info_version = buffer.readInt();
+        }
+        if ((flags & (1L << 18)) != 0) {
+            restriction_reason = buffer.readString();
+        }
+        if ((flags & (1L << 19)) != 0) {
+            bot_inline_placeholder = buffer.readString();
+        }
+    }
+
+    @Override
+    public ProtocolBuffer serialize() {
+        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        serializeTo(buffer);
+        return buffer;
+    }
+
+    @Override
+    public void serializeTo(ProtocolBuffer buff) {
+        buff.writeInt(getConstructor());
+        buff.writeInt(flags);
+        buff.writeInt(id);
+        if ((flags & (1L << 0)) != 0) {
+            buff.writeLong(access_hash);
+        }
+        if ((flags & (1L << 1)) != 0) {
+            buff.writeString(first_name);
+        }
+        if ((flags & (1L << 2)) != 0) {
+            buff.writeString(last_name);
+        }
+        if ((flags & (1L << 3)) != 0) {
+            buff.writeString(username);
+        }
+        if ((flags & (1L << 4)) != 0) {
+            buff.writeString(phone);
+        }
+        if ((flags & (1L << 5)) != 0) {
+            buff.writeTLObject(photo);
+        }
+        if ((flags & (1L << 6)) != 0) {
+            buff.writeTLObject(status);
+        }
+        if ((flags & (1L << 14)) != 0) {
+            buff.writeInt(bot_info_version);
+        }
+        if ((flags & (1L << 18)) != 0) {
+            buff.writeString(restriction_reason);
+        }
+        if ((flags & (1L << 19)) != 0) {
+            buff.writeString(bot_inline_placeholder);
+        }
+    }
+
+    public int getConstructor() {
+        return ID;
+    }
+}

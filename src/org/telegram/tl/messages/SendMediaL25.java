@@ -96,7 +96,7 @@ public class SendMediaL25 extends TLObject implements TLMethod {
                 int[] users_ids = ChatStore.getInstance().getChatParticipants(toChatId);
                 for (int user_id : users_ids) {
                     if (user_id != context.getUserId()) {
-                        UpdateNewMessage msg = crateNewChatMessage(user_id, toChatId, context.getUserId(), messageMedia);
+                        UpdateNewMessage msg = crateNewChatMessage(context, user_id, toChatId, context.getUserId(), messageMedia);
 
                         UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
                         msg_id = um.sent_messages + um.received_messages + 1;
@@ -117,7 +117,7 @@ public class SendMediaL25 extends TLObject implements TLMethod {
                                 new PeerChat(toChatId), date, "", messageMedia), um.pts, 0);
                         updateTLVector.add(msg_self);
                         TLVector<TLUser> userTLVector = new TLVector<>();
-                        userTLVector.add(um.toUser());
+                        userTLVector.add(um.toUser(context.getApiLayer()));
                         TLVector<TLChat> chatsTLVector = new TLVector<>();
                         TLChat c = ChatStore.getInstance().getChat(toChatId);
                         chatsTLVector.add(c);
@@ -129,7 +129,7 @@ public class SendMediaL25 extends TLObject implements TLMethod {
             } else if (peer instanceof InputPeerUser) {
                 int toUserId = ((InputPeerUser) peer).user_id;
 
-                UpdateNewMessage msg = crateNewMessage(toUserId, context.getUserId(), messageMedia);
+                UpdateNewMessage msg = crateNewMessage(context, toUserId, context.getUserId(), messageMedia);
 
                 UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
                 msg_id = um.sent_messages + um.received_messages + 1;
@@ -150,9 +150,9 @@ public class SendMediaL25 extends TLObject implements TLMethod {
                         new PeerUser(toUserId), date, "", messageMedia), um.pts, 0);
                 updateTLVector.add(msg_self);
                 TLVector<TLUser> userTLVector = new TLVector<>();
-                userTLVector.add(um.toUser());
+                userTLVector.add(um.toUser(context.getApiLayer()));
                 UserModel uc = UserStore.getInstance().getUser(toUserId);
-                userTLVector.add(uc.toUser());
+                userTLVector.add(uc.toUser(context.getApiLayer()));
                 Updates updates = new Updates(updateTLVector, userTLVector, new TLVector<TLChat>(), date, um.pts);
 
                 return updates;
@@ -259,7 +259,7 @@ public class SendMediaL25 extends TLObject implements TLMethod {
         return res.toString();
     }
 
-    public UpdateNewMessage crateNewMessage(int to_user_id, int from_user_id, TLMessageMedia media) {
+    public UpdateNewMessage crateNewMessage(TLContext context, int to_user_id, int from_user_id, TLMessageMedia media) {
         int date = (int) (System.currentTimeMillis() / 1000L);
         int msg_id;
 
@@ -276,8 +276,8 @@ public class SendMediaL25 extends TLObject implements TLMethod {
         UserModel uc = UserStore.getInstance().getUser(from_user_id);
 
         TLVector<TLUser> userTLVector = new TLVector<>();
-        userTLVector.add(um.toUser());
-        userTLVector.add(uc.toUser());
+        userTLVector.add(um.toUser(context.getApiLayer()));
+        userTLVector.add(uc.toUser(context.getApiLayer()));
 
         UpdatesCombined updatesCombined = new UpdatesCombined(updateTLVector, userTLVector, new TLVector<TLChat>(), date, um.pts, um.pts);
 
@@ -286,7 +286,7 @@ public class SendMediaL25 extends TLObject implements TLMethod {
         return msg;
     }
 
-    public UpdateNewMessage crateNewChatMessage(int to_user_id, int to_chat_id, int from_user_id, TLMessageMedia media) {
+    public UpdateNewMessage crateNewChatMessage(TLContext context, int to_user_id, int to_chat_id, int from_user_id, TLMessageMedia media) {
         int date = (int) (System.currentTimeMillis() / 1000L);
         int msg_id;
 
@@ -303,8 +303,8 @@ public class SendMediaL25 extends TLObject implements TLMethod {
         UserModel uc = UserStore.getInstance().getUser(from_user_id);
 
         TLVector<TLUser> userTLVector = new TLVector<>();
-        userTLVector.add(um.toUser());
-        userTLVector.add(uc.toUser());
+        userTLVector.add(um.toUser(context.getApiLayer()));
+        userTLVector.add(uc.toUser(context.getApiLayer()));
 
         TLVector<TLChat> chatsTLVector = new TLVector<>();
         TLChat c = ChatStore.getInstance().getChat(to_chat_id);

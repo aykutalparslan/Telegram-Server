@@ -92,9 +92,9 @@ public class SendEncryptedFile extends TLObject implements TLMethod {
 
         TLVector<TLUser> userTLVector = new TLVector<>();
         UserModel um = UserStore.getInstance().getUser(context.getUserId());
-        userTLVector.add(um.toUser());
+        userTLVector.add(um.toUser(context.getApiLayer()));
         UserModel umc = UserStore.getInstance().increment_qts_getUser(user_id, 1);
-        userTLVector.add(umc.toUser());
+        userTLVector.add(umc.toUser(context.getApiLayer()));
         TLVector<TLUpdate> updateTLVector = new TLVector<>();
         EncryptedFile encryptedFile = null;
         if (file instanceof InputEncryptedFileUploaded) {

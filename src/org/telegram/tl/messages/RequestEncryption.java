@@ -81,9 +81,9 @@ public class RequestEncryption extends TLObject implements TLMethod {
 
         TLVector<TLUser> userTLVector = new TLVector<>();
         UserModel um = UserStore.getInstance().getUser(context.getUserId());
-        userTLVector.add(um.toUser());
+        userTLVector.add(um.toUser(context.getApiLayer()));
         UserModel umc = UserStore.getInstance().increment_pts_getUser(((InputUser) user_id).user_id, 1, 1, 0);
-        userTLVector.add(umc.toUser());
+        userTLVector.add(umc.toUser(context.getApiLayer()));
         TLVector<TLUpdate> updateTLVector = new TLVector<>();
         updateTLVector.add(updateEncryption);
         TLVector<TLChat> chatTLVector = new TLVector<>();

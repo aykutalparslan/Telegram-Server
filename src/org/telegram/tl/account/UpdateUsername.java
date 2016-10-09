@@ -68,6 +68,6 @@ public class UpdateUsername extends TLObject implements TLMethod {
         UserModel um = UserStore.getInstance().getUser(sm.phone);
         um.username = this.username;
         UserStore.getInstance().replaceUser(um);
-        return um.toUser();
+        return um.toUser(context.getApiLayer());
     }
 }

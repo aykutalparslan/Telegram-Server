@@ -26,6 +26,9 @@ import org.telegram.data.UserModel;
  * Created by aykut on 04/11/15.
  */
 public class TLContext {
+    public TLContext() {
+    }
+
     public boolean isAuthorized() {
         if (!authorized) {//temporary fix
             AuthKeyModel akm = AuthKeyStore.getInstance().getAuthKey(authKeyId);
@@ -44,8 +47,14 @@ public class TLContext {
             authorized = true;
             setPhone(um.phone);
             setUserId(um.user_id);
+            setApiLayer(akm.api_layer);
         }
         return authorized;
+    }
+
+    public void updateApiLayer(int api_layer) {
+        AuthKeyStore.getInstance().updateApiLayer(authKeyId, api_layer);
+        setApiLayer(api_layer);
     }
 
     public void setAuthorized(boolean authorized) {
@@ -91,4 +100,14 @@ public class TLContext {
     }
 
     private String phone;
+
+    private int apiLayer;
+
+    public int getApiLayer() {
+        return apiLayer;
+    }
+
+    public void setApiLayer(int apiLayer) {
+        this.apiLayer = apiLayer;
+    }
 }
