@@ -1,18 +1,25 @@
-package org.telegram.tl.messages;
+package org.telegram.tl;
 
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.messages.*;
 
-public class AllStickersNotModified extends TLAllStickers {
+public class UpdateNewStickerSet extends TLUpdate {
 
-    public static final int ID = 0xe86602c3;
+    public static final int ID = 0x688a30aa;
 
+    public TLStickerSet stickerset;
 
-    public AllStickersNotModified(){
+    public UpdateNewStickerSet() {
+    }
+
+    public UpdateNewStickerSet(TLStickerSet stickerset) {
+        this.stickerset = stickerset;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
+        stickerset = (TLStickerSet) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
@@ -26,6 +33,7 @@ public class AllStickersNotModified extends TLAllStickers {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
+        buff.writeTLObject(stickerset);
     }
 
 

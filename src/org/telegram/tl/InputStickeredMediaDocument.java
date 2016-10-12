@@ -1,18 +1,24 @@
-package org.telegram.tl.messages;
+package org.telegram.tl;
 
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class AllStickersNotModified extends TLAllStickers {
+public class InputStickeredMediaDocument extends TLInputStickeredMedia {
 
-    public static final int ID = 0xe86602c3;
+    public static final int ID = 0x438865b;
 
+    public TLInputDocument id;
 
-    public AllStickersNotModified(){
+    public InputStickeredMediaDocument() {
+    }
+
+    public InputStickeredMediaDocument(TLInputDocument id) {
+        this.id = id;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
+        id = (TLInputDocument) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
@@ -26,6 +32,7 @@ public class AllStickersNotModified extends TLAllStickers {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
+        buff.writeTLObject(id);
     }
 
 

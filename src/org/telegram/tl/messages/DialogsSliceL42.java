@@ -18,27 +18,41 @@
 
 package org.telegram.tl.messages;
 
-import org.telegram.core.TLContext;
-import org.telegram.core.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class GetAllStickers extends TLObject implements TLMethod {
+public class DialogsSliceL42 extends TLDialogs {
 
-    public static final int ID = 0x1c9618b1;
+    public static final int ID = 0x71e094f3;
 
-    public int hash;
+    public int count;
+    public TLVector<TLDialog> dialogs;
+    public TLVector<TLMessage> messages;
+    public TLVector<TLChat> chats;
+    public TLVector<TLUser> users;
 
-    public GetAllStickers() {
+    public DialogsSliceL42() {
+        this.dialogs = new TLVector<>();
+        this.messages = new TLVector<>();
+        this.chats = new TLVector<>();
+        this.users = new TLVector<>();
     }
 
-    public GetAllStickers(int hash) {
-        this.hash = hash;
+    public DialogsSliceL42(int count, TLVector<TLDialog> dialogs, TLVector<TLMessage> messages, TLVector<TLChat> chats, TLVector<TLUser> users) {
+        this.count = count;
+        this.dialogs = dialogs;
+        this.messages = messages;
+        this.chats = chats;
+        this.users = users;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        hash = buffer.readInt();
+        count = buffer.readInt();
+        dialogs = (TLVector<TLDialog>) buffer.readTLObject(APIContext.getInstance());
+        messages = (TLVector<TLMessage>) buffer.readTLObject(APIContext.getInstance());
+        chats = (TLVector<TLChat>) buffer.readTLObject(APIContext.getInstance());
+        users = (TLVector<TLUser>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
@@ -52,16 +66,15 @@ public class GetAllStickers extends TLObject implements TLMethod {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
-        buff.writeInt(hash);
+        buff.writeInt(count);
+        buff.writeTLObject(dialogs);
+        buff.writeTLObject(messages);
+        buff.writeTLObject(chats);
+        buff.writeTLObject(users);
     }
 
 
     public int getConstructor() {
         return ID;
-    }
-
-    @Override
-    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        return new AllStickersNotModified();
     }
 }

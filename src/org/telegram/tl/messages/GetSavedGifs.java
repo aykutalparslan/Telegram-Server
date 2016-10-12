@@ -23,16 +23,16 @@ import org.telegram.core.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class GetAllStickers extends TLObject implements TLMethod {
+public class GetSavedGifs extends TLObject implements TLMethod {
 
-    public static final int ID = 0x1c9618b1;
+    public static final int ID = 0x83bf3d52;
 
     public int hash;
 
-    public GetAllStickers() {
+    public GetSavedGifs() {
     }
 
-    public GetAllStickers(int hash) {
+    public GetSavedGifs(int hash) {
         this.hash = hash;
     }
 
@@ -62,6 +62,6 @@ public class GetAllStickers extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        return new AllStickersNotModified();
+        return new SavedGifsNotModified();
     }
 }

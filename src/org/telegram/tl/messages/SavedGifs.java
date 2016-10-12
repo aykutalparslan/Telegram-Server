@@ -3,26 +3,26 @@ package org.telegram.tl.messages;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class AllStickers extends TLAllStickers {
+public class SavedGifs extends TLSavedGifs {
 
-    public static final int ID = 0xedfd405f;
+    public static final int ID = 0x2e0709a5;
 
     public int hash;
-    public TLVector<TLStickerSet> sets;
+    public TLVector<TLDocument> gifs;
 
-    public AllStickers() {
-        this.sets = new TLVector<>();
+    public SavedGifs() {
+        this.gifs = new TLVector<>();
     }
 
-    public AllStickers(int hash, TLVector<TLStickerSet> sets) {
+    public SavedGifs(int hash, TLVector<TLDocument> gifs) {
         this.hash = hash;
-        this.sets = sets;
+        this.gifs = gifs;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         hash = buffer.readInt();
-        sets = (TLVector<TLStickerSet>) buffer.readTLObject(APIContext.getInstance());
+        gifs = (TLVector<TLDocument>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
@@ -37,7 +37,7 @@ public class AllStickers extends TLAllStickers {
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
         buff.writeInt(hash);
-        buff.writeTLObject(sets);
+        buff.writeTLObject(gifs);
     }
 
 

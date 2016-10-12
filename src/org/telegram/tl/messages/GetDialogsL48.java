@@ -31,7 +31,7 @@ import org.telegram.tl.service.rpc_error;
 import java.util.Collections;
 import java.util.Comparator;
 
-public class GetDialogsL42 extends TLObject implements TLMethod {
+public class GetDialogsL48 extends TLObject implements TLMethod {
 
     public static final int ID = 0x6b47f94d;
 
@@ -40,10 +40,10 @@ public class GetDialogsL42 extends TLObject implements TLMethod {
     public TLInputPeer offset_peer;
     public int limit;
 
-    public GetDialogsL42() {
+    public GetDialogsL48() {
     }
 
-    public GetDialogsL42(int offset_date, int offset_id, TLInputPeer offset_peer, int limit) {
+    public GetDialogsL48(int offset_date, int offset_id, TLInputPeer offset_peer, int limit) {
         this.offset_date = offset_date;
         this.offset_id = offset_id;
         this.offset_peer = offset_peer;
@@ -81,8 +81,22 @@ public class GetDialogsL42 extends TLObject implements TLMethod {
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {//TODO: use offset, max_id and limit parameters
         if (context.isAuthorized()) {
-            Message[] messages_in = DatabaseConnection.getInstance().getIncomingMessages(context.getUserId());
-            Message[] messages_out = DatabaseConnection.getInstance().getOutgoingMessages(context.getUserId());
+            Message[] messages_in_old = DatabaseConnection.getInstance().getIncomingMessages(context.getUserId());
+            Message[] messages_out_old = DatabaseConnection.getInstance().getOutgoingMessages(context.getUserId());
+
+            MessageL48[] messages_in = new MessageL48[messages_in_old.length];
+            for (int i = 0; i < messages_in.length; i++) {
+                messages_in[i] = new MessageL48(0, messages_in_old[i].id, messages_in_old[i].from_id, messages_in_old[i].to_id, null,
+                        0, 0, messages_in_old[i].date, messages_in_old[i].message, messages_in_old[i].media, null,
+                        null, 0, 0);
+            }
+
+            MessageL48[] messages_out = new MessageL48[messages_out_old.length];
+            for (int i = 0; i < messages_out.length; i++) {
+                messages_out[i] = new MessageL48(0, messages_out_old[i].id, messages_out_old[i].from_id, messages_out_old[i].to_id, null,
+                        0, 0, messages_out_old[i].date, messages_out_old[i].message, messages_out_old[i].media, null,
+                        null, 0, 0);
+            }
 
             TLVector<TLDialog> tlDialogs = new TLVector<>();
             TLVector<TLMessage> tlMessages = new TLVector<>();
@@ -93,7 +107,7 @@ public class GetDialogsL42 extends TLObject implements TLMethod {
                 tlUsers.add(um.toUser(context.getApiLayer()));
             }
 
-            for (Message m : messages_in) {
+            for (MessageL48 m : messages_in) {
                 m.flags = 0;
                 tlMessages.add(m);
 
@@ -125,7 +139,7 @@ public class GetDialogsL42 extends TLObject implements TLMethod {
                         PeerChat pc = (PeerChat) m.to_id;
                         Dialog d = new Dialog(pc, m.id, m.id, 0, new PeerNotifySettingsEmpty());
                         tlDialogs.add(d);
-                        TLChat c = ChatStore.getInstance().getChat(pc.chat_id);
+                        ChatL42 c = ((Chat) ChatStore.getInstance().getChat(pc.chat_id)).toChatL42();
                         if (c != null) {
                             tlChats.add(c);
                         }
@@ -156,8 +170,8 @@ public class GetDialogsL42 extends TLObject implements TLMethod {
                     }
                 }
             }
-            for (Message m : messages_out) {
-                m.flags = 2;
+            for (MessageL48 m : messages_out) {
+                m.set_messageL48_out();
                 tlMessages.add(m);
 
                 boolean dialog_exists = false;
@@ -183,7 +197,7 @@ public class GetDialogsL42 extends TLObject implements TLMethod {
                         PeerChat pc = (PeerChat) m.to_id;
                         Dialog d = new Dialog(pc, m.id, m.id, 0, new PeerNotifySettingsEmpty());
                         tlDialogs.add(d);
-                        TLChat c = ChatStore.getInstance().getChat(pc.chat_id);
+                        ChatL42 c = ((Chat) ChatStore.getInstance().getChat(pc.chat_id)).toChatL42();
                         if (c != null) {
                             tlChats.add(c);
                         }
@@ -219,11 +233,11 @@ public class GetDialogsL42 extends TLObject implements TLMethod {
             Collections.sort(tlMessages, new Comparator<TLMessage>() {
                 @Override
                 public int compare(TLMessage o1, TLMessage o2) {
-                    return ((Message) o2).id - ((Message) o1).id;
+                    return ((MessageL48) o2).id - ((MessageL48) o1).id;
                 }
             });
 
-            return new Dialogs(tlDialogs, tlMessages, tlChats, tlUsers);
+            return new DialogsL42(tlDialogs, tlMessages, tlChats, tlUsers);
         }
         return new rpc_error(401, "UNAUTHORIZED");
     }

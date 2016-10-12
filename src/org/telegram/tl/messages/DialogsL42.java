@@ -18,27 +18,38 @@
 
 package org.telegram.tl.messages;
 
-import org.telegram.core.TLContext;
-import org.telegram.core.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class GetAllStickers extends TLObject implements TLMethod {
+public class DialogsL42 extends TLDialogs {
 
-    public static final int ID = 0x1c9618b1;
+    public static final int ID = 0x15ba6c40;
 
-    public int hash;
+    public TLVector<TLDialog> dialogs;
+    public TLVector<TLMessage> messages;
+    public TLVector<TLChat> chats;
+    public TLVector<TLUser> users;
 
-    public GetAllStickers() {
+    public DialogsL42() {
+        this.dialogs = new TLVector<>();
+        this.messages = new TLVector<>();
+        this.chats = new TLVector<>();
+        this.users = new TLVector<>();
     }
 
-    public GetAllStickers(int hash) {
-        this.hash = hash;
+    public DialogsL42(TLVector<TLDialog> dialogs, TLVector<TLMessage> messages, TLVector<TLChat> chats, TLVector<TLUser> users) {
+        this.dialogs = dialogs;
+        this.messages = messages;
+        this.chats = chats;
+        this.users = users;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        hash = buffer.readInt();
+        dialogs = (TLVector<TLDialog>) buffer.readTLObject(APIContext.getInstance());
+        messages = (TLVector<TLMessage>) buffer.readTLObject(APIContext.getInstance());
+        chats = (TLVector<TLChat>) buffer.readTLObject(APIContext.getInstance());
+        users = (TLVector<TLUser>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
@@ -52,16 +63,14 @@ public class GetAllStickers extends TLObject implements TLMethod {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
-        buff.writeInt(hash);
+        buff.writeTLObject(dialogs);
+        buff.writeTLObject(messages);
+        buff.writeTLObject(chats);
+        buff.writeTLObject(users);
     }
 
 
     public int getConstructor() {
         return ID;
-    }
-
-    @Override
-    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        return new AllStickersNotModified();
     }
 }

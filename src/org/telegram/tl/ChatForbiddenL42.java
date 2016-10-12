@@ -1,18 +1,27 @@
-package org.telegram.tl.messages;
+package org.telegram.tl;
 
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class AllStickersNotModified extends TLAllStickers {
+public class ChatForbiddenL42 extends TLChat {
 
-    public static final int ID = 0xe86602c3;
+    public static final int ID = 0x7328bdb;
 
+    public int id;
+    public String title;
 
-    public AllStickersNotModified(){
+    public ChatForbiddenL42() {
+    }
+
+    public ChatForbiddenL42(int id, String title) {
+        this.id = id;
+        this.title = title;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
+        id = buffer.readInt();
+        title = buffer.readString();
     }
 
     @Override
@@ -26,6 +35,8 @@ public class AllStickersNotModified extends TLAllStickers {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
+        buff.writeInt(id);
+        buff.writeString(title);
     }
 
 

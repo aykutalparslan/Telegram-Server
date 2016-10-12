@@ -78,6 +78,10 @@ public class Chat extends TLChat {
         buff.writeInt(version);
     }
 
+    public ChatL42 toChatL42() {
+        return new ChatL42(0, id, title, photo, participants_count, date, version, null);
+    }
+
     public int getConstructor() {
         return ID;
     }

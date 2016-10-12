@@ -2,6 +2,6 @@ package org.telegram.tl.messages;
 
 import org.telegram.tl.*;
 
-public abstract class TLAllStickers extends TLObject {
+public abstract class TLSavedGifs extends TLObject {
 
 }

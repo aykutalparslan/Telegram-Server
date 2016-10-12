@@ -1,14 +1,14 @@
-package org.telegram.tl.messages;
+package org.telegram.tl;
 
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class AllStickersNotModified extends TLAllStickers {
+public class InputChannelEmpty extends TLInputChannel {
 
-    public static final int ID = 0xe86602c3;
+    public static final int ID = 0xee8c1e86;
 
 
-    public AllStickersNotModified(){
+    public InputChannelEmpty() {
     }
 
     @Override

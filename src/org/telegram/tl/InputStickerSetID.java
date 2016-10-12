@@ -1,18 +1,27 @@
-package org.telegram.tl.messages;
+package org.telegram.tl;
 
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class AllStickersNotModified extends TLAllStickers {
+public class InputStickerSetID extends TLInputStickerSet {
 
-    public static final int ID = 0xe86602c3;
+    public static final int ID = 0x9de7a269;
 
+    public long id;
+    public long access_hash;
 
-    public AllStickersNotModified(){
+    public InputStickerSetID() {
+    }
+
+    public InputStickerSetID(long id, long access_hash) {
+        this.id = id;
+        this.access_hash = access_hash;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
+        id = buffer.readLong();
+        access_hash = buffer.readLong();
     }
 
     @Override
@@ -26,6 +35,8 @@ public class AllStickersNotModified extends TLAllStickers {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
+        buff.writeLong(id);
+        buff.writeLong(access_hash);
     }
 
 

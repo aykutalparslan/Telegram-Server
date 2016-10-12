@@ -3,26 +3,30 @@ package org.telegram.tl.messages;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class AllStickers extends TLAllStickers {
+public class FeaturedStickers extends TLFeaturedStickers {
 
-    public static final int ID = 0xedfd405f;
+    public static final int ID = 0xf89d88e5;
 
     public int hash;
-    public TLVector<TLStickerSet> sets;
+    public TLVector<TLStickerSetCovered> sets;
+    public TLVector<Long> unread;
 
-    public AllStickers() {
+    public FeaturedStickers() {
         this.sets = new TLVector<>();
+        this.unread = new TLVector<>();
     }
 
-    public AllStickers(int hash, TLVector<TLStickerSet> sets) {
+    public FeaturedStickers(int hash, TLVector<TLStickerSetCovered> sets, TLVector<Long> unread) {
         this.hash = hash;
         this.sets = sets;
+        this.unread = unread;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         hash = buffer.readInt();
-        sets = (TLVector<TLStickerSet>) buffer.readTLObject(APIContext.getInstance());
+        sets = (TLVector<TLStickerSetCovered>) buffer.readTLObject(APIContext.getInstance());
+        unread = (TLVector<Long>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
@@ -38,6 +42,7 @@ public class AllStickers extends TLAllStickers {
         buff.writeInt(getConstructor());
         buff.writeInt(hash);
         buff.writeTLObject(sets);
+        buff.writeTLObject(unread);
     }
 
 

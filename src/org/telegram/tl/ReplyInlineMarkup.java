@@ -1,18 +1,25 @@
-package org.telegram.tl.messages;
+package org.telegram.tl;
 
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class AllStickersNotModified extends TLAllStickers {
+public class ReplyInlineMarkup extends TLReplyMarkup {
 
-    public static final int ID = 0xe86602c3;
+    public static final int ID = 0x48a30254;
 
+    public TLVector<TLKeyboardButtonRow> rows;
 
-    public AllStickersNotModified(){
+    public ReplyInlineMarkup() {
+        this.rows = new TLVector<>();
+    }
+
+    public ReplyInlineMarkup(TLVector<TLKeyboardButtonRow> rows) {
+        this.rows = rows;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
+        rows = (TLVector<TLKeyboardButtonRow>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
@@ -26,6 +33,7 @@ public class AllStickersNotModified extends TLAllStickers {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
+        buff.writeTLObject(rows);
     }
 
 
