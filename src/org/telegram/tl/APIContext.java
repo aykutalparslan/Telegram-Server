@@ -50,6 +50,13 @@ public class APIContext implements DeserializationContext {
     private HashMap<Integer, Class> schema;
 
     private APIContext(){
+        addToSchema(UpdateShortMessageL48.class);
+        addToSchema(UpdateShortChatMessageL48.class);
+        addToSchema(ForwardMessagesL48.class);
+        addToSchema(SendMessageL48.class);
+        addToSchema(SendMediaL48.class);
+        addToSchema(InputStickeredMediaDocument.class);
+        addToSchema(InputStickeredMediaPhoto.class);
         addToSchema(MaskCoords.class);
         addToSchema(StickerSetInstallResultArchive.class);
         addToSchema(SavedGifsNotModified.class);

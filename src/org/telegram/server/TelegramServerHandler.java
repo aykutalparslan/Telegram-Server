@@ -59,7 +59,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         super.channelRead(ctx, msg);
-        ProtocolBuffer data = (ProtocolBuffer)msg;
+        ProtocolBuffer data = (ProtocolBuffer) msg;
         long keyId = data.readLong();
         if (keyId == 0) {
             long messageId = data.readLong();
@@ -73,17 +73,17 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
 
             MTProtoAuth auth2 = null;
 
-            if(message instanceof req_pq){
+            if (message instanceof req_pq) {
                 auth2 = ProtoAuthStore.getInstance().getProtoAuth(((req_pq) message).nonce);
                 ctx.writeAndFlush(auth2.msgs_ack(messageId));
                 ctx.writeAndFlush(auth2.resPQ((req_pq) message));
                 ProtoAuthStore.getInstance().updateProtoAuth(((req_pq) message).nonce, auth2);
-            } else if (message instanceof req_DH_params){
+            } else if (message instanceof req_DH_params) {
                 auth2 = ProtoAuthStore.getInstance().getProtoAuth(((req_DH_params) message).nonce);
                 ctx.writeAndFlush(auth2.msgs_ack(messageId));
                 ctx.writeAndFlush(auth2.server_DH_params((req_DH_params) message));
                 ProtoAuthStore.getInstance().updateProtoAuth(((req_DH_params) message).nonce, auth2);
-            } else if (message instanceof set_client_DH_params){
+            } else if (message instanceof set_client_DH_params) {
                 auth2 = ProtoAuthStore.getInstance().getProtoAuth(((set_client_DH_params) message).nonce);
                 ctx.writeAndFlush(auth2.msgs_ack(messageId));
                 ctx.writeAndFlush(auth2.set_client_DH_params((set_client_DH_params) message));
@@ -171,6 +171,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
                     session.server = ServerConfig.SERVER_HOSTNAME;
                     session.user_id = tlContext.getUserId();
                     session.username = "";
+                    session.layer = tlContext.getApiLayer();
                     Router.getInstance().addActiveSession(session);
 
                     Router.getInstance().addChannelHandler(tlContext.getSessionId(), ctx);

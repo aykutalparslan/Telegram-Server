@@ -90,39 +90,27 @@ public class SendMediaL48 extends TLObject {
         }
     }
 
-    public boolean is_messages.
-
-    sendMediaL48_silent() {
+    public boolean is_silent() {
         return (flags & (1 << 5)) != 0;
     }
 
-    public boolean set_messages.
-
-    sendMediaL48_silent() {
+    public boolean set_silent() {
         return (flags |= (1 << 5)) != 0;
     }
 
-    public boolean is_messages.
-
-    sendMediaL48_background() {
+    public boolean is_background() {
         return (flags & (1 << 6)) != 0;
     }
 
-    public boolean set_messages.
-
-    sendMediaL48_background() {
+    public boolean set_background() {
         return (flags |= (1 << 6)) != 0;
     }
 
-    public boolean is_messages.
-
-    sendMediaL48_clear_draft() {
+    public boolean is_clear_draft() {
         return (flags & (1 << 7)) != 0;
     }
 
-    public boolean set_messages.
-
-    sendMediaL48_clear_draft() {
+    public boolean set_clear_draft() {
         return (flags |= (1 << 7)) != 0;
     }
 

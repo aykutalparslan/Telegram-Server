@@ -29,6 +29,7 @@ import org.telegram.mtproto.secure.CryptoUtils;
 import org.telegram.server.TelegramServerHandler;
 import org.telegram.tl.TLObject;
 
+import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -70,14 +71,30 @@ public class Router {
         activeSessions.delete(session_id);
     }
 
+    public Object[] getActiveSessions(int user_id) {
+        return activeSessions.values(new SqlPredicate("user_id = " + user_id)).toArray();
+    }
+
     public void Route(int user_id, TLObject msg, boolean rpc_response) {
         for (Object sess : activeSessions.values(new SqlPredicate("user_id = " + user_id)).toArray()) {
             //for now all sessions are on the same server
             ChannelHandlerContext ctx = channelHandlers.get(((ActiveSession) sess).session_id);
+            if (ctx != null && ctx.channel().isOpen()) {
+                long msg_id = ((TelegramServerHandler) ctx.handler()).generateMessageId(rpc_response);
+
+                ctx.writeAndFlush(encryptRpc(msg, ((TelegramServerHandler) ctx.handler()).getMessageSeqNo(true), msg_id,
+                        ((ActiveSession) sess).session_id, ((ActiveSession) sess).auth_key_id));
+            }
+        }
+    }
+
+    public void Route(long session_id, long auth_key_id, TLObject msg, boolean rpc_response) {
+        ChannelHandlerContext ctx = channelHandlers.get(session_id);
+        if (ctx != null && ctx.channel().isOpen()) {
             long msg_id = ((TelegramServerHandler) ctx.handler()).generateMessageId(rpc_response);
 
             ctx.writeAndFlush(encryptRpc(msg, ((TelegramServerHandler) ctx.handler()).getMessageSeqNo(true), msg_id,
-                    ((ActiveSession) sess).session_id, ((ActiveSession) sess).auth_key_id));
+                    session_id, auth_key_id));
         }
     }
 

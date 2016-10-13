@@ -54,16 +54,22 @@ public class GetConfig extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        DcOption dcOption = new DcOption(0, ServerConfig.SERVER_ID, ServerConfig.SERVER_IP, ServerConfig.SERVER_PORT);
-        TLVector<TLDcOption> dcOptions = new TLVector<>();
-        dcOptions.add(dcOption);
+
 
         TLVector<TLDisabledFeature> disabledFeatures = new TLVector<>();
 
         if (context.getApiLayer() >= 48) {
+            DcOption dcOption = new DcOption(0, ServerConfig.SERVER_ID, "127.0.0.1", ServerConfig.SERVER_PORT);
+            TLVector<TLDcOption> dcOptions = new TLVector<>();
+            dcOptions.add(dcOption);
+
             return new ConfigL48((int) (System.currentTimeMillis() / 1000L), (int) (System.currentTimeMillis() / 1000L) + 860000,
                     false, 1, dcOptions, 200, 100, 100, 120000, 5000, 30000, 300000, 30000, 1500, 10, 60000, 2, 100, 6000, disabledFeatures);
         } else {
+            DcOption dcOption = new DcOption(0, ServerConfig.SERVER_ID, "10.0.2.2", ServerConfig.SERVER_PORT);
+            TLVector<TLDcOption> dcOptions = new TLVector<>();
+            dcOptions.add(dcOption);
+
             return new Config((int) (System.currentTimeMillis() / 1000L), (int) (System.currentTimeMillis() / 1000L) + 860000,
                     false, 1, dcOptions, 200, 100, 100, 120000, 5000, 30000, 300000, 30000, 1500, 10, 60000, 2, disabledFeatures);
         }
