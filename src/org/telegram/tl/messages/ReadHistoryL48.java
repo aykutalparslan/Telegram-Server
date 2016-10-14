@@ -18,34 +18,34 @@
 
 package org.telegram.tl.messages;
 
-import org.telegram.core.*;
+import org.telegram.core.Router;
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.core.UserStore;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 import org.telegram.tl.service.rpc_error;
 
-public class ReadHistory extends TLObject implements TLMethod {
+public class ReadHistoryL48 extends TLObject implements TLMethod {
 
-    public static final int ID = 0xb04f2510;
+    public static final int ID = 0xe306d3a;
 
     public TLInputPeer peer;
     public int max_id;
-    public int offset;
 
-    public ReadHistory() {
+    public ReadHistoryL48() {
     }
 
-    public ReadHistory(TLInputPeer peer, int max_id, int offset, boolean read_contents){
+    public ReadHistoryL48(TLInputPeer peer, int max_id) {
         this.peer = peer;
         this.max_id = max_id;
-        this.offset = offset;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         max_id = buffer.readInt();
-        offset = buffer.readInt();
     }
 
     @Override
@@ -55,13 +55,14 @@ public class ReadHistory extends TLObject implements TLMethod {
         return buffer;
     }
 
+
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
         buff.writeTLObject(peer);
         buff.writeInt(max_id);
-        buff.writeInt(offset);
     }
+
 
     public int getConstructor() {
         return ID;
@@ -77,27 +78,12 @@ public class ReadHistory extends TLObject implements TLMethod {
         if (peer instanceof InputPeerUser) {
             UserModel umc = UserStore.getInstance().increment_pts_getUser(((InputPeerUser) peer).user_id, 1, 0, 0);
             if (um != null && umc != null) {
-                Object[] sessions = Router.getInstance().getActiveSessions(umc.user_id);
-                for (Object session : sessions) {
-                    if (((ActiveSession) session).layer >= 48) {
-                        UpdateShort update = new UpdateShort(new UpdateReadHistoryOutbox(um.toPeerUser(), umc.received_messages + umc.sent_messages + 1, umc.pts, 1), date);
-                        Router.getInstance().Route(((ActiveSession) session).session_id, ((ActiveSession) session).auth_key_id, update, false);
-                    } else {
-                        UpdateShort update = new UpdateShort(new UpdateReadHistoryOutbox(um.toPeerUser(), umc.received_messages + umc.sent_messages + 1, umc.pts, 0), date);
-                        Router.getInstance().Route(((ActiveSession) session).session_id, ((ActiveSession) session).auth_key_id, update, false);
-                    }
-                }
-
-                if (context.getApiLayer() >= 48) {
-
-                    return new AffectedHistory48(um.pts, 0, um.pts);
-                } else {
-
-                    return new AffectedHistory(um.pts, um.pts, 0);
-                }
+                UpdateShort update = new UpdateShort(new UpdateReadHistoryOutbox(um.toPeerUser(), umc.received_messages + umc.sent_messages + 1, umc.pts, 1), date);
+                Router.getInstance().Route(umc.user_id, update, false);
+                return new AffectedMessages(um.pts, 0);
             }
         } else if (peer instanceof InputPeerChat) {
-            return new AffectedHistory(um.pts, um.pts, 0);
+            return new AffectedMessages(um.pts, 0);
         }
         return new rpc_error(401, "UNAUTHORIZED");
     }

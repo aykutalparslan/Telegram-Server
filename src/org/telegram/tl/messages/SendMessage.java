@@ -105,31 +105,70 @@ public class SendMessage extends TLObject implements TLMethod {
         if (context.isAuthorized()) {
             if (peer instanceof InputPeerUser) {
                 int toUserId = ((InputPeerUser) peer).user_id;
-                UpdateShortMessage msg = (UpdateShortMessage) crateShortMessage(toUserId,
-                        context.getUserId(), this.message, this.entities);
+
+                UserModel umc = UserStore.getInstance().increment_pts_getUser(toUserId, 1, 0, 1);
+                msg_id = umc.sent_messages + umc.received_messages + 1;
+
+                UpdateShortMessageL48 msg_48 = crateShortMessageL48(msg_id, umc.pts, context.getUserId(), this.message, this.entities);
+                UpdateShortMessage msg = crateShortMessage(msg_id, umc.pts, context.getUserId(), this.message, this.entities);
+
+                DatabaseConnection.getInstance().saveIncomingMessage(toUserId, context.getUserId(), 0, msg_48.id, msg_id,
+                        msg_48.message, msg_48.flags, msg_48.date);
 
                 UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
                 msg_id = um.sent_messages + um.received_messages + 1;
 
-                DatabaseConnection.getInstance().saveIncomingMessage(toUserId, context.getUserId(), 0, msg.id, msg_id,
-                        msg.message, msg.flags, msg.date);
-
-                DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, 0, msg_id, msg.id,
-                        msg.message, 2, msg.date);
+                DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, 0, msg_id, msg_48.id,
+                        msg_48.message, 2, msg_48.date);
 
                 pts = um.pts;
 
-                return new SentMessage(msg_id, date, new MessageMediaEmpty(), new TLVector<TLMessageEntity>(), pts, 0, pts);
+                Object[] sessions = Router.getInstance().getActiveSessions(toUserId);
+
+                for (Object session : sessions) {
+                    if (((ActiveSession) session).layer >= 48) {
+                        Router.getInstance().Route(((ActiveSession) session).session_id, ((ActiveSession) session).auth_key_id, msg_48, false);
+                    } else {
+                        Router.getInstance().Route(((ActiveSession) session).session_id, ((ActiveSession) session).auth_key_id, msg, false);
+                    }
+                }
+
+                if (context.getApiLayer() >= 48) {
+                    return new UpdateShortSentMessage(0, msg_id, pts, 1, date,
+                            new MessageMediaEmpty(), entities);
+                } else {
+                    return new SentMessage(msg_id, date, new MessageMediaEmpty(),
+                            new TLVector<TLMessageEntity>(), pts, 0, pts);
+                }
             } else if (peer instanceof InputPeerChat) {
                 int toChatId = ((InputPeerChat) peer).chat_id;
                 int[] users_ids = ChatStore.getInstance().getChatParticipants(toChatId);
                 for (int user_id : users_ids) {
                     if (user_id != context.getUserId()) {
-                        UpdateShortChatMessage msg = (UpdateShortChatMessage) crateShortChatMessage(user_id, toChatId,
+
+                        int msg_id_peer;
+
+                        UserModel umc = UserStore.getInstance().increment_pts_getUser(user_id, 1, 0, 1);
+                        msg_id_peer = umc.sent_messages + umc.received_messages + 1;
+
+                        UpdateShortChatMessage msg = crateShortChatMessage(msg_id_peer, pts, toChatId,
+                                context.getUserId(), this.message, this.entities);
+
+                        UpdateShortChatMessageL48 msg_48 = crateShortChatMessageL48(msg_id_peer, pts, toChatId,
                                 context.getUserId(), this.message, this.entities);
 
                         DatabaseConnection.getInstance().saveIncomingMessage(user_id, context.getUserId(), toChatId, msg.id, msg_id,
                                 msg.message, msg.flags, msg.date);
+
+                        Object[] sessions = Router.getInstance().getActiveSessions(user_id);
+
+                        for (Object session : sessions) {
+                            if (((ActiveSession) session).layer >= 48) {
+                                Router.getInstance().Route(((ActiveSession) session).session_id, ((ActiveSession) session).auth_key_id, msg_48, false);
+                            } else {
+                                Router.getInstance().Route(((ActiveSession) session).session_id, ((ActiveSession) session).auth_key_id, msg, false);
+                            }
+                        }
                     }
                 }
 
@@ -141,43 +180,58 @@ public class SendMessage extends TLObject implements TLMethod {
 
                 pts = um.pts;
 
-                return new SentMessage(msg_id, date, new MessageMediaEmpty(), new TLVector<TLMessageEntity>(), pts, 0, pts);
+                if (context.getApiLayer() >= 48) {
+                    return new UpdateShortSentMessage(0, msg_id, pts, 1, date,
+                            new MessageMediaEmpty(), entities);
+                } else {
+                    return new SentMessage(msg_id, date, new MessageMediaEmpty(),
+                            new TLVector<TLMessageEntity>(), pts, 0, pts);
+                }
             }
         }
 
         return rpc_error.UNAUTHORIZED();
     }
 
-    public TLUpdates crateShortMessage(int to_user_id, int from_user_id, String message, TLVector<TLMessageEntity> entities) {
+    public UpdateShortMessage crateShortMessage(int message_id, int pts, int from_user_id, String message, TLVector<TLMessageEntity> entities) {
         int date = (int) (System.currentTimeMillis() / 1000L);
-        int msg_id;
-
-        UserModel um = UserStore.getInstance().increment_pts_getUser(to_user_id, 1, 0, 1);
-        msg_id = um.sent_messages + um.received_messages + 1;
 
         int flags_msg = 1;
-        UpdateShortMessage msg = new UpdateShortMessage(flags_msg, msg_id,
-                from_user_id, message, um.pts, 1,
+        UpdateShortMessage msg = new UpdateShortMessage(flags_msg, message_id,
+                from_user_id, message, pts, 1,
                 date, 0, 0, 0, entities);
-
-        Router.getInstance().Route(to_user_id, msg, false);
 
         return msg;
     }
 
-    public TLUpdates crateShortChatMessage(int to_user_id, int to_chat_id, int from_user_id, String message, TLVector<TLMessageEntity> entities) {
+    public UpdateShortMessageL48 crateShortMessageL48(int message_id, int pts, int from_user_id, String message, TLVector<TLMessageEntity> entities) {
         int date = (int) (System.currentTimeMillis() / 1000L);
-        int msg_id;
-
-        UserModel um = UserStore.getInstance().increment_pts_getUser(to_user_id, 1, 0, 1);
-        msg_id = um.sent_messages + um.received_messages + 1;
 
         int flags_msg = 1;
-        UpdateShortChatMessage msg = new UpdateShortChatMessage(flags_msg, msg_id,
-                from_user_id, to_chat_id, message, um.pts, 1,
+        UpdateShortMessageL48 msg = new UpdateShortMessageL48(flags_msg, message_id, from_user_id, message,
+                pts, 1, date, null, 0, 0, entities);
+
+        return msg;
+    }
+
+    public UpdateShortChatMessage crateShortChatMessage(int message_id, int pts, int to_chat_id, int from_user_id, String message, TLVector<TLMessageEntity> entities) {
+        int date = (int) (System.currentTimeMillis() / 1000L);
+
+        int flags_msg = 1;
+        UpdateShortChatMessage msg = new UpdateShortChatMessage(flags_msg, message_id,
+                from_user_id, to_chat_id, message, pts, 1,
                 date, 0, 0, 0, entities);
 
-        Router.getInstance().Route(to_user_id, msg, false);
+        return msg;
+    }
+
+    public UpdateShortChatMessageL48 crateShortChatMessageL48(int message_id, int pts, int to_chat_id, int from_user_id, String message, TLVector<TLMessageEntity> entities) {
+        int date = (int) (System.currentTimeMillis() / 1000L);
+
+        int flags_msg = 1;
+        UpdateShortChatMessageL48 msg = new UpdateShortChatMessageL48(flags_msg, message_id,
+                from_user_id, to_chat_id, message, pts, 1,
+                date, null, 0, 0, entities);
 
         return msg;
     }

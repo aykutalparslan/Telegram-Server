@@ -16,38 +16,29 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.tl.updates;
+package org.telegram.tl.messages;
 
 import org.telegram.core.TLContext;
 import org.telegram.core.TLMethod;
-import org.telegram.core.UserStore;
-import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
-import org.telegram.tl.service.rpc_error;
 
-public class GetDifference extends TLObject implements TLMethod {
+public class ReceivedMessagesL48 extends TLObject implements TLMethod {
 
-    public static final int ID = 168039573;
+    public static final int ID = 0x5a954c0;
 
-    public int pts;
-    public int date;
-    public int qts;
+    public int max_id;
 
-    public GetDifference() {
+    public ReceivedMessagesL48() {
     }
 
-    public GetDifference(int pts, int date, int qts){
-        this.pts = pts;
-        this.date = date;
-        this.qts = qts;
+    public ReceivedMessagesL48(int max_id) {
+        this.max_id = max_id;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        pts = buffer.readInt();
-        date = buffer.readInt();
-        qts = buffer.readInt();
+        max_id = buffer.readInt();
     }
 
     @Override
@@ -57,13 +48,13 @@ public class GetDifference extends TLObject implements TLMethod {
         return buffer;
     }
 
+
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
-        buff.writeInt(pts);
-        buff.writeInt(date);
-        buff.writeInt(qts);
+        buff.writeInt(max_id);
     }
+
 
     public int getConstructor() {
         return ID;
@@ -71,13 +62,8 @@ public class GetDifference extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        if (context.isAuthorized()) {
-            UserModel um = UserStore.getInstance().getUser(context.getUserId());
-            return new Difference(new TLVector<TLMessage>(), new TLVector<TLEncryptedMessage>(),
-                    new TLVector<TLUpdate>(), new TLVector<TLChat>(), new TLVector<TLUser>(),
-                    new State(um.pts, um.qts, date, um.pts, 0));
-        }
-
-        return rpc_error.UNAUTHORIZED();
+        TLVector<TLReceivedNotifyMessage> receivedNotifyMessages = new TLVector<>();
+        receivedNotifyMessages.add(new ReceivedNotifyMessage(max_id, 0));
+        return receivedNotifyMessages;
     }
 }

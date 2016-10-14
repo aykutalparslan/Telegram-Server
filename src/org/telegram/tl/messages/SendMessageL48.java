@@ -160,7 +160,7 @@ public class SendMessageL48 extends TLObject implements TLMethod {
                 DatabaseConnection.getInstance().saveIncomingMessage(toUserId, context.getUserId(), 0, msg_48.id, msg_id,
                         msg_48.message, msg_48.flags, msg_48.date);
 
-                UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
+                UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 1, 1, 0);
                 msg_id = um.sent_messages + um.received_messages + 1;
 
                 DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, 0, msg_id, msg_48.id,
@@ -172,9 +172,9 @@ public class SendMessageL48 extends TLObject implements TLMethod {
 
                 for (Object session : sessions) {
                     if (((ActiveSession) session).layer >= 48) {
-                        Router.getInstance().Route(toUserId, msg_48, false);
+                        Router.getInstance().Route(((ActiveSession) session).session_id, ((ActiveSession) session).auth_key_id, msg_48, false);
                     } else {
-                        Router.getInstance().Route(toUserId, msg, false);
+                        Router.getInstance().Route(((ActiveSession) session).session_id, ((ActiveSession) session).auth_key_id, msg, false);
                     }
                 }
 
@@ -209,9 +209,9 @@ public class SendMessageL48 extends TLObject implements TLMethod {
 
                         for (Object session : sessions) {
                             if (((ActiveSession) session).layer >= 48) {
-                                Router.getInstance().Route(user_id, msg_48, false);
+                                Router.getInstance().Route(((ActiveSession) session).session_id, ((ActiveSession) session).auth_key_id, msg_48, false);
                             } else {
-                                Router.getInstance().Route(user_id, msg, false);
+                                Router.getInstance().Route(((ActiveSession) session).session_id, ((ActiveSession) session).auth_key_id, msg, false);
                             }
                         }
                     }

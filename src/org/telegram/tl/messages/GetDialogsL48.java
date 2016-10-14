@@ -87,7 +87,7 @@ public class GetDialogsL48 extends TLObject implements TLMethod {
             MessageL48[] messages_in = new MessageL48[messages_in_old.length];
             for (int i = 0; i < messages_in.length; i++) {
                 messages_in[i] = new MessageL48(0, messages_in_old[i].id, messages_in_old[i].from_id, messages_in_old[i].to_id, null,
-                        0, 0, messages_in_old[i].date, messages_in_old[i].message, messages_in_old[i].media, null,
+                        0, 0, messages_in_old[i].date, messages_in_old[i].message, null, null,
                         null, 0, 0);
             }
 

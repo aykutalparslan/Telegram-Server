@@ -50,6 +50,10 @@ public class APIContext implements DeserializationContext {
     private HashMap<Integer, Class> schema;
 
     private APIContext(){
+        addToSchema(AffectedMessages.class);
+        addToSchema(ReadHistoryL48.class);
+        addToSchema(ReceivedNotifyMessage.class);
+        addToSchema(ReceivedMessagesL48.class);
         addToSchema(UpdateShortMessageL48.class);
         addToSchema(UpdateShortChatMessageL48.class);
         addToSchema(ForwardMessagesL48.class);

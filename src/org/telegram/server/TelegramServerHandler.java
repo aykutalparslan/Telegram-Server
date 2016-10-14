@@ -129,6 +129,22 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             System.out.println("null rpc");
         }
 
+        if (tlContext.isAuthorized()) {
+            if (Router.getInstance().getActiveSession(tlContext.getSessionId()) == null) {
+                ActiveSession session = new ActiveSession();
+                session.auth_key_id = tlContext.getAuthKeyId();
+                session.session_id = tlContext.getSessionId();
+                session.phone = tlContext.getPhone();
+                session.server = ServerConfig.SERVER_HOSTNAME;
+                session.user_id = tlContext.getUserId();
+                session.username = "";
+                session.layer = tlContext.getApiLayer();
+                Router.getInstance().addActiveSession(session);
+
+                Router.getInstance().addChannelHandler(tlContext.getSessionId(), ctx);
+            }
+        }
+
         /*if (!(rpc instanceof Ping) && !(rpc instanceof ping_delay_disconnect) && !(rpc instanceof msgs_ack) && !(rpc instanceof TLMethod)) {
             TLVector<Long> msg_ids = new TLVector<>();
             msg_ids.add(messageId);
@@ -162,21 +178,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         }
 
         if (rpc instanceof Ping || rpc instanceof ping_delay_disconnect) {
-            if (tlContext.isAuthorized()) {
-                if (Router.getInstance().getActiveSession(tlContext.getSessionId()) == null) {
-                    ActiveSession session = new ActiveSession();
-                    session.auth_key_id = tlContext.getAuthKeyId();
-                    session.session_id = tlContext.getSessionId();
-                    session.phone = tlContext.getPhone();
-                    session.server = ServerConfig.SERVER_HOSTNAME;
-                    session.user_id = tlContext.getUserId();
-                    session.username = "";
-                    session.layer = tlContext.getApiLayer();
-                    Router.getInstance().addActiveSession(session);
 
-                    Router.getInstance().addChannelHandler(tlContext.getSessionId(), ctx);
-                }
-            }
         }
 
         if (rpc instanceof TLMethod) {

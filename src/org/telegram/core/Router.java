@@ -79,7 +79,7 @@ public class Router {
         for (Object sess : activeSessions.values(new SqlPredicate("user_id = " + user_id)).toArray()) {
             //for now all sessions are on the same server
             ChannelHandlerContext ctx = channelHandlers.get(((ActiveSession) sess).session_id);
-            if (ctx != null && ctx.channel().isOpen()) {
+            if (ctx != null) {
                 long msg_id = ((TelegramServerHandler) ctx.handler()).generateMessageId(rpc_response);
 
                 ctx.writeAndFlush(encryptRpc(msg, ((TelegramServerHandler) ctx.handler()).getMessageSeqNo(true), msg_id,
@@ -90,7 +90,7 @@ public class Router {
 
     public void Route(long session_id, long auth_key_id, TLObject msg, boolean rpc_response) {
         ChannelHandlerContext ctx = channelHandlers.get(session_id);
-        if (ctx != null && ctx.channel().isOpen()) {
+        if (ctx != null) {
             long msg_id = ((TelegramServerHandler) ctx.handler()).generateMessageId(rpc_response);
 
             ctx.writeAndFlush(encryptRpc(msg, ((TelegramServerHandler) ctx.handler()).getMessageSeqNo(true), msg_id,
