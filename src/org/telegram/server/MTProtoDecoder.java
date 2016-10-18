@@ -33,23 +33,9 @@ import java.util.List;
 public class MTProtoDecoder  extends ByteToMessageDecoder {
     int currentPacketLength;
     byte fByte;
-    boolean firstPacket = true;
-    /*byte[] aes_key = new byte[64];
-    byte[] readable_bytes;*/
 
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
-        /*int readable = in.readableBytes();
-        readable_bytes = new byte[readable];
-        in.readBytes(readable_bytes, 0, readable);
-        in.resetReaderIndex();
-        if(firstPacket){
-            if (in.readableBytes() < 64) {
-                return;
-            }
-            in.readBytes(aes_key, 0, 64);
-            firstPacket = false;
-        }*/
         if (currentPacketLength == 0) {
             if (in.readableBytes() < 1) {
                 return;

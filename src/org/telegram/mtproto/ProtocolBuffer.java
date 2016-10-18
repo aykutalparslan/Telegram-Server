@@ -28,7 +28,6 @@ import java.io.Serializable;
  * Created by aykut on 21/09/15.
  */
 public class ProtocolBuffer implements Serializable {
-    public byte[] aes_key;
     private byte[] _bytes;
     private int _readerIndex = 0;
     private int _writerIndex = 0;
