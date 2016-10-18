@@ -1,30 +1,33 @@
-package org.telegram.tl.messages;
+package org.telegram.tl.L57;
 
 import org.telegram.mtproto.ProtocolBuffer;
-import org.telegram.tl.*;
+import org.telegram.tl.TLObject;
+import org.telegram.tl.TLVector;
+import org.telegram.tl.APIContext;
+import org.telegram.tl.L57.*;
 
-public class AffectedHistory48 extends TLAffectedHistory {
+public class UpdateEditMessage extends TLUpdate {
 
-    public static final int ID = 0xb45c69d1;
+    public static final int ID = 0xe40370a3;
 
+    public TLMessage message;
     public int pts;
     public int pts_count;
-    public int offset;
 
-    public AffectedHistory48() {
+    public UpdateEditMessage() {
     }
 
-    public AffectedHistory48(int pts, int pts_count, int offset) {
+    public UpdateEditMessage(TLMessage message, int pts, int pts_count) {
+        this.message = message;
         this.pts = pts;
         this.pts_count = pts_count;
-        this.offset = offset;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
+        message = (TLMessage) buffer.readTLObject(APIContext.getInstance());
         pts = buffer.readInt();
         pts_count = buffer.readInt();
-        offset = buffer.readInt();
     }
 
     @Override
@@ -38,9 +41,9 @@ public class AffectedHistory48 extends TLAffectedHistory {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
+        buff.writeTLObject(message);
         buff.writeInt(pts);
         buff.writeInt(pts_count);
-        buff.writeInt(offset);
     }
 
 
