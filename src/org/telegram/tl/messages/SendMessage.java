@@ -151,10 +151,10 @@ public class SendMessage extends TLObject implements TLMethod {
                         UserModel umc = UserStore.getInstance().increment_pts_getUser(user_id, 1, 0, 1);
                         msg_id_peer = umc.sent_messages + umc.received_messages + 1;
 
-                        UpdateShortChatMessage msg = crateShortChatMessage(msg_id_peer, pts, toChatId,
+                        UpdateShortChatMessage msg = crateShortChatMessage(msg_id_peer, umc.pts, toChatId,
                                 context.getUserId(), this.message, this.entities);
 
-                        UpdateShortChatMessageL48 msg_48 = crateShortChatMessageL48(msg_id_peer, pts, toChatId,
+                        UpdateShortChatMessageL48 msg_48 = crateShortChatMessageL48(msg_id_peer, umc.pts, toChatId,
                                 context.getUserId(), this.message, this.entities);
 
                         DatabaseConnection.getInstance().saveIncomingMessage(user_id, context.getUserId(), toChatId, msg.id, msg_id,

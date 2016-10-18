@@ -18,28 +18,33 @@
 
 package org.telegram.tl.messages;
 
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class AffectedMessages extends TLAffectedMessages {
+public class GetDocumentByHash extends TLObject implements TLMethod {
 
-    public static final int ID = 0x84d19185;
+    public static final int ID = 0x338e2464;
 
-    public int pts;
-    public int pts_count;
+    public byte[] sha256;
+    public int size;
+    public String mime_type;
 
-    public AffectedMessages() {
+    public GetDocumentByHash() {
     }
 
-    public AffectedMessages(int pts, int pts_count) {
-        this.pts = pts;
-        this.pts_count = pts_count;
+    public GetDocumentByHash(byte[] sha256, int size, String mime_type) {
+        this.sha256 = sha256;
+        this.size = size;
+        this.mime_type = mime_type;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        pts = buffer.readInt();
-        pts_count = buffer.readInt();
+        sha256 = buffer.readBytes();
+        size = buffer.readInt();
+        mime_type = buffer.readString();
     }
 
     @Override
@@ -53,12 +58,18 @@ public class AffectedMessages extends TLAffectedMessages {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
-        buff.writeInt(pts);
-        buff.writeInt(pts_count);
+        buff.writeBytes(sha256);
+        buff.writeInt(size);
+        buff.writeString(mime_type);
     }
 
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new DocumentEmpty();
     }
 }

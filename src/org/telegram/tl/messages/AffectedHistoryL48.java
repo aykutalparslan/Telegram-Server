@@ -21,25 +21,28 @@ package org.telegram.tl.messages;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
 
-public class AffectedMessages extends TLAffectedMessages {
+public class AffectedHistoryL48 extends TLAffectedHistory {
 
-    public static final int ID = 0x84d19185;
+    public static final int ID = 0xb45c69d1;
 
     public int pts;
     public int pts_count;
+    public int offset;
 
-    public AffectedMessages() {
+    public AffectedHistoryL48() {
     }
 
-    public AffectedMessages(int pts, int pts_count) {
+    public AffectedHistoryL48(int pts, int pts_count, int offset) {
         this.pts = pts;
         this.pts_count = pts_count;
+        this.offset = offset;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         pts = buffer.readInt();
         pts_count = buffer.readInt();
+        offset = buffer.readInt();
     }
 
     @Override
@@ -55,6 +58,7 @@ public class AffectedMessages extends TLAffectedMessages {
         buff.writeInt(getConstructor());
         buff.writeInt(pts);
         buff.writeInt(pts_count);
+        buff.writeInt(offset);
     }
 
 

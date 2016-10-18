@@ -77,10 +77,15 @@ public class SendCode extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        if (UserStore.getInstance().getUser(phone_number) == null) {
+
+        if (UserStore.getInstance().getUser(clearPhone(phone_number)) == null) {
             return new SentCode(false, "EFEFEFEFEFEFEFEFEF", 120, false);
         } else {
             return new SentCode(true, "EFEFEFEFEFEFEFEFEF", 120, false);
         }
+    }
+
+    public String clearPhone(String phone) {
+        return phone.replace("(", "").replace(")", "").replace(" ", "").replace("-", "").replace("+", "");
     }
 }

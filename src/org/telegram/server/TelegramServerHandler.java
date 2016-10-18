@@ -93,6 +93,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             if (tlContext.getAuthKeyId() == 0) {
                 tlContext.setAuthKeyId(keyId);
             }
+            //try {
             byte[] message_key = data.read(16);
             byte[] encrypted_bytes = data.read(data.length() - (8 + 16));
 
@@ -112,6 +113,10 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
 
             TLObject rpc = APIContext.getInstance().deserialize(buff);
             processRPC(ctx, rpc, message_id);
+            //} catch (Exception e){
+
+            //}
+
         }
     }
 

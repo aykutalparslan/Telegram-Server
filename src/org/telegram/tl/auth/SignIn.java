@@ -70,7 +70,7 @@ public class SignIn extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        UserModel userModel = UserStore.getInstance().getUser(phone_number);
+        UserModel userModel = UserStore.getInstance().getUser(clearPhone(phone_number));
         if (userModel != null) {
             SessionModel sm = SessionStore.getInstance().getSession(context.getSessionId());
             if (sm == null) {
@@ -78,11 +78,11 @@ public class SignIn extends TLObject implements TLMethod {
                 sessionModel.auth_key_id = context.getAuthKeyId();
                 sessionModel.session_id = context.getSessionId();
                 sessionModel.layer = 0;
-                sessionModel.phone = phone_number;
+                sessionModel.phone = clearPhone(phone_number);
                 SessionStore.getInstance().createSession(sessionModel);
             }
 
-            AuthKeyStore.getInstance().updateAuthKey(context.getAuthKeyId(), phone_number, userModel.user_id);
+            AuthKeyStore.getInstance().updateAuthKey(context.getAuthKeyId(), clearPhone(phone_number), userModel.user_id);
 
             UserStatusOnline online = new UserStatusOnline(120);
             UserStore.getInstance().updateUserStatus(userModel.user_id, online);
@@ -91,5 +91,9 @@ public class SignIn extends TLObject implements TLMethod {
             return new rpc_error(400, "PHONE_NUMBER_UNOCCUPIED");
         }
 
+    }
+
+    public String clearPhone(String phone) {
+        return phone.replace("(", "").replace(")", "").replace(" ", "").replace("-", "").replace("+", "");
     }
 }

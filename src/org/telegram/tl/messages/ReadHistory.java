@@ -90,7 +90,7 @@ public class ReadHistory extends TLObject implements TLMethod {
 
                 if (context.getApiLayer() >= 48) {
 
-                    return new AffectedHistory48(um.pts, 0, um.pts);
+                    return new AffectedHistoryL48(um.pts, 0, um.pts);
                 } else {
 
                     return new AffectedHistory(um.pts, um.pts, 0);

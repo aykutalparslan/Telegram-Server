@@ -80,22 +80,26 @@ public class SignUp extends TLObject implements TLMethod {
         UserModel userModel = UserStore.getInstance().getUser(phone_number);
         if (userModel == null) {
             userModel = new UserModel();
-            userModel.phone = phone_number;
+            userModel.phone = clearPhone(phone_number);
             userModel.first_name = first_name;
             userModel.last_name = last_name;
             userModel.username = last_name.toLowerCase() + "." + first_name.toLowerCase();
             userModel = UserStore.getInstance().createUser(userModel);
         }
 
-        AuthKeyStore.getInstance().updateAuthKey(context.getAuthKeyId(), phone_number, userModel.user_id);
+        AuthKeyStore.getInstance().updateAuthKey(context.getAuthKeyId(), clearPhone(phone_number), userModel.user_id);
 
         SessionModel sessionModel = new SessionModel();
         sessionModel.auth_key_id = context.getAuthKeyId();
         sessionModel.session_id = context.getSessionId();
         sessionModel.layer = 0;
-        sessionModel.phone = phone_number;
+        sessionModel.phone = clearPhone(phone_number);
         SessionStore.getInstance().createSession(sessionModel);
 
         return new Authorization(Integer.MAX_VALUE, userModel.toUser(context.getApiLayer()));
+    }
+
+    public String clearPhone(String phone) {
+        return phone.replace("(", "").replace(")", "").replace(" ", "").replace("-", "").replace("+", "");
     }
 }

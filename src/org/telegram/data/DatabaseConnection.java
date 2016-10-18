@@ -497,8 +497,14 @@ public class DatabaseConnection {
     }
 
     public Message[] getIncomingMessages(int user_id, int from_user_id, int max_id) {
-        ResultSet results = session.execute("SELECT * FROM telegram.incoming_messages WHERE user_id = ? AND from_user_id = ? AND message_id < ?;",
-                user_id, from_user_id, max_id);
+        ResultSet results;
+        if (max_id > 0) {
+            results = session.execute("SELECT * FROM telegram.incoming_messages WHERE user_id = ? AND from_user_id = ? AND message_id < ?;",
+                    user_id, from_user_id, max_id);
+        } else {
+            results = session.execute("SELECT * FROM telegram.incoming_messages WHERE user_id = ? AND from_user_id = ?;",
+                    user_id, from_user_id);
+        }
 
         Message[] messages = new Message[results.getAvailableWithoutFetching()];
         int i = 0;
@@ -600,8 +606,15 @@ public class DatabaseConnection {
     }
 
     public Message[] getOutgoingMessages(int user_id, int from_user_id, int max_id) {
-        ResultSet results = session.execute("SELECT * FROM telegram.outgoing_messages WHERE user_id = ? AND to_user_id = ? AND message_id < ?;",
-                user_id, from_user_id, max_id);
+        ResultSet results;
+        if (max_id > 0) {
+            results = session.execute("SELECT * FROM telegram.outgoing_messages WHERE user_id = ? AND to_user_id = ? AND message_id < ?;",
+                    user_id, from_user_id, max_id);
+        } else {
+            results = session.execute("SELECT * FROM telegram.outgoing_messages WHERE user_id = ? AND to_user_id = ?;",
+                    user_id, from_user_id);
+        }
+
 
         Message[] messages = new Message[results.getAvailableWithoutFetching()];
         int i = 0;

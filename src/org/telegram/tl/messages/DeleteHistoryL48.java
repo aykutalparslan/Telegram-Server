@@ -16,30 +16,34 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.tl.auth;
+package org.telegram.tl.messages;
 
 import org.telegram.core.TLContext;
 import org.telegram.core.TLMethod;
-import org.telegram.core.UserStore;
+import org.telegram.data.DatabaseConnection;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.rpc_error;
 
-public class CheckPhone extends TLObject implements TLMethod {
+public class DeleteHistoryL48 extends TLObject implements TLMethod {
 
-    public static final int ID = 1877286395;
+    public static final int ID = 0xb7c13bd9;
 
-    public String phone_number;
+    public TLInputPeer peer;
+    public int max_id;
 
-    public CheckPhone() {
+    public DeleteHistoryL48() {
     }
 
-    public CheckPhone(String phone_number){
-        this.phone_number = phone_number;
+    public DeleteHistoryL48(TLInputPeer peer, int max_id) {
+        this.peer = peer;
+        this.max_id = max_id;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        phone_number = buffer.readString();
+        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        max_id = buffer.readInt();
     }
 
     @Override
@@ -49,11 +53,14 @@ public class CheckPhone extends TLObject implements TLMethod {
         return buffer;
     }
 
+
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
-        buff.writeString(phone_number);
+        buff.writeTLObject(peer);
+        buff.writeInt(max_id);
     }
+
 
     public int getConstructor() {
         return ID;
@@ -61,14 +68,19 @@ public class CheckPhone extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        if (UserStore.getInstance().getUser(clearPhone(phone_number)) == null) {
-            return new CheckedPhone(false, false);
-        } else {
-            return new CheckedPhone(true, false);
-        }
-    }
+        if (context.isAuthorized()) {
+            if (peer instanceof InputPeerUser) {
+                DatabaseConnection.getInstance().deleteHistory(context.getUserId(), ((InputPeerUser) peer).user_id);
+            }
+            if (peer instanceof InputPeerContact) {
+                DatabaseConnection.getInstance().deleteHistory(context.getUserId(), ((InputPeerContact) peer).user_id);
+            }
+            if (peer instanceof InputPeerForeign) {
+                DatabaseConnection.getInstance().deleteHistory(context.getUserId(), ((InputPeerForeign) peer).user_id);
+            }
 
-    public String clearPhone(String phone) {
-        return phone.replace("(", "").replace(")", "").replace(" ", "").replace("-", "").replace("+", "");
+            return new AffectedHistoryL48(0, 0, 0);
+        }
+        return rpc_error.UNAUTHORIZED();
     }
 }
