@@ -26,7 +26,6 @@ public class InitConnection extends TLObject {
 
     public static final int ID = 0x69796de9;
 
-    public TLObject X;
     public int api_id;
     public String device_model;
     public String system_version;
@@ -38,7 +37,6 @@ public class InitConnection extends TLObject {
     }
 
     public InitConnection(TLObject X, int api_id, String device_model, String system_version, String app_version, String lang_code, TLObject query) {
-        this.X = X;
         this.api_id = api_id;
         this.device_model = device_model;
         this.system_version = system_version;
@@ -49,7 +47,6 @@ public class InitConnection extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        X = buffer.readTLObject(APIContext.getInstance());
         api_id = buffer.readInt();
         device_model = buffer.readString();
         system_version = buffer.readString();
@@ -69,7 +66,6 @@ public class InitConnection extends TLObject {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
-        buff.writeTLObject(X);
         buff.writeInt(api_id);
         buff.writeString(device_model);
         buff.writeString(system_version);

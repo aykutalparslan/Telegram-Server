@@ -26,20 +26,17 @@ public class InvokeWithoutUpdates extends TLObject {
 
     public static final int ID = 0xbf9459b7;
 
-    public TLObject X;
     public TLObject query;
 
     public InvokeWithoutUpdates() {
     }
 
     public InvokeWithoutUpdates(TLObject X, TLObject query) {
-        this.X = X;
         this.query = query;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        X = buffer.readTLObject(APIContext.getInstance());
         query = (TLObject) buffer.readTLObject(APIContext.getInstance());
     }
 
@@ -54,7 +51,6 @@ public class InvokeWithoutUpdates extends TLObject {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
-        buff.writeTLObject(X);
         buff.writeTLObject(query);
     }
 

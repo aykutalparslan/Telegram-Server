@@ -26,7 +26,6 @@ public class InvokeAfterMsg extends TLObject {
 
     public static final int ID = 0xcb9f372d;
 
-    public TLObject X;
     public long msg_id;
     public TLObject query;
 
@@ -34,14 +33,12 @@ public class InvokeAfterMsg extends TLObject {
     }
 
     public InvokeAfterMsg(TLObject X, long msg_id, TLObject query) {
-        this.X = X;
         this.msg_id = msg_id;
         this.query = query;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        X = buffer.readTLObject(APIContext.getInstance());
         msg_id = buffer.readLong();
         query = buffer.readTLObject(APIContext.getInstance());
     }
@@ -57,7 +54,6 @@ public class InvokeAfterMsg extends TLObject {
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
-        buff.writeTLObject(X);
         buff.writeLong(msg_id);
         buff.writeTLObject(query);
     }
