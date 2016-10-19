@@ -1,21 +1,3 @@
-/*
- *     This file is part of Telegram Server
- *     Copyright (C) 2015  Aykut Alparslan KOÇ
- *
- *     Telegram Server is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
- *
- *     Telegram Server is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package org.telegram.tl.L57.updates;
 
 import org.telegram.mtproto.ProtocolBuffer;
@@ -24,17 +6,17 @@ import org.telegram.tl.TLVector;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
-public class ChannelDifference extends TLChannelDifference {
+public class ChannelDifference extends org.telegram.tl.updates.TLChannelDifference {
 
     public static final int ID = 0x2064674e;
 
     public int flags;
     public int pts;
     public int timeout;
-    public TLVector<TLMessage> new_messages;
-    public TLVector<TLUpdate> other_updates;
-    public TLVector<TLChat> chats;
-    public TLVector<TLUser> users;
+    public TLVector<org.telegram.tl.TLMessage> new_messages;
+    public TLVector<org.telegram.tl.TLUpdate> other_updates;
+    public TLVector<org.telegram.tl.TLChat> chats;
+    public TLVector<org.telegram.tl.TLUser> users;
 
     public ChannelDifference() {
         this.new_messages = new TLVector<>();
@@ -43,7 +25,7 @@ public class ChannelDifference extends TLChannelDifference {
         this.users = new TLVector<>();
     }
 
-    public ChannelDifference(int flags, int pts, int timeout, TLVector<TLMessage> new_messages, TLVector<TLUpdate> other_updates, TLVector<TLChat> chats, TLVector<TLUser> users) {
+    public ChannelDifference(int flags, int pts, int timeout, TLVector<org.telegram.tl.TLMessage> new_messages, TLVector<org.telegram.tl.TLUpdate> other_updates, TLVector<org.telegram.tl.TLChat> chats, TLVector<org.telegram.tl.TLUser> users) {
         this.flags = flags;
         this.pts = pts;
         this.timeout = timeout;
@@ -60,15 +42,15 @@ public class ChannelDifference extends TLChannelDifference {
         if ((flags & (1 << 1)) != 0) {
             timeout = buffer.readInt();
         }
-        new_messages = (TLVector<TLMessage>) buffer.readTLObject(APIContext.getInstance());
-        other_updates = (TLVector<TLUpdate>) buffer.readTLObject(APIContext.getInstance());
-        chats = (TLVector<TLChat>) buffer.readTLObject(APIContext.getInstance());
-        users = (TLVector<TLUser>) buffer.readTLObject(APIContext.getInstance());
+        new_messages = (TLVector<org.telegram.tl.TLMessage>) buffer.readTLObject(APIContext.getInstance());
+        other_updates = (TLVector<org.telegram.tl.TLUpdate>) buffer.readTLObject(APIContext.getInstance());
+        chats = (TLVector<org.telegram.tl.TLChat>) buffer.readTLObject(APIContext.getInstance());
+        users = (TLVector<org.telegram.tl.TLUser>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(60);
         setFlags();
         serializeTo(buffer);
         return buffer;

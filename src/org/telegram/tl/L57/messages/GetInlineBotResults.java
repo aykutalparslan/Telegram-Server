@@ -29,16 +29,16 @@ public class GetInlineBotResults extends TLObject {
     public static final int ID = 0x514e999d;
 
     public int flags;
-    public TLInputUser bot;
-    public TLInputPeer peer;
-    public TLInputGeoPoint geo_point;
+    public org.telegram.tl.TLInputUser bot;
+    public org.telegram.tl.TLInputPeer peer;
+    public org.telegram.tl.TLInputGeoPoint geo_point;
     public String query;
     public String offset;
 
     public GetInlineBotResults() {
     }
 
-    public GetInlineBotResults(int flags, TLInputUser bot, TLInputPeer peer, TLInputGeoPoint geo_point, String query, String offset) {
+    public GetInlineBotResults(int flags, org.telegram.tl.TLInputUser bot, org.telegram.tl.TLInputPeer peer, org.telegram.tl.TLInputGeoPoint geo_point, String query, String offset) {
         this.flags = flags;
         this.bot = bot;
         this.peer = peer;
@@ -50,10 +50,10 @@ public class GetInlineBotResults extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         flags = buffer.readInt();
-        bot = (TLInputUser) buffer.readTLObject(APIContext.getInstance());
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        bot = (org.telegram.tl.TLInputUser) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         if ((flags & (1 << 0)) != 0) {
-            geo_point = (TLInputGeoPoint) buffer.readTLObject(APIContext.getInstance());
+            geo_point = (org.telegram.tl.TLInputGeoPoint) buffer.readTLObject(APIContext.getInstance());
         }
         query = buffer.readString();
         offset = buffer.readString();
@@ -61,7 +61,7 @@ public class GetInlineBotResults extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(48);
         setFlags();
         serializeTo(buffer);
         return buffer;

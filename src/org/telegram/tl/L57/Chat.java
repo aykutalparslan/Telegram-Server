@@ -1,21 +1,3 @@
-/*
- *     This file is part of Telegram Server
- *     Copyright (C) 2015  Aykut Alparslan KOÇ
- *
- *     Telegram Server is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
- *
- *     Telegram Server is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package org.telegram.tl.L57;
 
 import org.telegram.mtproto.ProtocolBuffer;
@@ -24,23 +6,23 @@ import org.telegram.tl.TLVector;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
-public class Chat extends TLChat {
+public class Chat extends org.telegram.tl.TLChat {
 
     public static final int ID = 0xd91cdd54;
 
     public int flags;
     public int id;
     public String title;
-    public TLChatPhoto photo;
+    public org.telegram.tl.TLChatPhoto photo;
     public int participants_count;
     public int date;
     public int version;
-    public TLInputChannel migrated_to;
+    public org.telegram.tl.TLInputChannel migrated_to;
 
     public Chat() {
     }
 
-    public Chat(int flags, int id, String title, TLChatPhoto photo, int participants_count, int date, int version, TLInputChannel migrated_to) {
+    public Chat(int flags, int id, String title, org.telegram.tl.TLChatPhoto photo, int participants_count, int date, int version, org.telegram.tl.TLInputChannel migrated_to) {
         this.flags = flags;
         this.id = id;
         this.title = title;
@@ -56,18 +38,18 @@ public class Chat extends TLChat {
         flags = buffer.readInt();
         id = buffer.readInt();
         title = buffer.readString();
-        photo = (TLChatPhoto) buffer.readTLObject(APIContext.getInstance());
+        photo = (org.telegram.tl.TLChatPhoto) buffer.readTLObject(APIContext.getInstance());
         participants_count = buffer.readInt();
         date = buffer.readInt();
         version = buffer.readInt();
         if ((flags & (1 << 6)) != 0) {
-            migrated_to = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+            migrated_to = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
         }
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(96);
         setFlags();
         serializeTo(buffer);
         return buffer;

@@ -28,23 +28,23 @@ public class DeleteContact extends TLObject {
 
     public static final int ID = 0x8e953744;
 
-    public TLInputUser id;
+    public org.telegram.tl.TLInputUser id;
 
     public DeleteContact() {
     }
 
-    public DeleteContact(TLInputUser id) {
+    public DeleteContact(org.telegram.tl.TLInputUser id) {
         this.id = id;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        id = (TLInputUser) buffer.readTLObject(APIContext.getInstance());
+        id = (org.telegram.tl.TLInputUser) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(12);
         serializeTo(buffer);
         return buffer;
     }

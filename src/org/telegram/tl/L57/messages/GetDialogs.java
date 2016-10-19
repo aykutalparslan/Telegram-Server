@@ -30,13 +30,13 @@ public class GetDialogs extends TLObject {
 
     public int offset_date;
     public int offset_id;
-    public TLInputPeer offset_peer;
+    public org.telegram.tl.TLInputPeer offset_peer;
     public int limit;
 
     public GetDialogs() {
     }
 
-    public GetDialogs(int offset_date, int offset_id, TLInputPeer offset_peer, int limit) {
+    public GetDialogs(int offset_date, int offset_id, org.telegram.tl.TLInputPeer offset_peer, int limit) {
         this.offset_date = offset_date;
         this.offset_id = offset_id;
         this.offset_peer = offset_peer;
@@ -47,13 +47,13 @@ public class GetDialogs extends TLObject {
     public void deserialize(ProtocolBuffer buffer) {
         offset_date = buffer.readInt();
         offset_id = buffer.readInt();
-        offset_peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        offset_peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         limit = buffer.readInt();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(24);
         serializeTo(buffer);
         return buffer;
     }

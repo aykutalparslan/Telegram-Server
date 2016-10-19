@@ -28,24 +28,24 @@ public class GetPeerDialogs extends TLObject {
 
     public static final int ID = 0x2d9776b9;
 
-    public TLVector<TLInputPeer> peers;
+    public TLVector<org.telegram.tl.TLInputPeer> peers;
 
     public GetPeerDialogs() {
         this.peers = new TLVector<>();
     }
 
-    public GetPeerDialogs(TLVector<TLInputPeer> peers) {
+    public GetPeerDialogs(TLVector<org.telegram.tl.TLInputPeer> peers) {
         this.peers = peers;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        peers = (TLVector<TLInputPeer>) buffer.readTLObject(APIContext.getInstance());
+        peers = (TLVector<org.telegram.tl.TLInputPeer>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(12);
         serializeTo(buffer);
         return buffer;
     }

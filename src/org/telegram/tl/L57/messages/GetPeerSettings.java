@@ -28,23 +28,23 @@ public class GetPeerSettings extends TLObject {
 
     public static final int ID = 0x3672e09c;
 
-    public TLInputPeer peer;
+    public org.telegram.tl.TLInputPeer peer;
 
     public GetPeerSettings() {
     }
 
-    public GetPeerSettings(TLInputPeer peer) {
+    public GetPeerSettings(org.telegram.tl.TLInputPeer peer) {
         this.peer = peer;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(12);
         serializeTo(buffer);
         return buffer;
     }

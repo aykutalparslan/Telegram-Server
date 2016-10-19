@@ -19,7 +19,9 @@
 package org.telegram.tl.L57;
 
 import org.telegram.mtproto.ProtocolBuffer;
-import org.telegram.tl.*;
+import org.telegram.tl.TLObject;
+import org.telegram.tl.TLVector;
+import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
 public class InvokeWithoutUpdates extends TLObject {
@@ -31,7 +33,7 @@ public class InvokeWithoutUpdates extends TLObject {
     public InvokeWithoutUpdates() {
     }
 
-    public InvokeWithoutUpdates(TLObject X, TLObject query) {
+    public InvokeWithoutUpdates(TLObject query) {
         this.query = query;
     }
 
@@ -42,7 +44,7 @@ public class InvokeWithoutUpdates extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(12);
         serializeTo(buffer);
         return buffer;
     }

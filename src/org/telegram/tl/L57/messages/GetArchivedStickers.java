@@ -50,7 +50,7 @@ public class GetArchivedStickers extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(28);
         setFlags();
         serializeTo(buffer);
         return buffer;

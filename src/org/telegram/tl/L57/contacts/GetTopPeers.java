@@ -53,7 +53,7 @@ public class GetTopPeers extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(60);
         setFlags();
         serializeTo(buffer);
         return buffer;

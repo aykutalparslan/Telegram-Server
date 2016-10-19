@@ -1,21 +1,3 @@
-/*
- *     This file is part of Telegram Server
- *     Copyright (C) 2015  Aykut Alparslan KOÇ
- *
- *     Telegram Server is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
- *
- *     Telegram Server is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package org.telegram.tl.L57.messages;
 
 import org.telegram.mtproto.ProtocolBuffer;
@@ -24,13 +6,13 @@ import org.telegram.tl.TLVector;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
-public class Messages extends TLMessages {
+public class Messages extends org.telegram.tl.messages.TLMessages {
 
     public static final int ID = 0x8c718e87;
 
-    public TLVector<TLMessage> messages;
-    public TLVector<TLChat> chats;
-    public TLVector<TLUser> users;
+    public TLVector<org.telegram.tl.TLMessage> messages;
+    public TLVector<org.telegram.tl.TLChat> chats;
+    public TLVector<org.telegram.tl.TLUser> users;
 
     public Messages() {
         this.messages = new TLVector<>();
@@ -38,7 +20,7 @@ public class Messages extends TLMessages {
         this.users = new TLVector<>();
     }
 
-    public Messages(TLVector<TLMessage> messages, TLVector<TLChat> chats, TLVector<TLUser> users) {
+    public Messages(TLVector<org.telegram.tl.TLMessage> messages, TLVector<org.telegram.tl.TLChat> chats, TLVector<org.telegram.tl.TLUser> users) {
         this.messages = messages;
         this.chats = chats;
         this.users = users;
@@ -46,14 +28,14 @@ public class Messages extends TLMessages {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        messages = (TLVector<TLMessage>) buffer.readTLObject(APIContext.getInstance());
-        chats = (TLVector<TLChat>) buffer.readTLObject(APIContext.getInstance());
-        users = (TLVector<TLUser>) buffer.readTLObject(APIContext.getInstance());
+        messages = (TLVector<org.telegram.tl.TLMessage>) buffer.readTLObject(APIContext.getInstance());
+        chats = (TLVector<org.telegram.tl.TLChat>) buffer.readTLObject(APIContext.getInstance());
+        users = (TLVector<org.telegram.tl.TLUser>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(28);
         serializeTo(buffer);
         return buffer;
     }

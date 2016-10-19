@@ -19,7 +19,9 @@
 package org.telegram.tl.L57;
 
 import org.telegram.mtproto.ProtocolBuffer;
-import org.telegram.tl.*;
+import org.telegram.tl.TLObject;
+import org.telegram.tl.TLVector;
+import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
 public class InvokeWithLayer extends TLObject {
@@ -32,7 +34,7 @@ public class InvokeWithLayer extends TLObject {
     public InvokeWithLayer() {
     }
 
-    public InvokeWithLayer(TLObject X, int layer, TLObject query) {
+    public InvokeWithLayer(int layer, TLObject query) {
         this.layer = layer;
         this.query = query;
     }
@@ -40,12 +42,12 @@ public class InvokeWithLayer extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         layer = buffer.readInt();
-        query = buffer.readTLObject(APIContext.getInstance());
+        query = (TLObject) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(16);
         serializeTo(buffer);
         return buffer;
     }

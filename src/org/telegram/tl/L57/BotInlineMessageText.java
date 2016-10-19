@@ -1,21 +1,3 @@
-/*
- *     This file is part of Telegram Server
- *     Copyright (C) 2015  Aykut Alparslan KOÇ
- *
- *     Telegram Server is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
- *
- *     Telegram Server is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package org.telegram.tl.L57;
 
 import org.telegram.mtproto.ProtocolBuffer;
@@ -24,20 +6,20 @@ import org.telegram.tl.TLVector;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
-public class BotInlineMessageText extends TLBotInlineMessage {
+public class BotInlineMessageText extends org.telegram.tl.TLBotInlineMessage {
 
     public static final int ID = 0x8c7f65e2;
 
     public int flags;
     public String message;
-    public TLVector<TLMessageEntity> entities;
-    public TLReplyMarkup reply_markup;
+    public TLVector<org.telegram.tl.TLMessageEntity> entities;
+    public org.telegram.tl.TLReplyMarkup reply_markup;
 
     public BotInlineMessageText() {
         this.entities = new TLVector<>();
     }
 
-    public BotInlineMessageText(int flags, String message, TLVector<TLMessageEntity> entities, TLReplyMarkup reply_markup) {
+    public BotInlineMessageText(int flags, String message, TLVector<org.telegram.tl.TLMessageEntity> entities, org.telegram.tl.TLReplyMarkup reply_markup) {
         this.flags = flags;
         this.message = message;
         this.entities = entities;
@@ -49,16 +31,16 @@ public class BotInlineMessageText extends TLBotInlineMessage {
         flags = buffer.readInt();
         message = buffer.readString();
         if ((flags & (1 << 1)) != 0) {
-            entities = (TLVector<TLMessageEntity>) buffer.readTLVector(TLMessageEntity.class);
+            entities = (TLVector<org.telegram.tl.TLMessageEntity>) buffer.readTLVector(org.telegram.tl.TLMessageEntity.class);
         }
         if ((flags & (1 << 2)) != 0) {
-            reply_markup = (TLReplyMarkup) buffer.readTLObject(APIContext.getInstance());
+            reply_markup = (org.telegram.tl.TLReplyMarkup) buffer.readTLObject(APIContext.getInstance());
         }
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(40);
         setFlags();
         serializeTo(buffer);
         return buffer;

@@ -28,15 +28,15 @@ public class ReportSpam extends TLObject {
 
     public static final int ID = 0xfe087810;
 
-    public TLInputChannel channel;
-    public TLInputUser user_id;
+    public org.telegram.tl.TLInputChannel channel;
+    public org.telegram.tl.TLInputUser user_id;
     public TLVector<Integer> id;
 
     public ReportSpam() {
         this.id = new TLVector<>();
     }
 
-    public ReportSpam(TLInputChannel channel, TLInputUser user_id, TLVector<Integer> id) {
+    public ReportSpam(org.telegram.tl.TLInputChannel channel, org.telegram.tl.TLInputUser user_id, TLVector<Integer> id) {
         this.channel = channel;
         this.user_id = user_id;
         this.id = id;
@@ -44,14 +44,14 @@ public class ReportSpam extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
-        user_id = (TLInputUser) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        user_id = (org.telegram.tl.TLInputUser) buffer.readTLObject(APIContext.getInstance());
         id = (TLVector<Integer>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(28);
         serializeTo(buffer);
         return buffer;
     }

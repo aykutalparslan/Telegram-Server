@@ -29,16 +29,16 @@ public class SendMedia extends TLObject {
     public static final int ID = 0xc8f16791;
 
     public int flags;
-    public TLInputPeer peer;
+    public org.telegram.tl.TLInputPeer peer;
     public int reply_to_msg_id;
-    public TLInputMedia media;
+    public org.telegram.tl.TLInputMedia media;
     public long random_id;
-    public TLReplyMarkup reply_markup;
+    public org.telegram.tl.TLReplyMarkup reply_markup;
 
     public SendMedia() {
     }
 
-    public SendMedia(int flags, TLInputPeer peer, int reply_to_msg_id, TLInputMedia media, long random_id, TLReplyMarkup reply_markup) {
+    public SendMedia(int flags, org.telegram.tl.TLInputPeer peer, int reply_to_msg_id, org.telegram.tl.TLInputMedia media, long random_id, org.telegram.tl.TLReplyMarkup reply_markup) {
         this.flags = flags;
         this.peer = peer;
         this.reply_to_msg_id = reply_to_msg_id;
@@ -50,20 +50,20 @@ public class SendMedia extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         flags = buffer.readInt();
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         if ((flags & (1 << 0)) != 0) {
             reply_to_msg_id = buffer.readInt();
         }
-        media = (TLInputMedia) buffer.readTLObject(APIContext.getInstance());
+        media = (org.telegram.tl.TLInputMedia) buffer.readTLObject(APIContext.getInstance());
         random_id = buffer.readLong();
         if ((flags & (1 << 2)) != 0) {
-            reply_markup = (TLReplyMarkup) buffer.readTLObject(APIContext.getInstance());
+            reply_markup = (org.telegram.tl.TLReplyMarkup) buffer.readTLObject(APIContext.getInstance());
         }
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(72);
         setFlags();
         serializeTo(buffer);
         return buffer;

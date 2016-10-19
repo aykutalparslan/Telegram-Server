@@ -29,16 +29,16 @@ public class EditInlineBotMessage extends TLObject {
     public static final int ID = 0x130c2c85;
 
     public int flags;
-    public TLInputBotInlineMessageID id;
+    public org.telegram.tl.TLInputBotInlineMessageID id;
     public String message;
-    public TLReplyMarkup reply_markup;
-    public TLVector<TLMessageEntity> entities;
+    public org.telegram.tl.TLReplyMarkup reply_markup;
+    public TLVector<org.telegram.tl.TLMessageEntity> entities;
 
     public EditInlineBotMessage() {
         this.entities = new TLVector<>();
     }
 
-    public EditInlineBotMessage(int flags, TLInputBotInlineMessageID id, String message, TLReplyMarkup reply_markup, TLVector<TLMessageEntity> entities) {
+    public EditInlineBotMessage(int flags, org.telegram.tl.TLInputBotInlineMessageID id, String message, org.telegram.tl.TLReplyMarkup reply_markup, TLVector<org.telegram.tl.TLMessageEntity> entities) {
         this.flags = flags;
         this.id = id;
         this.message = message;
@@ -49,21 +49,21 @@ public class EditInlineBotMessage extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         flags = buffer.readInt();
-        id = (TLInputBotInlineMessageID) buffer.readTLObject(APIContext.getInstance());
+        id = (org.telegram.tl.TLInputBotInlineMessageID) buffer.readTLObject(APIContext.getInstance());
         if ((flags & (1 << 11)) != 0) {
             message = buffer.readString();
         }
         if ((flags & (1 << 2)) != 0) {
-            reply_markup = (TLReplyMarkup) buffer.readTLObject(APIContext.getInstance());
+            reply_markup = (org.telegram.tl.TLReplyMarkup) buffer.readTLObject(APIContext.getInstance());
         }
         if ((flags & (1 << 3)) != 0) {
-            entities = (TLVector<TLMessageEntity>) buffer.readTLVector(TLMessageEntity.class);
+            entities = (TLVector<org.telegram.tl.TLMessageEntity>) buffer.readTLVector(org.telegram.tl.TLMessageEntity.class);
         }
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(48);
         setFlags();
         serializeTo(buffer);
         return buffer;

@@ -28,23 +28,23 @@ public class LeaveChannel extends TLObject {
 
     public static final int ID = 0xf836aa95;
 
-    public TLInputChannel channel;
+    public org.telegram.tl.TLInputChannel channel;
 
     public LeaveChannel() {
     }
 
-    public LeaveChannel(TLInputChannel channel) {
+    public LeaveChannel(org.telegram.tl.TLInputChannel channel) {
         this.channel = channel;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(12);
         serializeTo(buffer);
         return buffer;
     }

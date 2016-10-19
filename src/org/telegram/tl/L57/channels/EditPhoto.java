@@ -28,26 +28,26 @@ public class EditPhoto extends TLObject {
 
     public static final int ID = 0xf12e57c9;
 
-    public TLInputChannel channel;
-    public TLInputChatPhoto photo;
+    public org.telegram.tl.TLInputChannel channel;
+    public org.telegram.tl.TLInputChatPhoto photo;
 
     public EditPhoto() {
     }
 
-    public EditPhoto(TLInputChannel channel, TLInputChatPhoto photo) {
+    public EditPhoto(org.telegram.tl.TLInputChannel channel, org.telegram.tl.TLInputChatPhoto photo) {
         this.channel = channel;
         this.photo = photo;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
-        photo = (TLInputChatPhoto) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        photo = (org.telegram.tl.TLInputChatPhoto) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(20);
         serializeTo(buffer);
         return buffer;
     }

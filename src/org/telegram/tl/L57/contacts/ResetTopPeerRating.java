@@ -28,26 +28,26 @@ public class ResetTopPeerRating extends TLObject {
 
     public static final int ID = 0x1ae373ac;
 
-    public TLTopPeerCategory category;
-    public TLInputPeer peer;
+    public org.telegram.tl.TLTopPeerCategory category;
+    public org.telegram.tl.TLInputPeer peer;
 
     public ResetTopPeerRating() {
     }
 
-    public ResetTopPeerRating(TLTopPeerCategory category, TLInputPeer peer) {
+    public ResetTopPeerRating(org.telegram.tl.TLTopPeerCategory category, org.telegram.tl.TLInputPeer peer) {
         this.category = category;
         this.peer = peer;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        category = (TLTopPeerCategory) buffer.readTLObject(APIContext.getInstance());
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        category = (org.telegram.tl.TLTopPeerCategory) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(20);
         serializeTo(buffer);
         return buffer;
     }

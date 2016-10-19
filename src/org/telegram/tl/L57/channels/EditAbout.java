@@ -28,26 +28,26 @@ public class EditAbout extends TLObject {
 
     public static final int ID = 0x13e27f1e;
 
-    public TLInputChannel channel;
+    public org.telegram.tl.TLInputChannel channel;
     public String about;
 
     public EditAbout() {
     }
 
-    public EditAbout(TLInputChannel channel, String about) {
+    public EditAbout(org.telegram.tl.TLInputChannel channel, String about) {
         this.channel = channel;
         this.about = about;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
         about = buffer.readString();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(20);
         serializeTo(buffer);
         return buffer;
     }

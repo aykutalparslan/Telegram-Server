@@ -1,21 +1,3 @@
-/*
- *     This file is part of Telegram Server
- *     Copyright (C) 2015  Aykut Alparslan KOÇ
- *
- *     Telegram Server is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
- *
- *     Telegram Server is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package org.telegram.tl.L57;
 
 import org.telegram.mtproto.ProtocolBuffer;
@@ -24,22 +6,22 @@ import org.telegram.tl.TLVector;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
-public class Message extends TLMessage {
+public class Message extends org.telegram.tl.TLMessage {
 
     public static final int ID = 0xc09be45f;
 
     public int flags;
     public int id;
     public int from_id;
-    public TLPeer to_id;
-    public TLMessageFwdHeader fwd_from;
+    public org.telegram.tl.TLPeer to_id;
+    public org.telegram.tl.TLMessageFwdHeader fwd_from;
     public int via_bot_id;
     public int reply_to_msg_id;
     public int date;
     public String message;
-    public TLMessageMedia media;
-    public TLReplyMarkup reply_markup;
-    public TLVector<TLMessageEntity> entities;
+    public org.telegram.tl.TLMessageMedia media;
+    public org.telegram.tl.TLReplyMarkup reply_markup;
+    public TLVector<org.telegram.tl.TLMessageEntity> entities;
     public int views;
     public int edit_date;
 
@@ -47,7 +29,7 @@ public class Message extends TLMessage {
         this.entities = new TLVector<>();
     }
 
-    public Message(int flags, int id, int from_id, TLPeer to_id, TLMessageFwdHeader fwd_from, int via_bot_id, int reply_to_msg_id, int date, String message, TLMessageMedia media, TLReplyMarkup reply_markup, TLVector<TLMessageEntity> entities, int views, int edit_date) {
+    public Message(int flags, int id, int from_id, org.telegram.tl.TLPeer to_id, org.telegram.tl.TLMessageFwdHeader fwd_from, int via_bot_id, int reply_to_msg_id, int date, String message, org.telegram.tl.TLMessageMedia media, org.telegram.tl.TLReplyMarkup reply_markup, TLVector<org.telegram.tl.TLMessageEntity> entities, int views, int edit_date) {
         this.flags = flags;
         this.id = id;
         this.from_id = from_id;
@@ -71,9 +53,9 @@ public class Message extends TLMessage {
         if ((flags & (1 << 8)) != 0) {
             from_id = buffer.readInt();
         }
-        to_id = (TLPeer) buffer.readTLObject(APIContext.getInstance());
+        to_id = (org.telegram.tl.TLPeer) buffer.readTLObject(APIContext.getInstance());
         if ((flags & (1 << 2)) != 0) {
-            fwd_from = (TLMessageFwdHeader) buffer.readTLObject(APIContext.getInstance());
+            fwd_from = (org.telegram.tl.TLMessageFwdHeader) buffer.readTLObject(APIContext.getInstance());
         }
         if ((flags & (1 << 11)) != 0) {
             via_bot_id = buffer.readInt();
@@ -84,13 +66,13 @@ public class Message extends TLMessage {
         date = buffer.readInt();
         message = buffer.readString();
         if ((flags & (1 << 9)) != 0) {
-            media = (TLMessageMedia) buffer.readTLObject(APIContext.getInstance());
+            media = (org.telegram.tl.TLMessageMedia) buffer.readTLObject(APIContext.getInstance());
         }
         if ((flags & (1 << 6)) != 0) {
-            reply_markup = (TLReplyMarkup) buffer.readTLObject(APIContext.getInstance());
+            reply_markup = (org.telegram.tl.TLReplyMarkup) buffer.readTLObject(APIContext.getInstance());
         }
         if ((flags & (1 << 7)) != 0) {
-            entities = (TLVector<TLMessageEntity>) buffer.readTLVector(TLMessageEntity.class);
+            entities = (TLVector<org.telegram.tl.TLMessageEntity>) buffer.readTLVector(org.telegram.tl.TLMessageEntity.class);
         }
         if ((flags & (1 << 10)) != 0) {
             views = buffer.readInt();
@@ -102,7 +84,7 @@ public class Message extends TLMessage {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(144);
         setFlags();
         serializeTo(buffer);
         return buffer;

@@ -48,7 +48,7 @@ public class UpdatePasswordSettings extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(36);
         serializeTo(buffer);
         return buffer;
     }

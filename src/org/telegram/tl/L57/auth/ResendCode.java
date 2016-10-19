@@ -47,7 +47,7 @@ public class ResendCode extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(20);
         serializeTo(buffer);
         return buffer;
     }

@@ -29,7 +29,7 @@ public class SendInlineBotResult extends TLObject {
     public static final int ID = 0xb16e06fe;
 
     public int flags;
-    public TLInputPeer peer;
+    public org.telegram.tl.TLInputPeer peer;
     public int reply_to_msg_id;
     public long random_id;
     public long query_id;
@@ -38,7 +38,7 @@ public class SendInlineBotResult extends TLObject {
     public SendInlineBotResult() {
     }
 
-    public SendInlineBotResult(int flags, TLInputPeer peer, int reply_to_msg_id, long random_id, long query_id, String id) {
+    public SendInlineBotResult(int flags, org.telegram.tl.TLInputPeer peer, int reply_to_msg_id, long random_id, long query_id, String id) {
         this.flags = flags;
         this.peer = peer;
         this.reply_to_msg_id = reply_to_msg_id;
@@ -50,7 +50,7 @@ public class SendInlineBotResult extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         flags = buffer.readInt();
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         if ((flags & (1 << 0)) != 0) {
             reply_to_msg_id = buffer.readInt();
         }
@@ -61,7 +61,7 @@ public class SendInlineBotResult extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(72);
         setFlags();
         serializeTo(buffer);
         return buffer;

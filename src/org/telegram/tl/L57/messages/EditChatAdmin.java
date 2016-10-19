@@ -29,13 +29,13 @@ public class EditChatAdmin extends TLObject {
     public static final int ID = 0xa9e69f2e;
 
     public int chat_id;
-    public TLInputUser user_id;
+    public org.telegram.tl.TLInputUser user_id;
     public boolean is_admin;
 
     public EditChatAdmin() {
     }
 
-    public EditChatAdmin(int chat_id, TLInputUser user_id, boolean is_admin) {
+    public EditChatAdmin(int chat_id, org.telegram.tl.TLInputUser user_id, boolean is_admin) {
         this.chat_id = chat_id;
         this.user_id = user_id;
         this.is_admin = is_admin;
@@ -44,13 +44,13 @@ public class EditChatAdmin extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         chat_id = buffer.readInt();
-        user_id = (TLInputUser) buffer.readTLObject(APIContext.getInstance());
+        user_id = (org.telegram.tl.TLInputUser) buffer.readTLObject(APIContext.getInstance());
         is_admin = buffer.readBool();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(17);
         serializeTo(buffer);
         return buffer;
     }

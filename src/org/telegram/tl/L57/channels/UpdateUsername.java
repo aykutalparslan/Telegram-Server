@@ -28,26 +28,26 @@ public class UpdateUsername extends TLObject {
 
     public static final int ID = 0x3514b3de;
 
-    public TLInputChannel channel;
+    public org.telegram.tl.TLInputChannel channel;
     public String username;
 
     public UpdateUsername() {
     }
 
-    public UpdateUsername(TLInputChannel channel, String username) {
+    public UpdateUsername(org.telegram.tl.TLInputChannel channel, String username) {
         this.channel = channel;
         this.username = username;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
         username = buffer.readString();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(20);
         serializeTo(buffer);
         return buffer;
     }

@@ -28,14 +28,14 @@ public class SendEncrypted extends TLObject {
 
     public static final int ID = 0xa9776773;
 
-    public TLInputEncryptedChat peer;
+    public org.telegram.tl.TLInputEncryptedChat peer;
     public long random_id;
     public byte[] data;
 
     public SendEncrypted() {
     }
 
-    public SendEncrypted(TLInputEncryptedChat peer, long random_id, byte[] data) {
+    public SendEncrypted(org.telegram.tl.TLInputEncryptedChat peer, long random_id, byte[] data) {
         this.peer = peer;
         this.random_id = random_id;
         this.data = data;
@@ -43,14 +43,14 @@ public class SendEncrypted extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        peer = (TLInputEncryptedChat) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputEncryptedChat) buffer.readTLObject(APIContext.getInstance());
         random_id = buffer.readLong();
         data = buffer.readBytes();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(44);
         serializeTo(buffer);
         return buffer;
     }

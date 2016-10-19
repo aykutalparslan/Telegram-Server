@@ -53,7 +53,7 @@ public class BindTempAuthKey extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(48);
         serializeTo(buffer);
         return buffer;
     }

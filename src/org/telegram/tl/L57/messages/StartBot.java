@@ -28,15 +28,15 @@ public class StartBot extends TLObject {
 
     public static final int ID = 0xe6df7378;
 
-    public TLInputUser bot;
-    public TLInputPeer peer;
+    public org.telegram.tl.TLInputUser bot;
+    public org.telegram.tl.TLInputPeer peer;
     public long random_id;
     public String start_param;
 
     public StartBot() {
     }
 
-    public StartBot(TLInputUser bot, TLInputPeer peer, long random_id, String start_param) {
+    public StartBot(org.telegram.tl.TLInputUser bot, org.telegram.tl.TLInputPeer peer, long random_id, String start_param) {
         this.bot = bot;
         this.peer = peer;
         this.random_id = random_id;
@@ -45,15 +45,15 @@ public class StartBot extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        bot = (TLInputUser) buffer.readTLObject(APIContext.getInstance());
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        bot = (org.telegram.tl.TLInputUser) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         random_id = buffer.readLong();
         start_param = buffer.readString();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(36);
         serializeTo(buffer);
         return buffer;
     }

@@ -28,7 +28,7 @@ public class GetUserPhotos extends TLObject {
 
     public static final int ID = 0x91cd32a8;
 
-    public TLInputUser user_id;
+    public org.telegram.tl.TLInputUser user_id;
     public int offset;
     public long max_id;
     public int limit;
@@ -36,7 +36,7 @@ public class GetUserPhotos extends TLObject {
     public GetUserPhotos() {
     }
 
-    public GetUserPhotos(TLInputUser user_id, int offset, long max_id, int limit) {
+    public GetUserPhotos(org.telegram.tl.TLInputUser user_id, int offset, long max_id, int limit) {
         this.user_id = user_id;
         this.offset = offset;
         this.max_id = max_id;
@@ -45,7 +45,7 @@ public class GetUserPhotos extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        user_id = (TLInputUser) buffer.readTLObject(APIContext.getInstance());
+        user_id = (org.telegram.tl.TLInputUser) buffer.readTLObject(APIContext.getInstance());
         offset = buffer.readInt();
         max_id = buffer.readLong();
         limit = buffer.readInt();
@@ -53,7 +53,7 @@ public class GetUserPhotos extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(28);
         serializeTo(buffer);
         return buffer;
     }

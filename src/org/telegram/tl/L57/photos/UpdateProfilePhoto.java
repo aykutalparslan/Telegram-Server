@@ -28,23 +28,23 @@ public class UpdateProfilePhoto extends TLObject {
 
     public static final int ID = 0xf0bb5152;
 
-    public TLInputPhoto id;
+    public org.telegram.tl.TLInputPhoto id;
 
     public UpdateProfilePhoto() {
     }
 
-    public UpdateProfilePhoto(TLInputPhoto id) {
+    public UpdateProfilePhoto(org.telegram.tl.TLInputPhoto id) {
         this.id = id;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        id = (TLInputPhoto) buffer.readTLObject(APIContext.getInstance());
+        id = (org.telegram.tl.TLInputPhoto) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(12);
         serializeTo(buffer);
         return buffer;
     }

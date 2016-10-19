@@ -29,17 +29,17 @@ public class EditMessage extends TLObject {
     public static final int ID = 0xce91e4ca;
 
     public int flags;
-    public TLInputPeer peer;
+    public org.telegram.tl.TLInputPeer peer;
     public int id;
     public String message;
-    public TLReplyMarkup reply_markup;
-    public TLVector<TLMessageEntity> entities;
+    public org.telegram.tl.TLReplyMarkup reply_markup;
+    public TLVector<org.telegram.tl.TLMessageEntity> entities;
 
     public EditMessage() {
         this.entities = new TLVector<>();
     }
 
-    public EditMessage(int flags, TLInputPeer peer, int id, String message, TLReplyMarkup reply_markup, TLVector<TLMessageEntity> entities) {
+    public EditMessage(int flags, org.telegram.tl.TLInputPeer peer, int id, String message, org.telegram.tl.TLReplyMarkup reply_markup, TLVector<org.telegram.tl.TLMessageEntity> entities) {
         this.flags = flags;
         this.peer = peer;
         this.id = id;
@@ -51,22 +51,22 @@ public class EditMessage extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         flags = buffer.readInt();
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         id = buffer.readInt();
         if ((flags & (1 << 11)) != 0) {
             message = buffer.readString();
         }
         if ((flags & (1 << 2)) != 0) {
-            reply_markup = (TLReplyMarkup) buffer.readTLObject(APIContext.getInstance());
+            reply_markup = (org.telegram.tl.TLReplyMarkup) buffer.readTLObject(APIContext.getInstance());
         }
         if ((flags & (1 << 3)) != 0) {
-            entities = (TLVector<TLMessageEntity>) buffer.readTLVector(TLMessageEntity.class);
+            entities = (TLVector<org.telegram.tl.TLMessageEntity>) buffer.readTLVector(org.telegram.tl.TLMessageEntity.class);
         }
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(52);
         setFlags();
         serializeTo(buffer);
         return buffer;

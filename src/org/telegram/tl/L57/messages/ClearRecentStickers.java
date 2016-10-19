@@ -44,7 +44,7 @@ public class ClearRecentStickers extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(16);
         setFlags();
         serializeTo(buffer);
         return buffer;

@@ -28,15 +28,15 @@ public class GetParticipants extends TLObject {
 
     public static final int ID = 0x24d98f92;
 
-    public TLInputChannel channel;
-    public TLChannelParticipantsFilter filter;
+    public org.telegram.tl.TLInputChannel channel;
+    public org.telegram.tl.TLChannelParticipantsFilter filter;
     public int offset;
     public int limit;
 
     public GetParticipants() {
     }
 
-    public GetParticipants(TLInputChannel channel, TLChannelParticipantsFilter filter, int offset, int limit) {
+    public GetParticipants(org.telegram.tl.TLInputChannel channel, org.telegram.tl.TLChannelParticipantsFilter filter, int offset, int limit) {
         this.channel = channel;
         this.filter = filter;
         this.offset = offset;
@@ -45,15 +45,15 @@ public class GetParticipants extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
-        filter = (TLChannelParticipantsFilter) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        filter = (org.telegram.tl.TLChannelParticipantsFilter) buffer.readTLObject(APIContext.getInstance());
         offset = buffer.readInt();
         limit = buffer.readInt();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(28);
         serializeTo(buffer);
         return buffer;
     }

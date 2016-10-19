@@ -28,27 +28,27 @@ public class InviteToChannel extends TLObject {
 
     public static final int ID = 0x199f3a6c;
 
-    public TLInputChannel channel;
-    public TLVector<TLInputUser> users;
+    public org.telegram.tl.TLInputChannel channel;
+    public TLVector<org.telegram.tl.TLInputUser> users;
 
     public InviteToChannel() {
         this.users = new TLVector<>();
     }
 
-    public InviteToChannel(TLInputChannel channel, TLVector<TLInputUser> users) {
+    public InviteToChannel(org.telegram.tl.TLInputChannel channel, TLVector<org.telegram.tl.TLInputUser> users) {
         this.channel = channel;
         this.users = users;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
-        users = (TLVector<TLInputUser>) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        users = (TLVector<org.telegram.tl.TLInputUser>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(20);
         serializeTo(buffer);
         return buffer;
     }

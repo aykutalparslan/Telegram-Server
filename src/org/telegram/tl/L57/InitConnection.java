@@ -19,7 +19,9 @@
 package org.telegram.tl.L57;
 
 import org.telegram.mtproto.ProtocolBuffer;
-import org.telegram.tl.*;
+import org.telegram.tl.TLObject;
+import org.telegram.tl.TLVector;
+import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
 public class InitConnection extends TLObject {
@@ -36,7 +38,7 @@ public class InitConnection extends TLObject {
     public InitConnection() {
     }
 
-    public InitConnection(TLObject X, int api_id, String device_model, String system_version, String app_version, String lang_code, TLObject query) {
+    public InitConnection(int api_id, String device_model, String system_version, String app_version, String lang_code, TLObject query) {
         this.api_id = api_id;
         this.device_model = device_model;
         this.system_version = system_version;
@@ -52,12 +54,12 @@ public class InitConnection extends TLObject {
         system_version = buffer.readString();
         app_version = buffer.readString();
         lang_code = buffer.readString();
-        query = buffer.readTLObject(APIContext.getInstance());
+        query = (TLObject) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(48);
         serializeTo(buffer);
         return buffer;
     }

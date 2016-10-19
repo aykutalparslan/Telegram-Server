@@ -28,24 +28,24 @@ public class SaveAppLog extends TLObject {
 
     public static final int ID = 0x6f02f748;
 
-    public TLVector<TLInputAppEvent> events;
+    public TLVector<org.telegram.tl.TLInputAppEvent> events;
 
     public SaveAppLog() {
         this.events = new TLVector<>();
     }
 
-    public SaveAppLog(TLVector<TLInputAppEvent> events) {
+    public SaveAppLog(TLVector<org.telegram.tl.TLInputAppEvent> events) {
         this.events = events;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        events = (TLVector<TLInputAppEvent>) buffer.readTLObject(APIContext.getInstance());
+        events = (TLVector<org.telegram.tl.TLInputAppEvent>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(12);
         serializeTo(buffer);
         return buffer;
     }

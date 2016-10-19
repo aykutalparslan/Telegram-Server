@@ -28,24 +28,24 @@ public class DeletePhotos extends TLObject {
 
     public static final int ID = 0x87cf7f2f;
 
-    public TLVector<TLInputPhoto> id;
+    public TLVector<org.telegram.tl.TLInputPhoto> id;
 
     public DeletePhotos() {
         this.id = new TLVector<>();
     }
 
-    public DeletePhotos(TLVector<TLInputPhoto> id) {
+    public DeletePhotos(TLVector<org.telegram.tl.TLInputPhoto> id) {
         this.id = id;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        id = (TLVector<TLInputPhoto>) buffer.readTLObject(APIContext.getInstance());
+        id = (TLVector<org.telegram.tl.TLInputPhoto>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(12);
         serializeTo(buffer);
         return buffer;
     }

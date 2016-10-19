@@ -28,14 +28,14 @@ public class EditAdmin extends TLObject {
 
     public static final int ID = 0xeb7611d0;
 
-    public TLInputChannel channel;
-    public TLInputUser user_id;
-    public TLChannelParticipantRole role;
+    public org.telegram.tl.TLInputChannel channel;
+    public org.telegram.tl.TLInputUser user_id;
+    public org.telegram.tl.TLChannelParticipantRole role;
 
     public EditAdmin() {
     }
 
-    public EditAdmin(TLInputChannel channel, TLInputUser user_id, TLChannelParticipantRole role) {
+    public EditAdmin(org.telegram.tl.TLInputChannel channel, org.telegram.tl.TLInputUser user_id, org.telegram.tl.TLChannelParticipantRole role) {
         this.channel = channel;
         this.user_id = user_id;
         this.role = role;
@@ -43,14 +43,14 @@ public class EditAdmin extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
-        user_id = (TLInputUser) buffer.readTLObject(APIContext.getInstance());
-        role = (TLChannelParticipantRole) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        user_id = (org.telegram.tl.TLInputUser) buffer.readTLObject(APIContext.getInstance());
+        role = (org.telegram.tl.TLChannelParticipantRole) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(28);
         serializeTo(buffer);
         return buffer;
     }

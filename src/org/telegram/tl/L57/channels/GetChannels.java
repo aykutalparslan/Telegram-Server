@@ -28,24 +28,24 @@ public class GetChannels extends TLObject {
 
     public static final int ID = 0xa7f6bbb;
 
-    public TLVector<TLInputChannel> id;
+    public TLVector<org.telegram.tl.TLInputChannel> id;
 
     public GetChannels() {
         this.id = new TLVector<>();
     }
 
-    public GetChannels(TLVector<TLInputChannel> id) {
+    public GetChannels(TLVector<org.telegram.tl.TLInputChannel> id) {
         this.id = id;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        id = (TLVector<TLInputChannel>) buffer.readTLObject(APIContext.getInstance());
+        id = (TLVector<org.telegram.tl.TLInputChannel>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(12);
         serializeTo(buffer);
         return buffer;
     }

@@ -19,7 +19,9 @@
 package org.telegram.tl.L57;
 
 import org.telegram.mtproto.ProtocolBuffer;
-import org.telegram.tl.*;
+import org.telegram.tl.TLObject;
+import org.telegram.tl.TLVector;
+import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
 public class InvokeAfterMsg extends TLObject {
@@ -32,7 +34,7 @@ public class InvokeAfterMsg extends TLObject {
     public InvokeAfterMsg() {
     }
 
-    public InvokeAfterMsg(TLObject X, long msg_id, TLObject query) {
+    public InvokeAfterMsg(long msg_id, TLObject query) {
         this.msg_id = msg_id;
         this.query = query;
     }
@@ -40,12 +42,12 @@ public class InvokeAfterMsg extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         msg_id = buffer.readLong();
-        query = buffer.readTLObject(APIContext.getInstance());
+        query = (TLObject) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(20);
         serializeTo(buffer);
         return buffer;
     }

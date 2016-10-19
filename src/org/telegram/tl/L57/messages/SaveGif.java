@@ -28,26 +28,26 @@ public class SaveGif extends TLObject {
 
     public static final int ID = 0x327a30cb;
 
-    public TLInputDocument id;
+    public org.telegram.tl.TLInputDocument id;
     public boolean unsave;
 
     public SaveGif() {
     }
 
-    public SaveGif(TLInputDocument id, boolean unsave) {
+    public SaveGif(org.telegram.tl.TLInputDocument id, boolean unsave) {
         this.id = id;
         this.unsave = unsave;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        id = (TLInputDocument) buffer.readTLObject(APIContext.getInstance());
+        id = (org.telegram.tl.TLInputDocument) buffer.readTLObject(APIContext.getInstance());
         unsave = buffer.readBool();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(13);
         serializeTo(buffer);
         return buffer;
     }

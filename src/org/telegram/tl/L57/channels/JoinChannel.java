@@ -28,23 +28,23 @@ public class JoinChannel extends TLObject {
 
     public static final int ID = 0x24b524c5;
 
-    public TLInputChannel channel;
+    public org.telegram.tl.TLInputChannel channel;
 
     public JoinChannel() {
     }
 
-    public JoinChannel(TLInputChannel channel) {
+    public JoinChannel(org.telegram.tl.TLInputChannel channel) {
         this.channel = channel;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(12);
         serializeTo(buffer);
         return buffer;
     }

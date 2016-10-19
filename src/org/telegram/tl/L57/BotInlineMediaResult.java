@@ -1,21 +1,3 @@
-/*
- *     This file is part of Telegram Server
- *     Copyright (C) 2015  Aykut Alparslan KOÇ
- *
- *     Telegram Server is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
- *
- *     Telegram Server is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package org.telegram.tl.L57;
 
 import org.telegram.mtproto.ProtocolBuffer;
@@ -24,23 +6,23 @@ import org.telegram.tl.TLVector;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
-public class BotInlineMediaResult extends TLBotInlineResult {
+public class BotInlineMediaResult extends org.telegram.tl.TLBotInlineResult {
 
     public static final int ID = 0x17db940b;
 
     public int flags;
     public String id;
     public String type;
-    public TLPhoto photo;
-    public TLDocument document;
+    public org.telegram.tl.photos.TLPhoto photo;
+    public org.telegram.tl.TLDocument document;
     public String title;
     public String description;
-    public TLBotInlineMessage send_message;
+    public org.telegram.tl.TLBotInlineMessage send_message;
 
     public BotInlineMediaResult() {
     }
 
-    public BotInlineMediaResult(int flags, String id, String type, TLPhoto photo, TLDocument document, String title, String description, TLBotInlineMessage send_message) {
+    public BotInlineMediaResult(int flags, String id, String type, org.telegram.tl.photos.TLPhoto photo, org.telegram.tl.TLDocument document, String title, String description, org.telegram.tl.TLBotInlineMessage send_message) {
         this.flags = flags;
         this.id = id;
         this.type = type;
@@ -57,10 +39,10 @@ public class BotInlineMediaResult extends TLBotInlineResult {
         id = buffer.readString();
         type = buffer.readString();
         if ((flags & (1 << 0)) != 0) {
-            photo = (TLPhoto) buffer.readTLObject(APIContext.getInstance());
+            photo = (org.telegram.tl.photos.TLPhoto) buffer.readTLObject(APIContext.getInstance());
         }
         if ((flags & (1 << 1)) != 0) {
-            document = (TLDocument) buffer.readTLObject(APIContext.getInstance());
+            document = (org.telegram.tl.TLDocument) buffer.readTLObject(APIContext.getInstance());
         }
         if ((flags & (1 << 2)) != 0) {
             title = buffer.readString();
@@ -68,12 +50,12 @@ public class BotInlineMediaResult extends TLBotInlineResult {
         if ((flags & (1 << 3)) != 0) {
             description = buffer.readString();
         }
-        send_message = (TLBotInlineMessage) buffer.readTLObject(APIContext.getInstance());
+        send_message = (org.telegram.tl.TLBotInlineMessage) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(64);
         setFlags();
         serializeTo(buffer);
         return buffer;

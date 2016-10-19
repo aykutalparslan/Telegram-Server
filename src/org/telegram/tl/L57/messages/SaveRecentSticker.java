@@ -29,13 +29,13 @@ public class SaveRecentSticker extends TLObject {
     public static final int ID = 0x392718f8;
 
     public int flags;
-    public TLInputDocument id;
+    public org.telegram.tl.TLInputDocument id;
     public boolean unsave;
 
     public SaveRecentSticker() {
     }
 
-    public SaveRecentSticker(int flags, TLInputDocument id, boolean unsave) {
+    public SaveRecentSticker(int flags, org.telegram.tl.TLInputDocument id, boolean unsave) {
         this.flags = flags;
         this.id = id;
         this.unsave = unsave;
@@ -44,13 +44,13 @@ public class SaveRecentSticker extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         flags = buffer.readInt();
-        id = (TLInputDocument) buffer.readTLObject(APIContext.getInstance());
+        id = (org.telegram.tl.TLInputDocument) buffer.readTLObject(APIContext.getInstance());
         unsave = buffer.readBool();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(25);
         setFlags();
         serializeTo(buffer);
         return buffer;

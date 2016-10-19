@@ -29,12 +29,12 @@ public class EditChatPhoto extends TLObject {
     public static final int ID = 0xca4c79d8;
 
     public int chat_id;
-    public TLInputChatPhoto photo;
+    public org.telegram.tl.TLInputChatPhoto photo;
 
     public EditChatPhoto() {
     }
 
-    public EditChatPhoto(int chat_id, TLInputChatPhoto photo) {
+    public EditChatPhoto(int chat_id, org.telegram.tl.TLInputChatPhoto photo) {
         this.chat_id = chat_id;
         this.photo = photo;
     }
@@ -42,12 +42,12 @@ public class EditChatPhoto extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         chat_id = buffer.readInt();
-        photo = (TLInputChatPhoto) buffer.readTLObject(APIContext.getInstance());
+        photo = (org.telegram.tl.TLInputChatPhoto) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(16);
         serializeTo(buffer);
         return buffer;
     }

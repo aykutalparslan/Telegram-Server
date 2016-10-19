@@ -1,21 +1,3 @@
-/*
- *     This file is part of Telegram Server
- *     Copyright (C) 2015  Aykut Alparslan KOÇ
- *
- *     Telegram Server is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
- *
- *     Telegram Server is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package org.telegram.tl.L57.messages;
 
 import org.telegram.mtproto.ProtocolBuffer;
@@ -24,21 +6,21 @@ import org.telegram.tl.TLVector;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
-public class BotResults extends TLBotResults {
+public class BotResults extends org.telegram.tl.messages.TLBotResults {
 
     public static final int ID = 0x256709a6;
 
     public int flags;
     public long query_id;
     public String next_offset;
-    public TLInlineBotSwitchPM switch_pm;
-    public TLVector<TLBotInlineResult> results;
+    public org.telegram.tl.TLInlineBotSwitchPM switch_pm;
+    public TLVector<org.telegram.tl.TLBotInlineResult> results;
 
     public BotResults() {
         this.results = new TLVector<>();
     }
 
-    public BotResults(int flags, long query_id, String next_offset, TLInlineBotSwitchPM switch_pm, TLVector<TLBotInlineResult> results) {
+    public BotResults(int flags, long query_id, String next_offset, org.telegram.tl.TLInlineBotSwitchPM switch_pm, TLVector<org.telegram.tl.TLBotInlineResult> results) {
         this.flags = flags;
         this.query_id = query_id;
         this.next_offset = next_offset;
@@ -54,14 +36,14 @@ public class BotResults extends TLBotResults {
             next_offset = buffer.readString();
         }
         if ((flags & (1 << 2)) != 0) {
-            switch_pm = (TLInlineBotSwitchPM) buffer.readTLObject(APIContext.getInstance());
+            switch_pm = (org.telegram.tl.TLInlineBotSwitchPM) buffer.readTLObject(APIContext.getInstance());
         }
-        results = (TLVector<TLBotInlineResult>) buffer.readTLObject(APIContext.getInstance());
+        results = (TLVector<org.telegram.tl.TLBotInlineResult>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(48);
         setFlags();
         serializeTo(buffer);
         return buffer;

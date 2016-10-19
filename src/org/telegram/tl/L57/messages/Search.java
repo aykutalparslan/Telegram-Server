@@ -29,9 +29,9 @@ public class Search extends TLObject {
     public static final int ID = 0xd4569248;
 
     public int flags;
-    public TLInputPeer peer;
+    public org.telegram.tl.TLInputPeer peer;
     public String q;
-    public TLMessagesFilter filter;
+    public org.telegram.tl.TLMessagesFilter filter;
     public int min_date;
     public int max_date;
     public int offset;
@@ -41,7 +41,7 @@ public class Search extends TLObject {
     public Search() {
     }
 
-    public Search(int flags, TLInputPeer peer, String q, TLMessagesFilter filter, int min_date, int max_date, int offset, int max_id, int limit) {
+    public Search(int flags, org.telegram.tl.TLInputPeer peer, String q, org.telegram.tl.TLMessagesFilter filter, int min_date, int max_date, int offset, int max_id, int limit) {
         this.flags = flags;
         this.peer = peer;
         this.q = q;
@@ -56,9 +56,9 @@ public class Search extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         flags = buffer.readInt();
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         q = buffer.readString();
-        filter = (TLMessagesFilter) buffer.readTLObject(APIContext.getInstance());
+        filter = (org.telegram.tl.TLMessagesFilter) buffer.readTLObject(APIContext.getInstance());
         min_date = buffer.readInt();
         max_date = buffer.readInt();
         offset = buffer.readInt();
@@ -68,7 +68,7 @@ public class Search extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(52);
         serializeTo(buffer);
         return buffer;
     }

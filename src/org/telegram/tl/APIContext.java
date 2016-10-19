@@ -590,7 +590,9 @@ public class APIContext implements DeserializationContext {
                 schema = new HashMap<>();
             }
             int constructor = type.getField("ID").getInt(null);
-            schema.put(constructor, type);
+            if (schema.get(constructor) == null) {
+                schema.put(constructor, type);
+            }
         } catch (Exception e) {
 
         }

@@ -28,26 +28,26 @@ public class InstallStickerSet extends TLObject {
 
     public static final int ID = 0xc78fe460;
 
-    public TLInputStickerSet stickerset;
+    public org.telegram.tl.TLInputStickerSet stickerset;
     public boolean archived;
 
     public InstallStickerSet() {
     }
 
-    public InstallStickerSet(TLInputStickerSet stickerset, boolean archived) {
+    public InstallStickerSet(org.telegram.tl.TLInputStickerSet stickerset, boolean archived) {
         this.stickerset = stickerset;
         this.archived = archived;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        stickerset = (TLInputStickerSet) buffer.readTLObject(APIContext.getInstance());
+        stickerset = (org.telegram.tl.TLInputStickerSet) buffer.readTLObject(APIContext.getInstance());
         archived = buffer.readBool();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(13);
         serializeTo(buffer);
         return buffer;
     }

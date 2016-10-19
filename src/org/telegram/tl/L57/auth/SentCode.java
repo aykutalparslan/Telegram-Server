@@ -61,7 +61,7 @@ public class SentCode extends TLSentCode {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(48);
         setFlags();
         serializeTo(buffer);
         return buffer;

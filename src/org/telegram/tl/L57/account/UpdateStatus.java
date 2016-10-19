@@ -44,7 +44,7 @@ public class UpdateStatus extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(5);
         serializeTo(buffer);
         return buffer;
     }

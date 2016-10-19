@@ -25,22 +25,22 @@ import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 import org.telegram.tl.contacts.*;
 
-public class UserFull extends TLUserFull {
+public class UserFull extends org.telegram.tl.TLUserFull {
 
     public static final int ID = 0x5932fc03;
 
     public int flags;
-    public TLUser user;
+    public org.telegram.tl.TLUser user;
     public String about;
     public TLLink link;
-    public TLPhoto profile_photo;
-    public TLPeerNotifySettings notify_settings;
-    public TLBotInfo bot_info;
+    public org.telegram.tl.photos.TLPhoto profile_photo;
+    public org.telegram.tl.TLPeerNotifySettings notify_settings;
+    public org.telegram.tl.TLBotInfo bot_info;
 
     public UserFull() {
     }
 
-    public UserFull(int flags, TLUser user, String about, TLLink link, TLPhoto profile_photo, TLPeerNotifySettings notify_settings, TLBotInfo bot_info) {
+    public UserFull(int flags, org.telegram.tl.TLUser user, String about, TLLink link, org.telegram.tl.photos.TLPhoto profile_photo, org.telegram.tl.TLPeerNotifySettings notify_settings, org.telegram.tl.TLBotInfo bot_info) {
         this.flags = flags;
         this.user = user;
         this.about = about;
@@ -53,23 +53,23 @@ public class UserFull extends TLUserFull {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         flags = buffer.readInt();
-        user = (TLUser) buffer.readTLObject(APIContext.getInstance());
+        user = (org.telegram.tl.TLUser) buffer.readTLObject(APIContext.getInstance());
         if ((flags & (1 << 1)) != 0) {
             about = buffer.readString();
         }
         link = (TLLink) buffer.readTLObject(APIContext.getInstance());
         if ((flags & (1 << 2)) != 0) {
-            profile_photo = (TLPhoto) buffer.readTLObject(APIContext.getInstance());
+            profile_photo = (org.telegram.tl.photos.TLPhoto) buffer.readTLObject(APIContext.getInstance());
         }
-        notify_settings = (TLPeerNotifySettings) buffer.readTLObject(APIContext.getInstance());
+        notify_settings = (org.telegram.tl.TLPeerNotifySettings) buffer.readTLObject(APIContext.getInstance());
         if ((flags & (1 << 3)) != 0) {
-            bot_info = (TLBotInfo) buffer.readTLObject(APIContext.getInstance());
+            bot_info = (org.telegram.tl.TLBotInfo) buffer.readTLObject(APIContext.getInstance());
         }
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(64);
         setFlags();
         serializeTo(buffer);
         return buffer;

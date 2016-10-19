@@ -28,26 +28,26 @@ public class ToggleSignatures extends TLObject {
 
     public static final int ID = 0x1f69b606;
 
-    public TLInputChannel channel;
+    public org.telegram.tl.TLInputChannel channel;
     public boolean enabled;
 
     public ToggleSignatures() {
     }
 
-    public ToggleSignatures(TLInputChannel channel, boolean enabled) {
+    public ToggleSignatures(org.telegram.tl.TLInputChannel channel, boolean enabled) {
         this.channel = channel;
         this.enabled = enabled;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
         enabled = buffer.readBool();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(13);
         serializeTo(buffer);
         return buffer;
     }

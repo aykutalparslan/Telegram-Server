@@ -29,13 +29,13 @@ public class UpdatePinnedMessage extends TLObject {
     public static final int ID = 0xa72ded52;
 
     public int flags;
-    public TLInputChannel channel;
+    public org.telegram.tl.TLInputChannel channel;
     public int id;
 
     public UpdatePinnedMessage() {
     }
 
-    public UpdatePinnedMessage(int flags, TLInputChannel channel, int id) {
+    public UpdatePinnedMessage(int flags, org.telegram.tl.TLInputChannel channel, int id) {
         this.flags = flags;
         this.channel = channel;
         this.id = id;
@@ -44,13 +44,13 @@ public class UpdatePinnedMessage extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         flags = buffer.readInt();
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
         id = buffer.readInt();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(28);
         setFlags();
         serializeTo(buffer);
         return buffer;

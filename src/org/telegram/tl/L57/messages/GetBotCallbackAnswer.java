@@ -29,14 +29,14 @@ public class GetBotCallbackAnswer extends TLObject {
     public static final int ID = 0x810a9fec;
 
     public int flags;
-    public TLInputPeer peer;
+    public org.telegram.tl.TLInputPeer peer;
     public int msg_id;
     public byte[] data;
 
     public GetBotCallbackAnswer() {
     }
 
-    public GetBotCallbackAnswer(int flags, TLInputPeer peer, int msg_id, byte[] data) {
+    public GetBotCallbackAnswer(int flags, org.telegram.tl.TLInputPeer peer, int msg_id, byte[] data) {
         this.flags = flags;
         this.peer = peer;
         this.msg_id = msg_id;
@@ -46,7 +46,7 @@ public class GetBotCallbackAnswer extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         flags = buffer.readInt();
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         msg_id = buffer.readInt();
         if ((flags & (1 << 0)) != 0) {
             data = buffer.readBytes();
@@ -55,7 +55,7 @@ public class GetBotCallbackAnswer extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(36);
         setFlags();
         serializeTo(buffer);
         return buffer;

@@ -28,23 +28,23 @@ public class UninstallStickerSet extends TLObject {
 
     public static final int ID = 0xf96e55de;
 
-    public TLInputStickerSet stickerset;
+    public org.telegram.tl.TLInputStickerSet stickerset;
 
     public UninstallStickerSet() {
     }
 
-    public UninstallStickerSet(TLInputStickerSet stickerset) {
+    public UninstallStickerSet(org.telegram.tl.TLInputStickerSet stickerset) {
         this.stickerset = stickerset;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        stickerset = (TLInputStickerSet) buffer.readTLObject(APIContext.getInstance());
+        stickerset = (org.telegram.tl.TLInputStickerSet) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(12);
         serializeTo(buffer);
         return buffer;
     }

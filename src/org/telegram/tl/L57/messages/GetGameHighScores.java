@@ -28,14 +28,14 @@ public class GetGameHighScores extends TLObject {
 
     public static final int ID = 0xe822649d;
 
-    public TLInputPeer peer;
+    public org.telegram.tl.TLInputPeer peer;
     public int id;
-    public TLInputUser user_id;
+    public org.telegram.tl.TLInputUser user_id;
 
     public GetGameHighScores() {
     }
 
-    public GetGameHighScores(TLInputPeer peer, int id, TLInputUser user_id) {
+    public GetGameHighScores(org.telegram.tl.TLInputPeer peer, int id, org.telegram.tl.TLInputUser user_id) {
         this.peer = peer;
         this.id = id;
         this.user_id = user_id;
@@ -43,14 +43,14 @@ public class GetGameHighScores extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         id = buffer.readInt();
-        user_id = (TLInputUser) buffer.readTLObject(APIContext.getInstance());
+        user_id = (org.telegram.tl.TLInputUser) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(24);
         serializeTo(buffer);
         return buffer;
     }

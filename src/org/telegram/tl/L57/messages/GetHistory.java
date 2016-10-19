@@ -28,7 +28,7 @@ public class GetHistory extends TLObject {
 
     public static final int ID = 0xafa92846;
 
-    public TLInputPeer peer;
+    public org.telegram.tl.TLInputPeer peer;
     public int offset_id;
     public int offset_date;
     public int add_offset;
@@ -39,7 +39,7 @@ public class GetHistory extends TLObject {
     public GetHistory() {
     }
 
-    public GetHistory(TLInputPeer peer, int offset_id, int offset_date, int add_offset, int limit, int max_id, int min_id) {
+    public GetHistory(org.telegram.tl.TLInputPeer peer, int offset_id, int offset_date, int add_offset, int limit, int max_id, int min_id) {
         this.peer = peer;
         this.offset_id = offset_id;
         this.offset_date = offset_date;
@@ -51,7 +51,7 @@ public class GetHistory extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         offset_id = buffer.readInt();
         offset_date = buffer.readInt();
         add_offset = buffer.readInt();
@@ -62,7 +62,7 @@ public class GetHistory extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(36);
         serializeTo(buffer);
         return buffer;
     }

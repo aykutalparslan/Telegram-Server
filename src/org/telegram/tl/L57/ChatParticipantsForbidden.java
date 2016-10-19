@@ -1,21 +1,3 @@
-/*
- *     This file is part of Telegram Server
- *     Copyright (C) 2015  Aykut Alparslan KOÇ
- *
- *     Telegram Server is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
- *
- *     Telegram Server is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package org.telegram.tl.L57;
 
 import org.telegram.mtproto.ProtocolBuffer;
@@ -24,18 +6,18 @@ import org.telegram.tl.TLVector;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
-public class ChatParticipantsForbidden extends TLChatParticipants {
+public class ChatParticipantsForbidden extends org.telegram.tl.TLChatParticipants {
 
     public static final int ID = 0xfc900c2b;
 
     public int flags;
     public int chat_id;
-    public TLChatParticipant self_participant;
+    public org.telegram.tl.TLChatParticipant self_participant;
 
     public ChatParticipantsForbidden() {
     }
 
-    public ChatParticipantsForbidden(int flags, int chat_id, TLChatParticipant self_participant) {
+    public ChatParticipantsForbidden(int flags, int chat_id, org.telegram.tl.TLChatParticipant self_participant) {
         this.flags = flags;
         this.chat_id = chat_id;
         this.self_participant = self_participant;
@@ -46,13 +28,13 @@ public class ChatParticipantsForbidden extends TLChatParticipants {
         flags = buffer.readInt();
         chat_id = buffer.readInt();
         if ((flags & (1 << 0)) != 0) {
-            self_participant = (TLChatParticipant) buffer.readTLObject(APIContext.getInstance());
+            self_participant = (org.telegram.tl.TLChatParticipant) buffer.readTLObject(APIContext.getInstance());
         }
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(20);
         setFlags();
         serializeTo(buffer);
         return buffer;

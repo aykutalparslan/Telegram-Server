@@ -28,15 +28,15 @@ public class SendEncryptedFile extends TLObject {
 
     public static final int ID = 0x9a901b66;
 
-    public TLInputEncryptedChat peer;
+    public org.telegram.tl.TLInputEncryptedChat peer;
     public long random_id;
     public byte[] data;
-    public TLInputEncryptedFile file;
+    public org.telegram.tl.TLInputEncryptedFile file;
 
     public SendEncryptedFile() {
     }
 
-    public SendEncryptedFile(TLInputEncryptedChat peer, long random_id, byte[] data, TLInputEncryptedFile file) {
+    public SendEncryptedFile(org.telegram.tl.TLInputEncryptedChat peer, long random_id, byte[] data, org.telegram.tl.TLInputEncryptedFile file) {
         this.peer = peer;
         this.random_id = random_id;
         this.data = data;
@@ -45,15 +45,15 @@ public class SendEncryptedFile extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        peer = (TLInputEncryptedChat) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputEncryptedChat) buffer.readTLObject(APIContext.getInstance());
         random_id = buffer.readLong();
         data = buffer.readBytes();
-        file = (TLInputEncryptedFile) buffer.readTLObject(APIContext.getInstance());
+        file = (org.telegram.tl.TLInputEncryptedFile) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(52);
         serializeTo(buffer);
         return buffer;
     }

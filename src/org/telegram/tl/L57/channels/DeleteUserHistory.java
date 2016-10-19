@@ -28,26 +28,26 @@ public class DeleteUserHistory extends TLObject {
 
     public static final int ID = 0xd10dd71b;
 
-    public TLInputChannel channel;
-    public TLInputUser user_id;
+    public org.telegram.tl.TLInputChannel channel;
+    public org.telegram.tl.TLInputUser user_id;
 
     public DeleteUserHistory() {
     }
 
-    public DeleteUserHistory(TLInputChannel channel, TLInputUser user_id) {
+    public DeleteUserHistory(org.telegram.tl.TLInputChannel channel, org.telegram.tl.TLInputUser user_id) {
         this.channel = channel;
         this.user_id = user_id;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
-        user_id = (TLInputUser) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        user_id = (org.telegram.tl.TLInputUser) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(20);
         serializeTo(buffer);
         return buffer;
     }

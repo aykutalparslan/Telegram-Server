@@ -29,14 +29,14 @@ public class SetInlineGameScore extends TLObject {
     public static final int ID = 0x15ad9f64;
 
     public int flags;
-    public TLInputBotInlineMessageID id;
-    public TLInputUser user_id;
+    public org.telegram.tl.TLInputBotInlineMessageID id;
+    public org.telegram.tl.TLInputUser user_id;
     public int score;
 
     public SetInlineGameScore() {
     }
 
-    public SetInlineGameScore(int flags, TLInputBotInlineMessageID id, TLInputUser user_id, int score) {
+    public SetInlineGameScore(int flags, org.telegram.tl.TLInputBotInlineMessageID id, org.telegram.tl.TLInputUser user_id, int score) {
         this.flags = flags;
         this.id = id;
         this.user_id = user_id;
@@ -46,14 +46,14 @@ public class SetInlineGameScore extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         flags = buffer.readInt();
-        id = (TLInputBotInlineMessageID) buffer.readTLObject(APIContext.getInstance());
-        user_id = (TLInputUser) buffer.readTLObject(APIContext.getInstance());
+        id = (org.telegram.tl.TLInputBotInlineMessageID) buffer.readTLObject(APIContext.getInstance());
+        user_id = (org.telegram.tl.TLInputUser) buffer.readTLObject(APIContext.getInstance());
         score = buffer.readInt();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(36);
         setFlags();
         serializeTo(buffer);
         return buffer;

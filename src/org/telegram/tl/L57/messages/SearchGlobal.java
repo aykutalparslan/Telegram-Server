@@ -30,14 +30,14 @@ public class SearchGlobal extends TLObject {
 
     public String q;
     public int offset_date;
-    public TLInputPeer offset_peer;
+    public org.telegram.tl.TLInputPeer offset_peer;
     public int offset_id;
     public int limit;
 
     public SearchGlobal() {
     }
 
-    public SearchGlobal(String q, int offset_date, TLInputPeer offset_peer, int offset_id, int limit) {
+    public SearchGlobal(String q, int offset_date, org.telegram.tl.TLInputPeer offset_peer, int offset_id, int limit) {
         this.q = q;
         this.offset_date = offset_date;
         this.offset_peer = offset_peer;
@@ -49,7 +49,7 @@ public class SearchGlobal extends TLObject {
     public void deserialize(ProtocolBuffer buffer) {
         q = buffer.readString();
         offset_date = buffer.readInt();
-        offset_peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        offset_peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         offset_id = buffer.readInt();
         limit = buffer.readInt();
     }

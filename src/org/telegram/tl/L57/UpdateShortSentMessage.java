@@ -1,21 +1,3 @@
-/*
- *     This file is part of Telegram Server
- *     Copyright (C) 2015  Aykut Alparslan KOÇ
- *
- *     Telegram Server is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
- *
- *     Telegram Server is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package org.telegram.tl.L57;
 
 import org.telegram.mtproto.ProtocolBuffer;
@@ -24,7 +6,7 @@ import org.telegram.tl.TLVector;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
-public class UpdateShortSentMessage extends TLUpdates {
+public class UpdateShortSentMessage extends org.telegram.tl.TLUpdates {
 
     public static final int ID = 0x11f1331c;
 
@@ -33,14 +15,14 @@ public class UpdateShortSentMessage extends TLUpdates {
     public int pts;
     public int pts_count;
     public int date;
-    public TLMessageMedia media;
-    public TLVector<TLMessageEntity> entities;
+    public org.telegram.tl.TLMessageMedia media;
+    public TLVector<org.telegram.tl.TLMessageEntity> entities;
 
     public UpdateShortSentMessage() {
         this.entities = new TLVector<>();
     }
 
-    public UpdateShortSentMessage(int flags, int id, int pts, int pts_count, int date, TLMessageMedia media, TLVector<TLMessageEntity> entities) {
+    public UpdateShortSentMessage(int flags, int id, int pts, int pts_count, int date, org.telegram.tl.TLMessageMedia media, TLVector<org.telegram.tl.TLMessageEntity> entities) {
         this.flags = flags;
         this.id = id;
         this.pts = pts;
@@ -58,16 +40,16 @@ public class UpdateShortSentMessage extends TLUpdates {
         pts_count = buffer.readInt();
         date = buffer.readInt();
         if ((flags & (1 << 9)) != 0) {
-            media = (TLMessageMedia) buffer.readTLObject(APIContext.getInstance());
+            media = (org.telegram.tl.TLMessageMedia) buffer.readTLObject(APIContext.getInstance());
         }
         if ((flags & (1 << 7)) != 0) {
-            entities = (TLVector<TLMessageEntity>) buffer.readTLVector(TLMessageEntity.class);
+            entities = (TLVector<org.telegram.tl.TLMessageEntity>) buffer.readTLVector(org.telegram.tl.TLMessageEntity.class);
         }
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(48);
         setFlags();
         serializeTo(buffer);
         return buffer;

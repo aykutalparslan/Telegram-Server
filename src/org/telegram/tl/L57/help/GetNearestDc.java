@@ -38,7 +38,7 @@ public class GetNearestDc extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(4);
         serializeTo(buffer);
         return buffer;
     }

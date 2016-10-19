@@ -25,14 +25,14 @@ import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 import org.telegram.tl.updates.*;
 
-public class PeerDialogs extends TLPeerDialogs {
+public class PeerDialogs extends org.telegram.tl.messages.TLPeerDialogs {
 
     public static final int ID = 0x3371c354;
 
-    public TLVector<TLDialog> dialogs;
-    public TLVector<TLMessage> messages;
-    public TLVector<TLChat> chats;
-    public TLVector<TLUser> users;
+    public TLVector<org.telegram.tl.TLDialog> dialogs;
+    public TLVector<org.telegram.tl.TLMessage> messages;
+    public TLVector<org.telegram.tl.TLChat> chats;
+    public TLVector<org.telegram.tl.TLUser> users;
     public TLState state;
 
     public PeerDialogs() {
@@ -42,7 +42,7 @@ public class PeerDialogs extends TLPeerDialogs {
         this.users = new TLVector<>();
     }
 
-    public PeerDialogs(TLVector<TLDialog> dialogs, TLVector<TLMessage> messages, TLVector<TLChat> chats, TLVector<TLUser> users, TLState state) {
+    public PeerDialogs(TLVector<org.telegram.tl.TLDialog> dialogs, TLVector<org.telegram.tl.TLMessage> messages, TLVector<org.telegram.tl.TLChat> chats, TLVector<org.telegram.tl.TLUser> users, TLState state) {
         this.dialogs = dialogs;
         this.messages = messages;
         this.chats = chats;
@@ -52,16 +52,16 @@ public class PeerDialogs extends TLPeerDialogs {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        dialogs = (TLVector<TLDialog>) buffer.readTLObject(APIContext.getInstance());
-        messages = (TLVector<TLMessage>) buffer.readTLObject(APIContext.getInstance());
-        chats = (TLVector<TLChat>) buffer.readTLObject(APIContext.getInstance());
-        users = (TLVector<TLUser>) buffer.readTLObject(APIContext.getInstance());
+        dialogs = (TLVector<org.telegram.tl.TLDialog>) buffer.readTLObject(APIContext.getInstance());
+        messages = (TLVector<org.telegram.tl.TLMessage>) buffer.readTLObject(APIContext.getInstance());
+        chats = (TLVector<org.telegram.tl.TLChat>) buffer.readTLObject(APIContext.getInstance());
+        users = (TLVector<org.telegram.tl.TLUser>) buffer.readTLObject(APIContext.getInstance());
         state = (TLState) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(44);
         serializeTo(buffer);
         return buffer;
     }

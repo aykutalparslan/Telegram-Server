@@ -28,26 +28,26 @@ public class GetMessageEditData extends TLObject {
 
     public static final int ID = 0xfda68d36;
 
-    public TLInputPeer peer;
+    public org.telegram.tl.TLInputPeer peer;
     public int id;
 
     public GetMessageEditData() {
     }
 
-    public GetMessageEditData(TLInputPeer peer, int id) {
+    public GetMessageEditData(org.telegram.tl.TLInputPeer peer, int id) {
         this.peer = peer;
         this.id = id;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         id = buffer.readInt();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(16);
         serializeTo(buffer);
         return buffer;
     }

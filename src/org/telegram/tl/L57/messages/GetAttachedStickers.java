@@ -28,23 +28,23 @@ public class GetAttachedStickers extends TLObject {
 
     public static final int ID = 0xcc5b67cc;
 
-    public TLInputStickeredMedia media;
+    public org.telegram.tl.TLInputStickeredMedia media;
 
     public GetAttachedStickers() {
     }
 
-    public GetAttachedStickers(TLInputStickeredMedia media) {
+    public GetAttachedStickers(org.telegram.tl.TLInputStickeredMedia media) {
         this.media = media;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        media = (TLInputStickeredMedia) buffer.readTLObject(APIContext.getInstance());
+        media = (org.telegram.tl.TLInputStickeredMedia) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(12);
         serializeTo(buffer);
         return buffer;
     }

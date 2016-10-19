@@ -30,16 +30,16 @@ public class SetInlineBotResults extends TLObject {
 
     public int flags;
     public long query_id;
-    public TLVector<TLInputBotInlineResult> results;
+    public TLVector<org.telegram.tl.TLInputBotInlineResult> results;
     public int cache_time;
     public String next_offset;
-    public TLInlineBotSwitchPM switch_pm;
+    public org.telegram.tl.TLInlineBotSwitchPM switch_pm;
 
     public SetInlineBotResults() {
         this.results = new TLVector<>();
     }
 
-    public SetInlineBotResults(int flags, long query_id, TLVector<TLInputBotInlineResult> results, int cache_time, String next_offset, TLInlineBotSwitchPM switch_pm) {
+    public SetInlineBotResults(int flags, long query_id, TLVector<org.telegram.tl.TLInputBotInlineResult> results, int cache_time, String next_offset, org.telegram.tl.TLInlineBotSwitchPM switch_pm) {
         this.flags = flags;
         this.query_id = query_id;
         this.results = results;
@@ -52,19 +52,19 @@ public class SetInlineBotResults extends TLObject {
     public void deserialize(ProtocolBuffer buffer) {
         flags = buffer.readInt();
         query_id = buffer.readLong();
-        results = (TLVector<TLInputBotInlineResult>) buffer.readTLObject(APIContext.getInstance());
+        results = (TLVector<org.telegram.tl.TLInputBotInlineResult>) buffer.readTLObject(APIContext.getInstance());
         cache_time = buffer.readInt();
         if ((flags & (1 << 2)) != 0) {
             next_offset = buffer.readString();
         }
         if ((flags & (1 << 3)) != 0) {
-            switch_pm = (TLInlineBotSwitchPM) buffer.readTLObject(APIContext.getInstance());
+            switch_pm = (org.telegram.tl.TLInlineBotSwitchPM) buffer.readTLObject(APIContext.getInstance());
         }
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(60);
         setFlags();
         serializeTo(buffer);
         return buffer;

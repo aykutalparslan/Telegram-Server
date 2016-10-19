@@ -30,15 +30,15 @@ public class SaveDraft extends TLObject {
 
     public int flags;
     public int reply_to_msg_id;
-    public TLInputPeer peer;
+    public org.telegram.tl.TLInputPeer peer;
     public String message;
-    public TLVector<TLMessageEntity> entities;
+    public TLVector<org.telegram.tl.TLMessageEntity> entities;
 
     public SaveDraft() {
         this.entities = new TLVector<>();
     }
 
-    public SaveDraft(int flags, int reply_to_msg_id, TLInputPeer peer, String message, TLVector<TLMessageEntity> entities) {
+    public SaveDraft(int flags, int reply_to_msg_id, org.telegram.tl.TLInputPeer peer, String message, TLVector<org.telegram.tl.TLMessageEntity> entities) {
         this.flags = flags;
         this.reply_to_msg_id = reply_to_msg_id;
         this.peer = peer;
@@ -52,16 +52,16 @@ public class SaveDraft extends TLObject {
         if ((flags & (1 << 0)) != 0) {
             reply_to_msg_id = buffer.readInt();
         }
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         message = buffer.readString();
         if ((flags & (1 << 3)) != 0) {
-            entities = (TLVector<TLMessageEntity>) buffer.readTLVector(TLMessageEntity.class);
+            entities = (TLVector<org.telegram.tl.TLMessageEntity>) buffer.readTLVector(org.telegram.tl.TLMessageEntity.class);
         }
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(48);
         setFlags();
         serializeTo(buffer);
         return buffer;

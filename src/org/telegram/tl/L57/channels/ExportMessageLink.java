@@ -28,26 +28,26 @@ public class ExportMessageLink extends TLObject {
 
     public static final int ID = 0xc846d22d;
 
-    public TLInputChannel channel;
+    public org.telegram.tl.TLInputChannel channel;
     public int id;
 
     public ExportMessageLink() {
     }
 
-    public ExportMessageLink(TLInputChannel channel, int id) {
+    public ExportMessageLink(org.telegram.tl.TLInputChannel channel, int id) {
         this.channel = channel;
         this.id = id;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
         id = buffer.readInt();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(16);
         serializeTo(buffer);
         return buffer;
     }

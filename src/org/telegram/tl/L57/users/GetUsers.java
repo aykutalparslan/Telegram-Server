@@ -28,24 +28,24 @@ public class GetUsers extends TLObject {
 
     public static final int ID = 0xd91a548;
 
-    public TLVector<TLInputUser> id;
+    public TLVector<org.telegram.tl.TLInputUser> id;
 
     public GetUsers() {
         this.id = new TLVector<>();
     }
 
-    public GetUsers(TLVector<TLInputUser> id) {
+    public GetUsers(TLVector<org.telegram.tl.TLInputUser> id) {
         this.id = id;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        id = (TLVector<TLInputUser>) buffer.readTLObject(APIContext.getInstance());
+        id = (TLVector<org.telegram.tl.TLInputUser>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(12);
         serializeTo(buffer);
         return buffer;
     }

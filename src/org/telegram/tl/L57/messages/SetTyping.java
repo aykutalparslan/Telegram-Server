@@ -28,26 +28,26 @@ public class SetTyping extends TLObject {
 
     public static final int ID = 0xa3825e50;
 
-    public TLInputPeer peer;
-    public TLSendMessageAction action;
+    public org.telegram.tl.TLInputPeer peer;
+    public org.telegram.tl.TLSendMessageAction action;
 
     public SetTyping() {
     }
 
-    public SetTyping(TLInputPeer peer, TLSendMessageAction action) {
+    public SetTyping(org.telegram.tl.TLInputPeer peer, org.telegram.tl.TLSendMessageAction action) {
         this.peer = peer;
         this.action = action;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
-        action = (TLSendMessageAction) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        action = (org.telegram.tl.TLSendMessageAction) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(20);
         serializeTo(buffer);
         return buffer;
     }

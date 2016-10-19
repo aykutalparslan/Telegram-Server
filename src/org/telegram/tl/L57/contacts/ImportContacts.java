@@ -28,27 +28,27 @@ public class ImportContacts extends TLObject {
 
     public static final int ID = 0xda30b32d;
 
-    public TLVector<TLInputContact> contacts;
+    public TLVector<org.telegram.tl.TLInputContact> contacts;
     public boolean replace;
 
     public ImportContacts() {
         this.contacts = new TLVector<>();
     }
 
-    public ImportContacts(TLVector<TLInputContact> contacts, boolean replace) {
+    public ImportContacts(TLVector<org.telegram.tl.TLInputContact> contacts, boolean replace) {
         this.contacts = contacts;
         this.replace = replace;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        contacts = (TLVector<TLInputContact>) buffer.readTLObject(APIContext.getInstance());
+        contacts = (TLVector<org.telegram.tl.TLInputContact>) buffer.readTLObject(APIContext.getInstance());
         replace = buffer.readBool();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(13);
         serializeTo(buffer);
         return buffer;
     }

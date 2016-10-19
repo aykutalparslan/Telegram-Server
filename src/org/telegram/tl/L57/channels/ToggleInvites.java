@@ -28,26 +28,26 @@ public class ToggleInvites extends TLObject {
 
     public static final int ID = 0x49609307;
 
-    public TLInputChannel channel;
+    public org.telegram.tl.TLInputChannel channel;
     public boolean enabled;
 
     public ToggleInvites() {
     }
 
-    public ToggleInvites(TLInputChannel channel, boolean enabled) {
+    public ToggleInvites(org.telegram.tl.TLInputChannel channel, boolean enabled) {
         this.channel = channel;
         this.enabled = enabled;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
         enabled = buffer.readBool();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(13);
         serializeTo(buffer);
         return buffer;
     }

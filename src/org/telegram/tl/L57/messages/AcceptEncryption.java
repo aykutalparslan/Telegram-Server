@@ -28,14 +28,14 @@ public class AcceptEncryption extends TLObject {
 
     public static final int ID = 0x3dbc0415;
 
-    public TLInputEncryptedChat peer;
+    public org.telegram.tl.TLInputEncryptedChat peer;
     public byte[] g_b;
     public long key_fingerprint;
 
     public AcceptEncryption() {
     }
 
-    public AcceptEncryption(TLInputEncryptedChat peer, byte[] g_b, long key_fingerprint) {
+    public AcceptEncryption(org.telegram.tl.TLInputEncryptedChat peer, byte[] g_b, long key_fingerprint) {
         this.peer = peer;
         this.g_b = g_b;
         this.key_fingerprint = key_fingerprint;
@@ -43,14 +43,14 @@ public class AcceptEncryption extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        peer = (TLInputEncryptedChat) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputEncryptedChat) buffer.readTLObject(APIContext.getInstance());
         g_b = buffer.readBytes();
         key_fingerprint = buffer.readLong();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(44);
         serializeTo(buffer);
         return buffer;
     }

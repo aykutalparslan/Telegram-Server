@@ -29,17 +29,17 @@ public class ForwardMessages extends TLObject {
     public static final int ID = 0x708e0195;
 
     public int flags;
-    public TLInputPeer from_peer;
+    public org.telegram.tl.TLInputPeer from_peer;
     public TLVector<Integer> id;
     public TLVector<Long> random_id;
-    public TLInputPeer to_peer;
+    public org.telegram.tl.TLInputPeer to_peer;
 
     public ForwardMessages() {
         this.id = new TLVector<>();
         this.random_id = new TLVector<>();
     }
 
-    public ForwardMessages(int flags, TLInputPeer from_peer, TLVector<Integer> id, TLVector<Long> random_id, TLInputPeer to_peer) {
+    public ForwardMessages(int flags, org.telegram.tl.TLInputPeer from_peer, TLVector<Integer> id, TLVector<Long> random_id, org.telegram.tl.TLInputPeer to_peer) {
         this.flags = flags;
         this.from_peer = from_peer;
         this.id = id;
@@ -50,15 +50,15 @@ public class ForwardMessages extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         flags = buffer.readInt();
-        from_peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        from_peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         id = (TLVector<Integer>) buffer.readTLObject(APIContext.getInstance());
         random_id = (TLVector<Long>) buffer.readTLObject(APIContext.getInstance());
-        to_peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        to_peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(64);
         setFlags();
         serializeTo(buffer);
         return buffer;

@@ -28,26 +28,26 @@ public class UpdateNotifySettings extends TLObject {
 
     public static final int ID = 0x84be5b93;
 
-    public TLInputNotifyPeer peer;
-    public TLInputPeerNotifySettings settings;
+    public org.telegram.tl.TLInputNotifyPeer peer;
+    public org.telegram.tl.TLInputPeerNotifySettings settings;
 
     public UpdateNotifySettings() {
     }
 
-    public UpdateNotifySettings(TLInputNotifyPeer peer, TLInputPeerNotifySettings settings) {
+    public UpdateNotifySettings(org.telegram.tl.TLInputNotifyPeer peer, org.telegram.tl.TLInputPeerNotifySettings settings) {
         this.peer = peer;
         this.settings = settings;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        peer = (TLInputNotifyPeer) buffer.readTLObject(APIContext.getInstance());
-        settings = (TLInputPeerNotifySettings) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputNotifyPeer) buffer.readTLObject(APIContext.getInstance());
+        settings = (org.telegram.tl.TLInputPeerNotifySettings) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(20);
         serializeTo(buffer);
         return buffer;
     }

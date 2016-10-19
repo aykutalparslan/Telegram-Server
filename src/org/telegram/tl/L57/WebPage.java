@@ -1,21 +1,3 @@
-/*
- *     This file is part of Telegram Server
- *     Copyright (C) 2015  Aykut Alparslan KOÇ
- *
- *     Telegram Server is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
- *
- *     Telegram Server is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package org.telegram.tl.L57;
 
 import org.telegram.mtproto.ProtocolBuffer;
@@ -24,7 +6,7 @@ import org.telegram.tl.TLVector;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
-public class WebPage extends TLWebPage {
+public class WebPage extends org.telegram.tl.TLWebPage {
 
     public static final int ID = 0xca820ed7;
 
@@ -36,19 +18,19 @@ public class WebPage extends TLWebPage {
     public String site_name;
     public String title;
     public String description;
-    public TLPhoto photo;
+    public org.telegram.tl.photos.TLPhoto photo;
     public String embed_url;
     public String embed_type;
     public int embed_width;
     public int embed_height;
     public int duration;
     public String author;
-    public TLDocument document;
+    public org.telegram.tl.TLDocument document;
 
     public WebPage() {
     }
 
-    public WebPage(int flags, long id, String url, String display_url, String type, String site_name, String title, String description, TLPhoto photo, String embed_url, String embed_type, int embed_width, int embed_height, int duration, String author, TLDocument document) {
+    public WebPage(int flags, long id, String url, String display_url, String type, String site_name, String title, String description, org.telegram.tl.photos.TLPhoto photo, String embed_url, String embed_type, int embed_width, int embed_height, int duration, String author, org.telegram.tl.TLDocument document) {
         this.flags = flags;
         this.id = id;
         this.url = url;
@@ -86,7 +68,7 @@ public class WebPage extends TLWebPage {
             description = buffer.readString();
         }
         if ((flags & (1 << 4)) != 0) {
-            photo = (TLPhoto) buffer.readTLObject(APIContext.getInstance());
+            photo = (org.telegram.tl.photos.TLPhoto) buffer.readTLObject(APIContext.getInstance());
         }
         if ((flags & (1 << 5)) != 0) {
             embed_url = buffer.readString();
@@ -107,13 +89,13 @@ public class WebPage extends TLWebPage {
             author = buffer.readString();
         }
         if ((flags & (1 << 9)) != 0) {
-            document = (TLDocument) buffer.readTLObject(APIContext.getInstance());
+            document = (org.telegram.tl.TLDocument) buffer.readTLObject(APIContext.getInstance());
         }
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(128);
         setFlags();
         serializeTo(buffer);
         return buffer;

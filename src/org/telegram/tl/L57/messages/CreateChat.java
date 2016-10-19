@@ -28,27 +28,27 @@ public class CreateChat extends TLObject {
 
     public static final int ID = 0x9cb126e;
 
-    public TLVector<TLInputUser> users;
+    public TLVector<org.telegram.tl.TLInputUser> users;
     public String title;
 
     public CreateChat() {
         this.users = new TLVector<>();
     }
 
-    public CreateChat(TLVector<TLInputUser> users, String title) {
+    public CreateChat(TLVector<org.telegram.tl.TLInputUser> users, String title) {
         this.users = users;
         this.title = title;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        users = (TLVector<TLInputUser>) buffer.readTLObject(APIContext.getInstance());
+        users = (TLVector<org.telegram.tl.TLInputUser>) buffer.readTLObject(APIContext.getInstance());
         title = buffer.readString();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(20);
         serializeTo(buffer);
         return buffer;
     }

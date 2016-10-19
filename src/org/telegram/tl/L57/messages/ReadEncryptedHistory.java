@@ -28,26 +28,26 @@ public class ReadEncryptedHistory extends TLObject {
 
     public static final int ID = 0x7f4b690a;
 
-    public TLInputEncryptedChat peer;
+    public org.telegram.tl.TLInputEncryptedChat peer;
     public int max_date;
 
     public ReadEncryptedHistory() {
     }
 
-    public ReadEncryptedHistory(TLInputEncryptedChat peer, int max_date) {
+    public ReadEncryptedHistory(org.telegram.tl.TLInputEncryptedChat peer, int max_date) {
         this.peer = peer;
         this.max_date = max_date;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        peer = (TLInputEncryptedChat) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputEncryptedChat) buffer.readTLObject(APIContext.getInstance());
         max_date = buffer.readInt();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(16);
         serializeTo(buffer);
         return buffer;
     }

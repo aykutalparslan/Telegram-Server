@@ -25,7 +25,7 @@ import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 import org.telegram.tl.storage.*;
 
-public class File extends TLFile {
+public class File extends org.telegram.tl.upload.TLFile {
 
     public static final int ID = 0x96a18d5;
 
@@ -51,7 +51,7 @@ public class File extends TLFile {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(40);
         serializeTo(buffer);
         return buffer;
     }

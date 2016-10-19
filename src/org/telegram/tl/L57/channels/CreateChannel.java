@@ -50,7 +50,7 @@ public class CreateChannel extends TLObject {
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(40);
         setFlags();
         serializeTo(buffer);
         return buffer;

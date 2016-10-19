@@ -28,14 +28,14 @@ public class KickFromChannel extends TLObject {
 
     public static final int ID = 0xa672de14;
 
-    public TLInputChannel channel;
-    public TLInputUser user_id;
+    public org.telegram.tl.TLInputChannel channel;
+    public org.telegram.tl.TLInputUser user_id;
     public boolean kicked;
 
     public KickFromChannel() {
     }
 
-    public KickFromChannel(TLInputChannel channel, TLInputUser user_id, boolean kicked) {
+    public KickFromChannel(org.telegram.tl.TLInputChannel channel, org.telegram.tl.TLInputUser user_id, boolean kicked) {
         this.channel = channel;
         this.user_id = user_id;
         this.kicked = kicked;
@@ -43,14 +43,14 @@ public class KickFromChannel extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
-        user_id = (TLInputUser) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        user_id = (org.telegram.tl.TLInputUser) buffer.readTLObject(APIContext.getInstance());
         kicked = buffer.readBool();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(21);
         serializeTo(buffer);
         return buffer;
     }

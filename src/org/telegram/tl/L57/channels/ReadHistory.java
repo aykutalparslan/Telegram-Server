@@ -28,26 +28,26 @@ public class ReadHistory extends TLObject {
 
     public static final int ID = 0xcc104937;
 
-    public TLInputChannel channel;
+    public org.telegram.tl.TLInputChannel channel;
     public int max_id;
 
     public ReadHistory() {
     }
 
-    public ReadHistory(TLInputChannel channel, int max_id) {
+    public ReadHistory(org.telegram.tl.TLInputChannel channel, int max_id) {
         this.channel = channel;
         this.max_id = max_id;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
         max_id = buffer.readInt();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(16);
         serializeTo(buffer);
         return buffer;
     }

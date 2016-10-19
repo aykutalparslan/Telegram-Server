@@ -28,27 +28,27 @@ public class SetPrivacy extends TLObject {
 
     public static final int ID = 0xc9f81ce8;
 
-    public TLInputPrivacyKey key;
-    public TLVector<TLInputPrivacyRule> rules;
+    public org.telegram.tl.TLInputPrivacyKey key;
+    public TLVector<org.telegram.tl.TLInputPrivacyRule> rules;
 
     public SetPrivacy() {
         this.rules = new TLVector<>();
     }
 
-    public SetPrivacy(TLInputPrivacyKey key, TLVector<TLInputPrivacyRule> rules) {
+    public SetPrivacy(org.telegram.tl.TLInputPrivacyKey key, TLVector<org.telegram.tl.TLInputPrivacyRule> rules) {
         this.key = key;
         this.rules = rules;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        key = (TLInputPrivacyKey) buffer.readTLObject(APIContext.getInstance());
-        rules = (TLVector<TLInputPrivacyRule>) buffer.readTLObject(APIContext.getInstance());
+        key = (org.telegram.tl.TLInputPrivacyKey) buffer.readTLObject(APIContext.getInstance());
+        rules = (TLVector<org.telegram.tl.TLInputPrivacyRule>) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(20);
         serializeTo(buffer);
         return buffer;
     }

@@ -28,14 +28,14 @@ public class GetFile extends TLObject {
 
     public static final int ID = 0xe3a6cfb5;
 
-    public TLInputFileLocation location;
+    public org.telegram.tl.TLInputFileLocation location;
     public int offset;
     public int limit;
 
     public GetFile() {
     }
 
-    public GetFile(TLInputFileLocation location, int offset, int limit) {
+    public GetFile(org.telegram.tl.TLInputFileLocation location, int offset, int limit) {
         this.location = location;
         this.offset = offset;
         this.limit = limit;
@@ -43,14 +43,14 @@ public class GetFile extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        location = (TLInputFileLocation) buffer.readTLObject(APIContext.getInstance());
+        location = (org.telegram.tl.TLInputFileLocation) buffer.readTLObject(APIContext.getInstance());
         offset = buffer.readInt();
         limit = buffer.readInt();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(20);
         serializeTo(buffer);
         return buffer;
     }

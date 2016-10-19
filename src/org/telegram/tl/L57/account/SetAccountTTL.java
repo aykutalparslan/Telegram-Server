@@ -28,23 +28,23 @@ public class SetAccountTTL extends TLObject {
 
     public static final int ID = 0x2442485e;
 
-    public TLAccountDaysTTL ttl;
+    public org.telegram.tl.TLAccountDaysTTL ttl;
 
     public SetAccountTTL() {
     }
 
-    public SetAccountTTL(TLAccountDaysTTL ttl) {
+    public SetAccountTTL(org.telegram.tl.TLAccountDaysTTL ttl) {
         this.ttl = ttl;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        ttl = (TLAccountDaysTTL) buffer.readTLObject(APIContext.getInstance());
+        ttl = (org.telegram.tl.TLAccountDaysTTL) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(12);
         serializeTo(buffer);
         return buffer;
     }

@@ -28,26 +28,26 @@ public class SetEncryptedTyping extends TLObject {
 
     public static final int ID = 0x791451ed;
 
-    public TLInputEncryptedChat peer;
+    public org.telegram.tl.TLInputEncryptedChat peer;
     public boolean typing;
 
     public SetEncryptedTyping() {
     }
 
-    public SetEncryptedTyping(TLInputEncryptedChat peer, boolean typing) {
+    public SetEncryptedTyping(org.telegram.tl.TLInputEncryptedChat peer, boolean typing) {
         this.peer = peer;
         this.typing = typing;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        peer = (TLInputEncryptedChat) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputEncryptedChat) buffer.readTLObject(APIContext.getInstance());
         typing = buffer.readBool();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(13);
         serializeTo(buffer);
         return buffer;
     }

@@ -28,23 +28,23 @@ public class UploadProfilePhoto extends TLObject {
 
     public static final int ID = 0x4f32c098;
 
-    public TLInputFile file;
+    public org.telegram.tl.TLInputFile file;
 
     public UploadProfilePhoto() {
     }
 
-    public UploadProfilePhoto(TLInputFile file) {
+    public UploadProfilePhoto(org.telegram.tl.TLInputFile file) {
         this.file = file;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        file = (TLInputFile) buffer.readTLObject(APIContext.getInstance());
+        file = (org.telegram.tl.TLInputFile) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(12);
         serializeTo(buffer);
         return buffer;
     }

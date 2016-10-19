@@ -28,15 +28,15 @@ public class GetChannelDifference extends TLObject {
 
     public static final int ID = 0xbb32d7c0;
 
-    public TLInputChannel channel;
-    public TLChannelMessagesFilter filter;
+    public org.telegram.tl.TLInputChannel channel;
+    public org.telegram.tl.TLChannelMessagesFilter filter;
     public int pts;
     public int limit;
 
     public GetChannelDifference() {
     }
 
-    public GetChannelDifference(TLInputChannel channel, TLChannelMessagesFilter filter, int pts, int limit) {
+    public GetChannelDifference(org.telegram.tl.TLInputChannel channel, org.telegram.tl.TLChannelMessagesFilter filter, int pts, int limit) {
         this.channel = channel;
         this.filter = filter;
         this.pts = pts;
@@ -45,15 +45,15 @@ public class GetChannelDifference extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        channel = (TLInputChannel) buffer.readTLObject(APIContext.getInstance());
-        filter = (TLChannelMessagesFilter) buffer.readTLObject(APIContext.getInstance());
+        channel = (org.telegram.tl.TLInputChannel) buffer.readTLObject(APIContext.getInstance());
+        filter = (org.telegram.tl.TLChannelMessagesFilter) buffer.readTLObject(APIContext.getInstance());
         pts = buffer.readInt();
         limit = buffer.readInt();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(28);
         serializeTo(buffer);
         return buffer;
     }

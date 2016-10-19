@@ -28,7 +28,7 @@ public class GetMessagesViews extends TLObject {
 
     public static final int ID = 0xc4c8a55d;
 
-    public TLInputPeer peer;
+    public org.telegram.tl.TLInputPeer peer;
     public TLVector<Integer> id;
     public boolean increment;
 
@@ -36,7 +36,7 @@ public class GetMessagesViews extends TLObject {
         this.id = new TLVector<>();
     }
 
-    public GetMessagesViews(TLInputPeer peer, TLVector<Integer> id, boolean increment) {
+    public GetMessagesViews(org.telegram.tl.TLInputPeer peer, TLVector<Integer> id, boolean increment) {
         this.peer = peer;
         this.id = id;
         this.increment = increment;
@@ -44,14 +44,14 @@ public class GetMessagesViews extends TLObject {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         id = (TLVector<Integer>) buffer.readTLObject(APIContext.getInstance());
         increment = buffer.readBool();
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(21);
         serializeTo(buffer);
         return buffer;
     }

@@ -29,18 +29,18 @@ public class SendMessage extends TLObject {
     public static final int ID = 0xfa88427a;
 
     public int flags;
-    public TLInputPeer peer;
+    public org.telegram.tl.TLInputPeer peer;
     public int reply_to_msg_id;
     public String message;
     public long random_id;
-    public TLReplyMarkup reply_markup;
-    public TLVector<TLMessageEntity> entities;
+    public org.telegram.tl.TLReplyMarkup reply_markup;
+    public TLVector<org.telegram.tl.TLMessageEntity> entities;
 
     public SendMessage() {
         this.entities = new TLVector<>();
     }
 
-    public SendMessage(int flags, TLInputPeer peer, int reply_to_msg_id, String message, long random_id, TLReplyMarkup reply_markup, TLVector<TLMessageEntity> entities) {
+    public SendMessage(int flags, org.telegram.tl.TLInputPeer peer, int reply_to_msg_id, String message, long random_id, org.telegram.tl.TLReplyMarkup reply_markup, TLVector<org.telegram.tl.TLMessageEntity> entities) {
         this.flags = flags;
         this.peer = peer;
         this.reply_to_msg_id = reply_to_msg_id;
@@ -53,23 +53,23 @@ public class SendMessage extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         flags = buffer.readInt();
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
         if ((flags & (1 << 0)) != 0) {
             reply_to_msg_id = buffer.readInt();
         }
         message = buffer.readString();
         random_id = buffer.readLong();
         if ((flags & (1 << 2)) != 0) {
-            reply_markup = (TLReplyMarkup) buffer.readTLObject(APIContext.getInstance());
+            reply_markup = (org.telegram.tl.TLReplyMarkup) buffer.readTLObject(APIContext.getInstance());
         }
         if ((flags & (1 << 3)) != 0) {
-            entities = (TLVector<TLMessageEntity>) buffer.readTLVector(TLMessageEntity.class);
+            entities = (TLVector<org.telegram.tl.TLMessageEntity>) buffer.readTLVector(org.telegram.tl.TLMessageEntity.class);
         }
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(88);
         setFlags();
         serializeTo(buffer);
         return buffer;

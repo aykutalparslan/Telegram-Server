@@ -29,12 +29,12 @@ public class DeleteChatUser extends TLObject {
     public static final int ID = 0xe0611f16;
 
     public int chat_id;
-    public TLInputUser user_id;
+    public org.telegram.tl.TLInputUser user_id;
 
     public DeleteChatUser() {
     }
 
-    public DeleteChatUser(int chat_id, TLInputUser user_id) {
+    public DeleteChatUser(int chat_id, org.telegram.tl.TLInputUser user_id) {
         this.chat_id = chat_id;
         this.user_id = user_id;
     }
@@ -42,12 +42,12 @@ public class DeleteChatUser extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         chat_id = buffer.readInt();
-        user_id = (TLInputUser) buffer.readTLObject(APIContext.getInstance());
+        user_id = (org.telegram.tl.TLInputUser) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(16);
         serializeTo(buffer);
         return buffer;
     }

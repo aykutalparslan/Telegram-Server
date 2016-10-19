@@ -28,26 +28,26 @@ public class ReportPeer extends TLObject {
 
     public static final int ID = 0xae189d5f;
 
-    public TLInputPeer peer;
-    public TLReportReason reason;
+    public org.telegram.tl.TLInputPeer peer;
+    public org.telegram.tl.TLReportReason reason;
 
     public ReportPeer() {
     }
 
-    public ReportPeer(TLInputPeer peer, TLReportReason reason) {
+    public ReportPeer(org.telegram.tl.TLInputPeer peer, org.telegram.tl.TLReportReason reason) {
         this.peer = peer;
         this.reason = reason;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        peer = (TLInputPeer) buffer.readTLObject(APIContext.getInstance());
-        reason = (TLReportReason) buffer.readTLObject(APIContext.getInstance());
+        peer = (org.telegram.tl.TLInputPeer) buffer.readTLObject(APIContext.getInstance());
+        reason = (org.telegram.tl.TLReportReason) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(20);
         serializeTo(buffer);
         return buffer;
     }

@@ -29,11 +29,11 @@ public class DifferenceSlice extends TLDifference {
 
     public static final int ID = 0xa8fb1981;
 
-    public TLVector<TLMessage> new_messages;
-    public TLVector<TLEncryptedMessage> new_encrypted_messages;
-    public TLVector<TLUpdate> other_updates;
-    public TLVector<TLChat> chats;
-    public TLVector<TLUser> users;
+    public TLVector<org.telegram.tl.TLMessage> new_messages;
+    public TLVector<org.telegram.tl.TLEncryptedMessage> new_encrypted_messages;
+    public TLVector<org.telegram.tl.TLUpdate> other_updates;
+    public TLVector<org.telegram.tl.TLChat> chats;
+    public TLVector<org.telegram.tl.TLUser> users;
     public TLState intermediate_state;
 
     public DifferenceSlice() {
@@ -44,7 +44,7 @@ public class DifferenceSlice extends TLDifference {
         this.users = new TLVector<>();
     }
 
-    public DifferenceSlice(TLVector<TLMessage> new_messages, TLVector<TLEncryptedMessage> new_encrypted_messages, TLVector<TLUpdate> other_updates, TLVector<TLChat> chats, TLVector<TLUser> users, TLState intermediate_state) {
+    public DifferenceSlice(TLVector<org.telegram.tl.TLMessage> new_messages, TLVector<org.telegram.tl.TLEncryptedMessage> new_encrypted_messages, TLVector<org.telegram.tl.TLUpdate> other_updates, TLVector<org.telegram.tl.TLChat> chats, TLVector<org.telegram.tl.TLUser> users, TLState intermediate_state) {
         this.new_messages = new_messages;
         this.new_encrypted_messages = new_encrypted_messages;
         this.other_updates = other_updates;
@@ -55,17 +55,17 @@ public class DifferenceSlice extends TLDifference {
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
-        new_messages = (TLVector<TLMessage>) buffer.readTLObject(APIContext.getInstance());
-        new_encrypted_messages = (TLVector<TLEncryptedMessage>) buffer.readTLObject(APIContext.getInstance());
-        other_updates = (TLVector<TLUpdate>) buffer.readTLObject(APIContext.getInstance());
-        chats = (TLVector<TLChat>) buffer.readTLObject(APIContext.getInstance());
-        users = (TLVector<TLUser>) buffer.readTLObject(APIContext.getInstance());
+        new_messages = (TLVector<org.telegram.tl.TLMessage>) buffer.readTLObject(APIContext.getInstance());
+        new_encrypted_messages = (TLVector<org.telegram.tl.TLEncryptedMessage>) buffer.readTLObject(APIContext.getInstance());
+        other_updates = (TLVector<org.telegram.tl.TLUpdate>) buffer.readTLObject(APIContext.getInstance());
+        chats = (TLVector<org.telegram.tl.TLChat>) buffer.readTLObject(APIContext.getInstance());
+        users = (TLVector<org.telegram.tl.TLUser>) buffer.readTLObject(APIContext.getInstance());
         intermediate_state = (TLState) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(32);
+        ProtocolBuffer buffer = new ProtocolBuffer(52);
         serializeTo(buffer);
         return buffer;
     }
