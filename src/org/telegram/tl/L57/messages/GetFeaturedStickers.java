@@ -18,13 +18,14 @@
 
 package org.telegram.tl.L57.messages;
 
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.TLObject;
+import org.telegram.tl.TLStickerSetCovered;
 import org.telegram.tl.TLVector;
-import org.telegram.tl.APIContext;
-import org.telegram.tl.L57.*;
 
-public class GetFeaturedStickers extends TLObject {
+public class GetFeaturedStickers extends TLObject implements TLMethod {
 
     public static final int ID = 0x2dacca4f;
 
@@ -59,5 +60,10 @@ public class GetFeaturedStickers extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new FeaturedStickers(0, new TLVector<TLStickerSetCovered>(), new TLVector<Long>());
     }
 }

@@ -189,7 +189,11 @@ public class GetHistoryL48 extends TLObject implements TLMethod {
             } else if (m.to_id instanceof PeerChat) {
                 TLChat c = ChatStore.getInstance().getChat(((PeerChat) m.to_id).chat_id);
                 if (c != null) {
-                    tlChats.add(c);
+                    if (context.getApiLayer() >= 48) {
+                        tlChats.add(((Chat) c).toChatL42());
+                    } else {
+                        tlChats.add(c);
+                    }
                 }
             }
 

@@ -59,8 +59,13 @@ public class UserStore {
             user = db.getUser(user_id);
             if (user != null) {
                 usersShared.set(user_id, user);
-                userPhoneToId.set(user.phone, user_id);
-                usernameToId.set(user.username, user_id);
+                if (user.phone != null) {
+                    userPhoneToId.set(user.phone, user_id);
+                }
+                if (user.username != null) {
+                    usernameToId.set(user.username, user_id);
+                }
+
             }
         }
         return user;

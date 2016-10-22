@@ -111,8 +111,11 @@ public class CreateChat extends TLObject implements TLMethod {
             TLVector<TLChat> chatTLVector = new TLVector<>();
             TLChat newChat = ChatStore.getInstance().createChat(new Chat(0, title, new ChatPhotoEmpty(),
                     users_ids.length, date, false, 1), users_ids, context.getUserId());
-            chatTLVector.add(newChat);
             int chat_id = ((Chat) newChat).id;
+            if (context.getApiLayer() >= 48) {
+                newChat = ((Chat) newChat).toChatL42();
+            }
+            chatTLVector.add(newChat);
 
             TLVector<TLUser> userTLVector = new TLVector<>();
             TLVector<TLUpdate> updateTLVector = new TLVector<>();
@@ -130,16 +133,24 @@ public class CreateChat extends TLObject implements TLMethod {
             int message_id = um.sent_messages + um.received_messages + 1;
             int flags = 259;
 
-            UpdateNewMessage chat_created = new UpdateNewMessage(new MessageService(flags, message_id, context.getUserId(),
-                    new PeerChat(chat_id), date, new MessageActionChatCreate(title, usersVectorInteger)), um.pts, 1);
+            if (context.getApiLayer() >= 48) {
+                UpdateNewMessage chat_created = new UpdateNewMessage(new MessageServiceL45(flags, message_id, context.getUserId(),
+                        new PeerChat(chat_id), date, new MessageActionChatCreate(title, usersVectorInteger)), um.pts, 1);
 
-            updateTLVector.add(chat_created);
+                updateTLVector.add(chat_created);
 
-            /*UpdateMessageID updateMessageID = new UpdateMessageID(message_id, rnd.nextLong());
-            updateTLVector.add(updateMessageID);*/
+                UpdateChatParticipants ucp = new UpdateChatParticipants(new org.telegram.tl.L57.ChatParticipants(chat_id, participants, 1));
+                updateTLVector.add(ucp);
+            } else {
+                UpdateNewMessage chat_created = new UpdateNewMessage(new MessageService(flags, message_id, context.getUserId(),
+                        new PeerChat(chat_id), date, new MessageActionChatCreate(title, usersVectorInteger)), um.pts, 1);
 
-            UpdateChatParticipants ucp = new UpdateChatParticipants(new ChatParticipants(chat_id, context.getUserId(), participants, 1));
-            updateTLVector.add(ucp);
+                updateTLVector.add(chat_created);
+
+                UpdateChatParticipants ucp = new UpdateChatParticipants(new ChatParticipants(chat_id, context.getUserId(), participants, 1));
+                updateTLVector.add(ucp);
+            }
+
 
             Updates updates = new Updates(updateTLVector, userTLVector, chatTLVector, date, 0);
 
@@ -149,17 +160,38 @@ public class CreateChat extends TLObject implements TLMethod {
                     TLVector<TLUpdate> updateTLVector2 = new TLVector<>();
                     int message_id2 = umc.sent_messages + umc.received_messages + 1;
                     int flags2 = 0;
-                    UpdateNewMessage chat_created2 = new UpdateNewMessage(new MessageService(flags2, message_id2, context.getUserId(),
-                            new PeerChat(chat_id), date, new MessageActionChatCreate(title, usersVectorInteger)), umc.pts, 1);
+                    for (Object sess : Router.getInstance().getActiveSessions(user_id)) {
+                        if (((ActiveSession) sess).layer >= 48) {
+                            MessageServiceL45 msg_service = new MessageServiceL45(flags2, message_id2, context.getUserId(),
+                                    new PeerChat(chat_id), date, new MessageActionChatCreate(title, usersVectorInteger));
 
-                    /*UpdateMessageID updateMessageID2 = new UpdateMessageID(message_id2, rnd.nextLong());
-                    updateTLVector2.add(updateMessageID2);*/
+                            UpdateNewMessage chat_created2 = new UpdateNewMessage(msg_service, umc.pts, 1);
 
-                    updateTLVector2.add(chat_created2);
-                    updateTLVector2.add(ucp);
+                            UpdateChatParticipants ucp = new UpdateChatParticipants(new org.telegram.tl.L57.ChatParticipants(chat_id, participants, 1));
+                            updateTLVector.add(ucp);
 
-                    Updates updates2 = new Updates(updateTLVector2, userTLVector, chatTLVector, date, 0);
-                    Router.getInstance().Route(user_id, updates2, false);
+                            updateTLVector2.add(chat_created2);
+                            updateTLVector2.add(ucp);
+
+                            Updates updates2 = new Updates(updateTLVector2, userTLVector, chatTLVector, date, 0);
+                            Router.getInstance().Route(((ActiveSession) sess).session_id, ((ActiveSession) sess).auth_key_id, updates2, false);
+                        } else {
+                            MessageService msg_service = new MessageService(flags2, message_id2, context.getUserId(),
+                                    new PeerChat(chat_id), date, new MessageActionChatCreate(title, usersVectorInteger));
+
+                            UpdateNewMessage chat_created2 = new UpdateNewMessage(msg_service, umc.pts, 1);
+
+                            UpdateChatParticipants ucp = new UpdateChatParticipants(new ChatParticipants(chat_id, context.getUserId(), participants, 1));
+                            updateTLVector.add(ucp);
+
+                            updateTLVector2.add(chat_created2);
+                            updateTLVector2.add(ucp);
+
+                            Updates updates2 = new Updates(updateTLVector2, userTLVector, chatTLVector, date, 0);
+                            Router.getInstance().Route(((ActiveSession) sess).session_id, ((ActiveSession) sess).auth_key_id, updates2, false);
+                        }
+                    }
+
                 }
             }
 

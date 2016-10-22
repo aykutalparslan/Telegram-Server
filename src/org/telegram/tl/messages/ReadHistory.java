@@ -97,7 +97,13 @@ public class ReadHistory extends TLObject implements TLMethod {
                 }
             }
         } else if (peer instanceof InputPeerChat) {
-            return new AffectedHistory(um.pts, um.pts, 0);
+            if (context.getApiLayer() >= 48) {
+
+                return new AffectedHistoryL48(um.pts, 0, um.pts);
+            } else {
+
+                return new AffectedHistory(um.pts, um.pts, 0);
+            }
         }
         return new rpc_error(401, "UNAUTHORIZED");
     }

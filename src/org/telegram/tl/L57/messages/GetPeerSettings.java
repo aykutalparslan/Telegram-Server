@@ -18,13 +18,15 @@
 
 package org.telegram.tl.L57.messages;
 
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.TLObject;
 import org.telegram.tl.TLVector;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
-public class GetPeerSettings extends TLObject {
+public class GetPeerSettings extends TLObject implements TLMethod {
 
     public static final int ID = 0x3672e09c;
 
@@ -59,5 +61,10 @@ public class GetPeerSettings extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new PeerSettings(0);
     }
 }

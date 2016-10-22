@@ -153,7 +153,7 @@ public class MTProtoAuth implements Serializable {
         server_DH_inner_data server_dh_inner_data = new server_DH_inner_data();
         server_dh_inner_data.nonce = authNonce;
         server_dh_inner_data.server_nonce = authServerNonce;
-        int[] gs= new int[]{2,3,4,5,6,7};
+        int[] gs = new int[]{3, 4, 7};
         Random rnd = new Random();
         server_dh_inner_data.g = gs[rnd.nextInt(5)];
         g = BigInteger.valueOf(server_dh_inner_data.g);

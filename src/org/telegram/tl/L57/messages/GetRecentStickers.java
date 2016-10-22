@@ -18,13 +18,18 @@
 
 package org.telegram.tl.L57.messages;
 
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.tl.TLDocument;
 import org.telegram.tl.TLObject;
 import org.telegram.tl.TLVector;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
+import org.telegram.tl.messages.*;
+import org.telegram.tl.messages.RecentStickers;
 
-public class GetRecentStickers extends TLObject {
+public class GetRecentStickers extends TLObject implements TLMethod {
 
     public static final int ID = 0x5ea192c9;
 
@@ -77,5 +82,10 @@ public class GetRecentStickers extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new RecentStickers(0, new TLVector<TLDocument>());
     }
 }

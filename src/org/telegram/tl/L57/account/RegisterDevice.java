@@ -18,13 +18,16 @@
 
 package org.telegram.tl.L57.account;
 
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.tl.BoolTrue;
 import org.telegram.tl.TLObject;
 import org.telegram.tl.TLVector;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
-public class RegisterDevice extends TLObject {
+public class RegisterDevice extends TLObject implements TLMethod {
 
     public static final int ID = 0x637ea878;
 
@@ -63,5 +66,10 @@ public class RegisterDevice extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new BoolTrue();
     }
 }

@@ -16,66 +16,81 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.telegram.tl.L57.contacts;
+package org.telegram.tl;
 
-import org.telegram.core.TLContext;
-import org.telegram.core.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
-import org.telegram.tl.*;
+import org.telegram.tl.TLObject;
+import org.telegram.tl.TLVector;
+import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
-public class GetTopPeers extends TLObject implements TLMethod {
+public class MessageServiceL45 extends TLMessage {
 
-    public static final int ID = 0xd4982db5;
+    public static final int ID = 0xc06b9607;
 
     public int flags;
-    public int offset;
-    public int limit;
-    public int hash;
+    public int id;
+    public int from_id;
+    public TLPeer to_id;
+    public int date;
+    public TLMessageAction action;
 
-    public GetTopPeers() {
+    public MessageServiceL45() {
     }
 
-    public GetTopPeers(int flags, int offset, int limit, int hash) {
+    public MessageServiceL45(int flags, int id, int from_id, TLPeer to_id, int date, TLMessageAction action) {
         this.flags = flags;
-        this.offset = offset;
-        this.limit = limit;
-        this.hash = hash;
+        this.id = id;
+        this.from_id = from_id;
+        this.to_id = to_id;
+        this.date = date;
+        this.action = action;
     }
 
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         flags = buffer.readInt();
-        offset = buffer.readInt();
-        limit = buffer.readInt();
-        hash = buffer.readInt();
+        id = buffer.readInt();
+        if ((flags & (1 << 8)) != 0) {
+            from_id = buffer.readInt();
+        }
+        to_id = (TLPeer) buffer.readTLObject(APIContext.getInstance());
+        date = buffer.readInt();
+        action = (TLMessageAction) buffer.readTLObject(APIContext.getInstance());
     }
 
     @Override
     public ProtocolBuffer serialize() {
-        ProtocolBuffer buffer = new ProtocolBuffer(60);
+        ProtocolBuffer buffer = new ProtocolBuffer(72);
         setFlags();
         serializeTo(buffer);
         return buffer;
     }
 
     public void setFlags() {
+        if (from_id != 0) {
+            flags |= (1 << 8);
+        }
     }
 
     @Override
     public void serializeTo(ProtocolBuffer buff) {
         buff.writeInt(getConstructor());
         buff.writeInt(flags);
-        buff.writeInt(offset);
-        buff.writeInt(limit);
-        buff.writeInt(hash);
+        buff.writeInt(id);
+        if ((flags & (1 << 8)) != 0) {
+            buff.writeInt(from_id);
+        }
+        buff.writeTLObject(to_id);
+        buff.writeInt(date);
+        buff.writeTLObject(action);
     }
 
-    public boolean is_correspondents() {
+    public boolean is_unread() {
         return (flags & (1 << 0)) != 0;
     }
 
-    public void set_correspondents(boolean v) {
+    public void set_unread(boolean v) {
         if (v) {
             flags |= (1 << 0);
         } else {
@@ -83,11 +98,11 @@ public class GetTopPeers extends TLObject implements TLMethod {
         }
     }
 
-    public boolean is_bots_pm() {
+    public boolean is_out() {
         return (flags & (1 << 1)) != 0;
     }
 
-    public void set_bots_pm(boolean v) {
+    public void set_out(boolean v) {
         if (v) {
             flags |= (1 << 1);
         } else {
@@ -95,48 +110,31 @@ public class GetTopPeers extends TLObject implements TLMethod {
         }
     }
 
-    public boolean is_bots_inline() {
-        return (flags & (1 << 2)) != 0;
+    public boolean is_mentioned() {
+        return (flags & (1 << 4)) != 0;
     }
 
-    public void set_bots_inline(boolean v) {
+    public void set_mentioned(boolean v) {
         if (v) {
-            flags |= (1 << 2);
+            flags |= (1 << 4);
         } else {
-            flags &= ~(1 << 2);
+            flags &= ~(1 << 4);
         }
     }
 
-    public boolean is_groups() {
-        return (flags & (1 << 10)) != 0;
+    public boolean is_media_unread() {
+        return (flags & (1 << 5)) != 0;
     }
 
-    public void set_groups(boolean v) {
+    public void set_media_unread(boolean v) {
         if (v) {
-            flags |= (1 << 10);
+            flags |= (1 << 5);
         } else {
-            flags &= ~(1 << 10);
-        }
-    }
-
-    public boolean is_channels() {
-        return (flags & (1 << 15)) != 0;
-    }
-
-    public void set_channels(boolean v) {
-        if (v) {
-            flags |= (1 << 15);
-        } else {
-            flags &= ~(1 << 15);
+            flags &= ~(1 << 5);
         }
     }
 
     public int getConstructor() {
         return ID;
-    }
-
-    @Override
-    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        return new TopPeers(new TLVector<TLTopPeerCategoryPeers>(), new TLVector<TLChat>(), new TLVector<TLUser>());
     }
 }

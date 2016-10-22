@@ -95,8 +95,11 @@ public class SignUp extends TLObject implements TLMethod {
         sessionModel.layer = 0;
         sessionModel.phone = clearPhone(phone_number);
         SessionStore.getInstance().createSession(sessionModel);
-
-        return new Authorization(Integer.MAX_VALUE, userModel.toUser(context.getApiLayer()));
+        if (context.getApiLayer() >= 57) {
+            return new org.telegram.tl.L57.auth.Authorization(Integer.MAX_VALUE, 5, userModel.toUser(context.getApiLayer()));
+        } else {
+            return new Authorization(Integer.MAX_VALUE, userModel.toUser(context.getApiLayer()));
+        }
     }
 
     public String clearPhone(String phone) {

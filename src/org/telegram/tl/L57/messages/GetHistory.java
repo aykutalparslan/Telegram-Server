@@ -18,13 +18,23 @@
 
 package org.telegram.tl.L57.messages;
 
+import org.telegram.core.ChatStore;
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.core.UserStore;
+import org.telegram.data.DatabaseConnection;
+import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
-import org.telegram.tl.TLObject;
-import org.telegram.tl.TLVector;
-import org.telegram.tl.APIContext;
-import org.telegram.tl.L57.*;
+import org.telegram.tl.*;
+import org.telegram.tl.L57.InputPeerChat;
+import org.telegram.tl.L57.InputPeerUser;
+import org.telegram.tl.L57.PeerChat;
+import org.telegram.tl.L57.PeerUser;
 
-public class GetHistory extends TLObject {
+import java.util.Collections;
+import java.util.Comparator;
+
+public class GetHistory extends TLObject implements TLMethod {
 
     public static final int ID = 0xafa92846;
 
@@ -83,5 +93,116 @@ public class GetHistory extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        TLVector<TLMessage> tlMessages = new TLVector<>();
+        TLVector<TLChat> tlChats = new TLVector<>();
+        TLVector<TLUser> tlUsers = new TLVector<>();
+        UserModel um = UserStore.getInstance().getUser(context.getUserId());
+        if (um != null) {
+            tlUsers.add(um.toUser(context.getApiLayer()));
+        }
+        if (context.isAuthorized()) {
+            int peer_id = 0;
+            if (peer instanceof InputPeerUser) {
+                org.telegram.tl.Message[] messages_in_old = DatabaseConnection.getInstance().getIncomingMessages(context.getUserId(), ((InputPeerUser) peer).user_id, max_id);
+                org.telegram.tl.Message[] messages_out_old = DatabaseConnection.getInstance().getOutgoingMessages(context.getUserId(), ((InputPeerUser) peer).user_id, max_id);
+                org.telegram.tl.L57.Message[] messages_in = new org.telegram.tl.L57.Message[messages_in_old.length];
+                for (int i = 0; i < messages_in.length; i++) {
+                    messages_in[i] = new org.telegram.tl.L57.Message(messages_in[i].flags, messages_in_old[i].id, messages_in_old[i].from_id, messages_in_old[i].to_id, null,
+                            0, 0, messages_in_old[i].date, messages_in_old[i].message, messages_in_old[i].media, null,
+                            null, 0, 0);
+                }
+
+                org.telegram.tl.L57.Message[] messages_out = new org.telegram.tl.L57.Message[messages_out_old.length];
+                for (int i = 0; i < messages_out.length; i++) {
+                    messages_out[i] = new org.telegram.tl.L57.Message(messages_out[i].flags, messages_out_old[i].id, messages_out_old[i].from_id, messages_out_old[i].to_id, null,
+                            0, 0, messages_out_old[i].date, messages_out_old[i].message, messages_out_old[i].media, null,
+                            null, 0, 0);
+                }
+                for (org.telegram.tl.L57.Message m : messages_in) {
+                    m.flags = 0;
+                    processMessage(context, tlMessages, tlUsers, tlChats, m);
+                }
+                for (org.telegram.tl.L57.Message m : messages_out) {
+                    m.flags = 2;
+                    m.set_out(true);
+                    processMessage(context, tlMessages, tlUsers, tlChats, m);
+                }
+            } else if (peer instanceof InputPeerChat) {
+                org.telegram.tl.Message[] messages_in_old = DatabaseConnection.getInstance().getIncomingChatMessages(context.getUserId(), ((InputPeerChat) peer).chat_id, max_id);
+                org.telegram.tl.Message[] messages_out_old = DatabaseConnection.getInstance().getOutgoingChatMessages(context.getUserId(), ((InputPeerChat) peer).chat_id, max_id);
+                org.telegram.tl.L57.Message[] messages_in = new org.telegram.tl.L57.Message[messages_in_old.length];
+                for (int i = 0; i < messages_in.length; i++) {
+                    messages_in[i] = new org.telegram.tl.L57.Message(0, messages_in_old[i].id, messages_in_old[i].from_id, messages_in_old[i].to_id, null,
+                            0, 0, messages_in_old[i].date, messages_in_old[i].message, messages_in_old[i].media, null,
+                            null, 0, 0);
+                }
+
+                org.telegram.tl.L57.Message[] messages_out = new org.telegram.tl.L57.Message[messages_out_old.length];
+                for (int i = 0; i < messages_out.length; i++) {
+                    messages_out[i] = new org.telegram.tl.L57.Message(0, messages_out_old[i].id, messages_out_old[i].from_id, messages_out_old[i].to_id, null,
+                            0, 0, messages_out_old[i].date, messages_out_old[i].message, messages_out_old[i].media, null,
+                            null, 0, 0);
+                }
+                for (org.telegram.tl.L57.Message m : messages_in) {
+                    m.flags = 0;
+                    processMessage(context, tlMessages, tlUsers, tlChats, m);
+                }
+                for (org.telegram.tl.L57.Message m : messages_out) {
+                    m.flags = 2;
+                    m.set_out(true);
+                    processMessage(context, tlMessages, tlUsers, tlChats, m);
+                }
+            }
+
+        }
+
+        Collections.sort(tlMessages, new Comparator<TLMessage>() {
+            @Override
+            public int compare(TLMessage o1, TLMessage o2) {
+                return ((org.telegram.tl.L57.Message) o2).id - ((org.telegram.tl.L57.Message) o1).id;
+            }
+        });
+
+        return new Messages(tlMessages, tlChats, tlUsers);
+    }
+
+    private void processMessage(TLContext context, TLVector<TLMessage> tlMessages, TLVector<TLUser> tlUsers, TLVector<TLChat> tlChats, org.telegram.tl.L57.Message m) {
+        tlMessages.add(m);
+        boolean user_exists_from = false;
+        boolean user_exists_to = false;
+        for (TLUser d : tlUsers) {
+            if (d instanceof UserContact) {
+                if (((UserContact) d).id == m.from_id) {
+                    user_exists_from = true;
+                }
+                if (((UserContact) d).id == ((PeerUser) m.to_id).user_id) {
+                    user_exists_to = true;
+                }
+            }
+        }
+        if (!user_exists_from) {
+            UserModel uc = UserStore.getInstance().getUser(m.from_id);
+            if (uc != null) {
+                tlUsers.add(uc.toUser(context.getApiLayer()));
+            }
+        }
+        if (!user_exists_to) {
+            if (m.to_id instanceof PeerUser) {
+                UserModel uc = UserStore.getInstance().getUser(((PeerUser) m.to_id).user_id);
+                if (uc != null) {
+                    tlUsers.add(uc.toUser(context.getApiLayer()));
+                }
+            } else if (m.to_id instanceof PeerChat) {
+                TLChat c = ChatStore.getInstance().getChat(((PeerChat) m.to_id).chat_id);
+                if (c != null) {
+                    tlChats.add(c);
+                }
+            }
+
+        }
     }
 }

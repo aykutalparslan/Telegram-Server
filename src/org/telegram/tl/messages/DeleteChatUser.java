@@ -87,21 +87,28 @@ public class DeleteChatUser extends TLObject implements TLMethod {
 
             TLVector<TLChat> chatTLVector = new TLVector<>();
             if (chat != null) {
-                chatTLVector.add(chat);
+                if (context.getApiLayer() >= 48) {
+                    chatTLVector.add(((Chat) chat).toChatL42());
+                } else {
+                    chatTLVector.add(chat);
+                }
             }
             TLVector<TLUser> userTLVector = new TLVector<>();
             userTLVector.add(umc.toUser(context.getApiLayer()));
             userTLVector.add(um.toUser(context.getApiLayer()));
             TLVector<TLUpdate> updateTLVector = new TLVector<>();
 
-            UpdateNewMessage user_added = new UpdateNewMessage(new MessageService(flags, message_id, context.getUserId(),
-                    new PeerChat(chat_id), date, new MessageActionChatDeleteUser(umc.user_id)), um.pts, 1);
+            if (context.getApiLayer() >= 48) {
+                UpdateNewMessage user_added = new UpdateNewMessage(new MessageServiceL45(flags, message_id, context.getUserId(),
+                        new PeerChat(chat_id), date, new MessageActionChatDeleteUser(umc.user_id)), um.pts, 1);
 
-            updateTLVector.add(user_added);
+                updateTLVector.add(user_added);
+            } else {
+                UpdateNewMessage user_added = new UpdateNewMessage(new MessageService(flags, message_id, context.getUserId(),
+                        new PeerChat(chat_id), date, new MessageActionChatDeleteUser(umc.user_id)), um.pts, 1);
 
-            /*Random rnd = new Random();
-            UpdateMessageID updateMessageID = new UpdateMessageID(message_id, rnd.nextLong());
-            updateTLVector.add(updateMessageID);*/
+                updateTLVector.add(user_added);
+            }
 
             UpdateChatParticipantDelete ucpd = new UpdateChatParticipantDelete(chat_id, umc.user_id, 1);
             updateTLVector.add(ucpd);
@@ -118,17 +125,28 @@ public class DeleteChatUser extends TLObject implements TLMethod {
                     TLVector<TLUpdate> updateTLVector2 = new TLVector<>();
                     int message_id2 = umc2.sent_messages + umc2.received_messages + 1;
                     int flags2 = 0;
-                    UpdateNewMessage user_added2 = new UpdateNewMessage(new MessageService(flags2, message_id2, context.getUserId(),
-                            new PeerChat(chat_id), date, new MessageActionChatDeleteUser(umc.user_id)), umc2.pts, 1);
 
-                    /*UpdateMessageID updateMessageID2 = new UpdateMessageID(message_id2, rnd.nextLong());
-                    updateTLVector2.add(updateMessageID2);*/
+                    for (Object sess : Router.getInstance().getActiveSessions(user_id)) {
+                        if (((ActiveSession) sess).layer >= 48) {
+                            UpdateNewMessage user_added2 = new UpdateNewMessage(new MessageServiceL45(flags2, message_id2, context.getUserId(),
+                                    new PeerChat(chat_id), date, new MessageActionChatDeleteUser(umc.user_id)), umc2.pts, 1);
 
-                    updateTLVector2.add(user_added2);
-                    updateTLVector2.add(ucpd);
+                            updateTLVector2.add(user_added2);
+                            updateTLVector2.add(ucpd);
 
-                    Updates updates2 = new Updates(updateTLVector2, userTLVector, chatTLVector, date, 0);
-                    Router.getInstance().Route(user_id, updates2, false);
+                            Updates updates2 = new Updates(updateTLVector2, userTLVector, chatTLVector, date, 0);
+                            Router.getInstance().Route(((ActiveSession) sess).session_id, ((ActiveSession) sess).auth_key_id, updates2, false);
+                        } else {
+                            UpdateNewMessage user_added2 = new UpdateNewMessage(new MessageService(flags2, message_id2, context.getUserId(),
+                                    new PeerChat(chat_id), date, new MessageActionChatDeleteUser(umc.user_id)), umc2.pts, 1);
+
+                            updateTLVector2.add(user_added2);
+                            updateTLVector2.add(ucpd);
+
+                            Updates updates2 = new Updates(updateTLVector2, userTLVector, chatTLVector, date, 0);
+                            Router.getInstance().Route(((ActiveSession) sess).session_id, ((ActiveSession) sess).auth_key_id, updates2, false);
+                        }
+                    }
                 }
             }
 

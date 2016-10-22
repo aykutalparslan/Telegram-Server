@@ -99,8 +99,8 @@ public class UpdateShortSentMessage extends TLUpdates {
         return (flags & (1 << 1)) != 0;
     }
 
-    public boolean set_updateShortSentMessage_out() {
-        return (flags |= (1 << 1)) != 0;
+    public void set_updateShortSentMessage_out() {
+        flags |= (1 << 1);
     }
 
     public int getConstructor() {

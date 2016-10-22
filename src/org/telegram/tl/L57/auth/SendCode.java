@@ -18,13 +18,16 @@
 
 package org.telegram.tl.L57.auth;
 
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.core.UserStore;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.TLObject;
 import org.telegram.tl.TLVector;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
-public class SendCode extends TLObject {
+public class SendCode extends TLObject implements TLMethod {
 
     public static final int ID = 0x86aef0ec;
 
@@ -96,5 +99,24 @@ public class SendCode extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+
+        if (UserStore.getInstance().getUser(clearPhone(phone_number)) == null) {
+            SentCode sentCode = new SentCode(0, new SentCodeTypeSms(), "EFEFEFEFEFEFEFEFEF", new CodeTypeCall(), 0);
+            sentCode.set_phone_registered(true);
+            return sentCode;
+        } else {
+            SentCode sentCode = new SentCode(0, new SentCodeTypeSms(), "EFEFEFEFEFEFEFEFEF", new CodeTypeCall(), 0);
+            return sentCode;
+        }
+
+
+    }
+
+    public String clearPhone(String phone) {
+        return phone.replace("(", "").replace(")", "").replace(" ", "").replace("-", "").replace("+", "");
     }
 }

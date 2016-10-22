@@ -90,6 +90,10 @@ public class GetFile extends TLObject implements TLMethod {
                 return rpc_error.BAD_REQUEST();
             }
 
+            int file_size = DatabaseConnection.getInstance().getFileSize(file_id);
+            int remaining = file_size - offset;
+            limit = Math.min(limit, remaining);
+
             int part_size = DatabaseConnection.getInstance().getPartSizeForFile(file_id);
             int first_part_num = offset / part_size;
             int last_part_num = first_part_num + limit / part_size - 1;
@@ -113,7 +117,7 @@ public class GetFile extends TLObject implements TLMethod {
 
                     byte[] bytes = DatabaseConnection.getInstance().getFilePart(file_id, i);
                     limit_for_part = Math.min(limit_for_part, bytes.length);
-                    buffer.write(bytes, offset_for_part, limit_for_part);
+                    buffer.write(bytes, offset_for_part, limit_for_part - offset_for_part);
                 }
             }
 

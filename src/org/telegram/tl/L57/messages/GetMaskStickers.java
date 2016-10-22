@@ -18,13 +18,16 @@
 
 package org.telegram.tl.L57.messages;
 
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.TLObject;
+import org.telegram.tl.TLStickerSet;
 import org.telegram.tl.TLVector;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.L57.*;
 
-public class GetMaskStickers extends TLObject {
+public class GetMaskStickers extends TLObject implements TLMethod {
 
     public static final int ID = 0x65b8c79f;
 
@@ -59,5 +62,10 @@ public class GetMaskStickers extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        return new AllStickers(0, new TLVector<TLStickerSet>());
     }
 }

@@ -715,7 +715,7 @@ public class DatabaseConnection {
     }
 
     public void saveFilePart(long file_id, int part_num, byte[] bytes) {
-        if (part_num == 1 || part_num == 0) {
+        if (part_num == 0) {
             saveFile(file_id, bytes.length);
         }
 

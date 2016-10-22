@@ -24,6 +24,41 @@ import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.server.ServerConfig;
 import org.telegram.tl.*;
+import org.telegram.tl.Document;
+import org.telegram.tl.FileLocation;
+import org.telegram.tl.GeoPoint;
+import org.telegram.tl.InputDocument;
+import org.telegram.tl.InputFile;
+import org.telegram.tl.InputGeoPoint;
+import org.telegram.tl.InputMediaContact;
+import org.telegram.tl.InputMediaDocument;
+import org.telegram.tl.InputMediaGeoPoint;
+import org.telegram.tl.InputMediaPhoto;
+import org.telegram.tl.InputMediaUploadedDocument;
+import org.telegram.tl.InputMediaUploadedPhoto;
+import org.telegram.tl.InputMediaUploadedThumbDocument;
+import org.telegram.tl.InputMediaVenue;
+import org.telegram.tl.InputPeerChat;
+import org.telegram.tl.InputPeerUser;
+import org.telegram.tl.InputPhoto;
+import org.telegram.tl.L57.*;
+import org.telegram.tl.Message;
+import org.telegram.tl.MessageMediaContact;
+import org.telegram.tl.MessageMediaDocument;
+import org.telegram.tl.MessageMediaEmpty;
+import org.telegram.tl.MessageMediaGeo;
+import org.telegram.tl.MessageMediaPhoto;
+import org.telegram.tl.MessageMediaVenue;
+import org.telegram.tl.PeerChat;
+import org.telegram.tl.PeerUser;
+import org.telegram.tl.Photo;
+import org.telegram.tl.PhotoEmpty;
+import org.telegram.tl.PhotoSize;
+import org.telegram.tl.PhotoSizeEmpty;
+import org.telegram.tl.UpdateMessageID;
+import org.telegram.tl.UpdateNewMessage;
+import org.telegram.tl.Updates;
+import org.telegram.tl.UpdatesCombined;
 import org.telegram.tl.service.rpc_error;
 
 import java.util.Random;
@@ -255,6 +290,13 @@ public class SendMediaL48 extends TLObject implements TLMethod {
             return new MessageMediaDocument(new Document(file_id, file_id,
                     0, ((InputMediaUploadedThumbDocument) media).mime_type, file_size, new PhotoSizeEmpty(),
                     ServerConfig.SERVER_ID, ((InputMediaUploadedThumbDocument) media).attributes));
+        } else if (media instanceof org.telegram.tl.L57.InputMediaUploadedDocument) {//TODO: save document info to database
+            long file_id = ((InputFile) ((org.telegram.tl.L57.InputMediaUploadedDocument) media).file).id;
+            int file_size = DatabaseConnection.getInstance().getFileSize(file_id);
+            return new org.telegram.tl.L57.MessageMediaDocument(new Document(file_id, file_id,
+                    0, ((org.telegram.tl.L57.InputMediaUploadedDocument) media).mime_type, file_size, new PhotoSizeEmpty(),
+                    ServerConfig.SERVER_ID, ((org.telegram.tl.L57.InputMediaUploadedDocument) media).attributes),
+                    ((org.telegram.tl.L57.InputMediaUploadedDocument) media).caption);
         } else if (media instanceof InputMediaUploadedAudio) {//TODO: save audio info to database
             long file_id = ((InputFile) ((InputMediaUploadedAudio) media).file).id;
             int file_size = DatabaseConnection.getInstance().getFileSize(file_id);
@@ -290,6 +332,7 @@ public class SendMediaL48 extends TLObject implements TLMethod {
             return new MessageMediaEmpty();
         }
     }
+
 
     private String stripPhone(String phone) {
         StringBuilder res = new StringBuilder(phone);

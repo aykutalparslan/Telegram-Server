@@ -81,9 +81,17 @@ public class GetFullUser extends TLObject implements TLMethod {
         }
         UserModel um = UserStore.getInstance().getUser(user_id);
         if (um != null) {
-            UserFull userFull = new UserFull(um.toUser(context.getApiLayer()), new Link(new MyLinkContact(), new ForeignLinkMutual(), um.toUser(context.getApiLayer())),
-                    new PhotoEmpty(), new PeerNotifySettingsEmpty(), false, new BotInfoEmpty());
-            return userFull;
+            if (context.getApiLayer() >= 57) {
+                org.telegram.tl.L57.UserFull userFull = new org.telegram.tl.L57.UserFull(0, um.toUser(context.getApiLayer()), "",
+                        new org.telegram.tl.L57.contacts.Link(new org.telegram.tl.L57.ContactLinkContact(), new org.telegram.tl.L57.ContactLinkContact(), um.toUser(context.getApiLayer())),
+                        null, new PeerNotifySettingsEmpty(), null);
+                return userFull;
+            } else {
+                UserFull userFull = new UserFull(um.toUser(context.getApiLayer()), new Link(new MyLinkContact(), new ForeignLinkMutual(), um.toUser(context.getApiLayer())),
+                        new PhotoEmpty(), new PeerNotifySettingsEmpty(), false, new BotInfoEmpty());
+                return userFull;
+            }
+
         }
         return null;
     }

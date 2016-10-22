@@ -70,7 +70,7 @@ public class GetFullChat extends TLObject implements TLMethod {
         int date = (int) (System.currentTimeMillis() / 1000L);
         TLChat chat = ChatStore.getInstance().getChat(chat_id);
         TLVector<TLChat> chatTLVector = new TLVector<>();
-        chatTLVector.add(chat);
+
         int[] participants_arr = ChatStore.getInstance().getChatParticipants(chat_id);
         TLVector<TLUser> userTLVector = new TLVector<>();
         TLVector<Integer> usersVectorInteger = new TLVector<>();
@@ -96,15 +96,32 @@ public class GetFullChat extends TLObject implements TLMethod {
                 chat_photo = new Photo(photo_id, photo_id, date, photoSizes);
             }
         }
-        org.telegram.tl.ChatFull chatFull = new org.telegram.tl.ChatFull(chat_id,
-                new ChatParticipants(chat_id, ((Chat) chat)._admin_id, participants, 1),
-                chat_photo,
-                new PeerNotifySettingsEmpty(),
-                new ChatInviteEmpty(),
-                new TLVector<TLBotInfo>());
+        if (context.getApiLayer() >= 48) {
+            org.telegram.tl.ChatFull chatFull = new org.telegram.tl.ChatFull(chat_id,
+                    new org.telegram.tl.L57.ChatParticipants(chat_id, participants, 1),
+                    chat_photo,
+                    new PeerNotifySettingsEmpty(),
+                    new ChatInviteEmpty(),
+                    new TLVector<TLBotInfo>());
 
-        ChatFull fullChat = new ChatFull(chatFull, chatTLVector, userTLVector);
+            ChatFull fullChat = new ChatFull(chatFull, chatTLVector, userTLVector);
 
-        return fullChat;
+            chatTLVector.add(((Chat) chat).toChatL42());
+
+            return fullChat;
+        } else {
+            org.telegram.tl.ChatFull chatFull = new org.telegram.tl.ChatFull(chat_id,
+                    new ChatParticipants(chat_id, ((Chat) chat)._admin_id, participants, 1),
+                    chat_photo,
+                    new PeerNotifySettingsEmpty(),
+                    new ChatInviteEmpty(),
+                    new TLVector<TLBotInfo>());
+
+            ChatFull fullChat = new ChatFull(chatFull, chatTLVector, userTLVector);
+
+            chatTLVector.add(chat);
+
+            return fullChat;
+        }
     }
 }

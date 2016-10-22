@@ -179,8 +179,10 @@ public class SendMessageL48 extends TLObject implements TLMethod {
                 }
 
                 if (context.getApiLayer() >= 48) {
-                    return new UpdateShortSentMessage(0, msg_id, pts, 1, date,
+                    UpdateShortSentMessage updateShortSentMessage = new UpdateShortSentMessage(0, msg_id, pts, 1, date,
                             new MessageMediaEmpty(), entities);
+                    updateShortSentMessage.set_updateShortSentMessage_out();
+                    return updateShortSentMessage;
                 } else {
                     return new SentMessage(msg_id, date, new MessageMediaEmpty(),
                             new TLVector<TLMessageEntity>(), pts, 0, pts);
@@ -226,8 +228,10 @@ public class SendMessageL48 extends TLObject implements TLMethod {
                 pts = um.pts;
 
                 if (context.getApiLayer() >= 48) {
-                    return new UpdateShortSentMessage(0, msg_id, pts, 1, date,
+                    UpdateShortSentMessage updateShortSentMessage = new UpdateShortSentMessage(0, msg_id, pts, 1, date,
                             new MessageMediaEmpty(), entities);
+                    updateShortSentMessage.set_updateShortSentMessage_out();
+                    return updateShortSentMessage;
                 } else {
                     return new SentMessage(msg_id, date, new MessageMediaEmpty(),
                             new TLVector<TLMessageEntity>(), pts, 0, pts);

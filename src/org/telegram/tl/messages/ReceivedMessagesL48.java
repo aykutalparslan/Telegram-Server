@@ -63,7 +63,7 @@ public class ReceivedMessagesL48 extends TLObject implements TLMethod {
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
         TLVector<TLReceivedNotifyMessage> receivedNotifyMessages = new TLVector<>();
-        receivedNotifyMessages.add(new ReceivedNotifyMessage(max_id, 0));
+        //receivedNotifyMessages.add(new ReceivedNotifyMessage(max_id, 0));
         return receivedNotifyMessages;
     }
 }

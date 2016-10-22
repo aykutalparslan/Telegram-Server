@@ -50,6 +50,18 @@ public class APIContext implements DeserializationContext {
     private HashMap<Integer, Class> schema;
 
     private APIContext(){
+        addToSchema(org.telegram.tl.L57.MessageMediaDocument.class);
+        addToSchema(org.telegram.tl.L57.DocumentAttributeAudio.class);
+        addToSchema(org.telegram.tl.L57.InputMediaUploadedDocument.class);
+        addToSchema(org.telegram.tl.L57.messages.GetRecentStickers.class);
+        addToSchema(org.telegram.tl.L57.messages.GetHistory.class);
+        addToSchema(org.telegram.tl.L57.messages.GetMaskStickers.class);
+        addToSchema(org.telegram.tl.L57.messages.GetPeerSettings.class);
+        addToSchema(org.telegram.tl.L57.contacts.GetTopPeers.class);
+        addToSchema(org.telegram.tl.L57.account.RegisterDevice.class);
+        addToSchema(org.telegram.tl.L57.messages.GetFeaturedStickers.class);
+        addToSchema(org.telegram.tl.L57.help.GetInviteText.class);
+        addToSchema(org.telegram.tl.L57.auth.SendCode.class);
         addToSchema(GetDocumentByHash.class);
         addToSchema(DeleteHistoryL48.class);
         addToSchema(AffectedMessages.class);

@@ -62,6 +62,6 @@ public class GetAllStickers extends TLObject implements TLMethod {
 
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
-        return new AllStickersNotModified();
+        return new AllStickers(0, new TLVector<TLStickerSet>());
     }
 }
