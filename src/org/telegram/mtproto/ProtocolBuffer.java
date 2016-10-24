@@ -26,6 +26,7 @@ import org.telegram.tl.TLObject;
 import org.telegram.tl.TLVector;
 
 import java.io.Serializable;
+import java.security.MessageDigest;
 
 /**
  * Created by aykut on 21/09/15.
@@ -337,7 +338,14 @@ public class ProtocolBuffer implements Serializable {
 
 
     public byte[] getSHA1() {
-        return Utilities.computeSHA1(getBytes());
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-1");
+            md.update(_buffer.nioBuffer());
+            return md.digest();
+        } catch (Exception e) {
+            return null;
+        }
+        //return Utilities.computeSHA1(getBytes());
     }
 
 

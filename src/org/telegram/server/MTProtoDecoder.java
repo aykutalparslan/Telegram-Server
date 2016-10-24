@@ -94,7 +94,7 @@ public class MTProtoDecoder  extends ByteToMessageDecoder {
             out.add(message);
         } else {
             byte[] message_key = buffer.read(16);
-            byte[] encrypted_bytes = buffer.read(currentPacketLength - 24);
+            byte[] encrypted_bytes = buffer.read(currentPacketLength - (8 + 16));
 
             AuthKeyModel authKey = AuthKeyStore.getInstance().getAuthKey(message.auth_key_id);
 
