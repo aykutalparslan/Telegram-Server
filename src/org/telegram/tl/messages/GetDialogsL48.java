@@ -104,7 +104,7 @@ public class GetDialogsL48 extends TLObject implements TLMethod {
         org.telegram.tl.L57.Message[] messages_out = new org.telegram.tl.L57.Message[messages_out_old.length];
         for (int i = 0; i < messages_out.length; i++) {
             messages_out[i] = new org.telegram.tl.L57.Message(0, messages_out_old[i].id, messages_out_old[i].from_id, messages_out_old[i].to_id, null,
-                    0, 0, messages_out_old[i].date, messages_out_old[i].message, messages_out_old[i].media, null,
+                    0, 0, messages_out_old[i].date, messages_out_old[i].message, null, null,
                     null, 0, 0);
         }
 
@@ -264,7 +264,7 @@ public class GetDialogsL48 extends TLObject implements TLMethod {
         MessageL48[] messages_out = new MessageL48[messages_out_old.length];
         for (int i = 0; i < messages_out.length; i++) {
             messages_out[i] = new MessageL48(0, messages_out_old[i].id, messages_out_old[i].from_id, messages_out_old[i].to_id, null,
-                    0, 0, messages_out_old[i].date, messages_out_old[i].message, messages_out_old[i].media, null,
+                    0, 0, messages_out_old[i].date, messages_out_old[i].message, null, null,
                     null, 0, 0);
         }
 
