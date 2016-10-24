@@ -32,4 +32,5 @@ public class ActiveSession implements Serializable {
     public String phone;
     public String username;
     public String server;
+    public boolean http = false;
 }

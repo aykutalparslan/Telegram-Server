@@ -20,12 +20,16 @@ package org.telegram.core;
 
 import com.hazelcast.core.IMap;
 import com.hazelcast.query.SqlPredicate;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.*;
 import org.telegram.data.HazelcastConnection;
 import org.telegram.mtproto.MessageKeyData;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.mtproto.Utilities;
 import org.telegram.mtproto.secure.CryptoUtils;
+import org.telegram.server.TelegramHTTPServerHandler;
 import org.telegram.server.TelegramServerHandler;
 import org.telegram.tl.TLObject;
 
@@ -80,10 +84,17 @@ public class Router {
             //for now all sessions are on the same server
             ChannelHandlerContext ctx = channelHandlers.get(((ActiveSession) sess).session_id);
             if (ctx != null) {
-                long msg_id = ((TelegramServerHandler) ctx.handler()).generateMessageId(rpc_response);
+                if (((ActiveSession) sess).http) {
+                    long msg_id = ((TelegramHTTPServerHandler) ctx.handler()).generateMessageId(rpc_response);
 
-                ctx.writeAndFlush(encryptRpc(msg, ((TelegramServerHandler) ctx.handler()).getMessageSeqNo(true), msg_id,
-                        ((ActiveSession) sess).session_id, ((ActiveSession) sess).auth_key_id));
+                    sendResponse(ctx, encryptRpc(msg, ((TelegramHTTPServerHandler) ctx.handler()).getMessageSeqNo(true), msg_id,
+                            ((ActiveSession) sess).session_id, ((ActiveSession) sess).auth_key_id).getBytes());
+                } else {
+                    long msg_id = ((TelegramServerHandler) ctx.handler()).generateMessageId(rpc_response);
+
+                    ctx.writeAndFlush(encryptRpc(msg, ((TelegramServerHandler) ctx.handler()).getMessageSeqNo(true), msg_id,
+                            ((ActiveSession) sess).session_id, ((ActiveSession) sess).auth_key_id));
+                }
             }
         }
     }
@@ -91,10 +102,21 @@ public class Router {
     public void Route(long session_id, long auth_key_id, TLObject msg, boolean rpc_response) {
         ChannelHandlerContext ctx = channelHandlers.get(session_id);
         if (ctx != null) {
-            long msg_id = ((TelegramServerHandler) ctx.handler()).generateMessageId(rpc_response);
 
-            ctx.writeAndFlush(encryptRpc(msg, ((TelegramServerHandler) ctx.handler()).getMessageSeqNo(true), msg_id,
-                    session_id, auth_key_id));
+
+            ActiveSession session = activeSessions.get(session_id);
+            if (session.http) {
+                long msg_id = ((TelegramHTTPServerHandler) ctx.handler()).generateMessageId(rpc_response);
+
+                sendResponse(ctx, encryptRpc(msg, ((TelegramHTTPServerHandler) ctx.handler()).getMessageSeqNo(true), msg_id,
+                        session_id, auth_key_id).getBytes());
+            } else {
+                long msg_id = ((TelegramServerHandler) ctx.handler()).generateMessageId(rpc_response);
+
+                ctx.writeAndFlush(encryptRpc(msg, ((TelegramServerHandler) ctx.handler()).getMessageSeqNo(true), msg_id,
+                        session_id, auth_key_id));
+            }
+
         }
     }
 
@@ -133,5 +155,19 @@ public class Router {
         data.write(messageKey);
         data.write(encryptedData);
         return data;
+    }
+
+    private void sendResponse(ChannelHandlerContext ctx, byte[] response) {
+        HttpResponse responseHeaders = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
+
+        ByteBuf responseContent = Unpooled.copiedBuffer(response);
+
+        responseHeaders.headers().set(HttpHeaderNames.CONTENT_LENGTH, responseContent.readableBytes());
+        responseHeaders.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
+
+        // write response
+        ctx.write(responseHeaders);
+        ctx.write(responseContent);
+        ctx.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
     }
 }

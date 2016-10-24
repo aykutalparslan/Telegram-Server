@@ -27,6 +27,8 @@ import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.http.HttpObjectAggregator;
+import io.netty.handler.codec.http.HttpServerCodec;
 import org.telegram.data.DatabaseConnection;
 import org.telegram.data.HazelcastConnection;
 
@@ -64,10 +66,32 @@ public class TelegramServer {
             // Bind and start to accept incoming connections.
             ChannelFuture f = b.bind(port).sync();
 
+            ServerBootstrap b2 = new ServerBootstrap();
+            b2.group(bossGroup, workerGroup)
+                    .channel(NioServerSocketChannel.class)
+                    .childHandler(new ChannelInitializer<SocketChannel>() {
+                        @Override
+                        public void initChannel(SocketChannel ch) throws Exception {
+                            ch.pipeline().addLast("codec", new HttpServerCodec());
+                            ch.pipeline().addLast("aggregator", new HttpObjectAggregator(512 * 1024));
+                            ch.pipeline().addLast(new TelegramHTTPServerHandler());
+                        }
+                    })
+                    .option(ChannelOption.SO_BACKLOG, 128)
+                    .childOption(ChannelOption.SO_KEEPALIVE, true);
+
+            // Bind and start to accept incoming connections.
+            ChannelFuture f2 = b2.bind(12345).sync();
+
             // Wait until the server socket is closed.
             // In this example, this does not happen, but you can do that to gracefully
             // shut down your server.
             f.channel().closeFuture().sync();
+
+            // Wait until the server socket is closed.
+            // In this example, this does not happen, but you can do that to gracefully
+            // shut down your server.
+            f2.channel().closeFuture().sync();
         } finally {
             workerGroup.shutdownGracefully();
             bossGroup.shutdownGracefully();
