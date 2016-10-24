@@ -21,7 +21,14 @@ package org.telegram.server;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
+import org.telegram.core.AuthKeyStore;
+import org.telegram.core.TLContext;
+import org.telegram.data.AuthKeyModel;
+import org.telegram.mtproto.MessageKeyData;
 import org.telegram.mtproto.ProtocolBuffer;
+import org.telegram.mtproto.secure.CryptoUtils;
+import org.telegram.tl.APIContext;
+import org.telegram.tl.TLObject;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -75,11 +82,41 @@ public class MTProtoDecoder  extends ByteToMessageDecoder {
             return;
         }
 
-        ProtocolBuffer received = new ProtocolBuffer(currentPacketLength);
+        ProtocolBuffer buffer = new ProtocolBuffer(in);
 
-        in.readBytes(received.getBuffer(), currentPacketLength);
+        MTProtoMessage message = new MTProtoMessage();
+        message.auth_key_id = buffer.readLong();
+        if (message.auth_key_id == 0) {
+            message.message_id = buffer.readLong();
+            message.message_data_length = buffer.readInt();
+            message.message_data = APIContext.getInstance().deserialize(buffer);
 
-        out.add(received);
+            out.add(message);
+        } else {
+            byte[] message_key = buffer.read(16);
+            byte[] encrypted_bytes = buffer.read(currentPacketLength - 24);
+
+            AuthKeyModel authKey = AuthKeyStore.getInstance().getAuthKey(message.auth_key_id);
+
+            ProtocolBuffer buff = decryptRpc(authKey.auth_key, encrypted_bytes, message_key);
+            message.server_salt = buff.readLong();
+            message.session_id = buff.readLong();
+            message.message_id = buff.readLong();
+            message.seq_no = buff.readInt();
+            message.message_data_length = buff.readInt();
+            message.message_data = APIContext.getInstance().deserialize(buff);
+            buff.release();
+
+            out.add(message);
+        }
+
         currentPacketLength = 0;
+    }
+
+    private ProtocolBuffer decryptRpc(byte[] authKey, byte[] bytes, byte[] messageKey) {
+        MessageKeyData keyData = MessageKeyData.generateMessageKeyData(authKey, messageKey, false);
+        byte[] decryptedData = CryptoUtils.AES256IGEDecrypt(bytes, keyData.aesIv, keyData.aesKey);
+        ProtocolBuffer buff = new ProtocolBuffer(decryptedData);
+        return buff;
     }
 }

@@ -83,6 +83,10 @@ public class ProtocolBufferTest {
         buffer.writeString(a);
         String b = buffer.readString();
         assertEquals(a, b);
+        a = "";
+        buffer.writeString(a);
+        b = buffer.readString();
+        assertEquals(a, b);
     }
 
     @Test

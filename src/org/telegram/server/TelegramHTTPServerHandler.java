@@ -64,15 +64,12 @@ public class TelegramHTTPServerHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-
-        //super.channelRead(ctx, msg);
-
         FullHttpRequest request = (FullHttpRequest) msg;
-        ByteBuf byteBuf = request.content();
+        /*ByteBuf byteBuf = request.content();
 
         byte[] message_bytes = new byte[byteBuf.readableBytes()];
-        byteBuf.readBytes(message_bytes);
-        ProtocolBuffer data = new ProtocolBuffer(message_bytes);
+        byteBuf.readBytes(message_bytes);*/
+        ProtocolBuffer data = new ProtocolBuffer(request.content());
         long keyId = data.readLong();
         if (keyId == 0) {
             long messageId = data.readLong();

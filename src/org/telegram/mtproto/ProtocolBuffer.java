@@ -52,6 +52,13 @@ public class ProtocolBuffer implements Serializable {
     }
 
     /**
+     * @param buffer
+     */
+    public ProtocolBuffer(ByteBuf buffer) {
+        _buffer = buffer;
+    }
+
+    /**
      *
      * @param value
      */
@@ -222,6 +229,7 @@ public class ProtocolBuffer implements Serializable {
         }
 
         return read(1)[0];
+        //return _buffer.readByte();
     }
 
     public int readInt() throws IndexOutOfBoundsException{
