@@ -74,21 +74,23 @@ public class ImportContacts extends TLObject implements TLMethod {
             AuthKeyModel akm = AuthKeyStore.getInstance().getAuthKey(context.getAuthKeyId());
             if (akm != null) {
                 for (TLInputContact c : contacts) {
-                    UserModel cu = UserStore.getInstance().getUser(((InputPhoneContact) c).phone.replace("+", ""));
+                    if (c != null && ((InputPhoneContact) c).phone != null) {
+                        UserModel cu = UserStore.getInstance().getUser(((InputPhoneContact) c).phone.replace("+", ""));
 
-                    if (cu != null) {
-                        DatabaseConnection.getInstance().saveContact(akm.user_id, ((InputPhoneContact) c).client_id,
-                                ((InputPhoneContact) c).phone.replace("+", ""),
-                                ((InputPhoneContact) c).first_name,
-                                ((InputPhoneContact) c).last_name, true);
-                        ImportedContact ic = new ImportedContact(cu.user_id, ((InputPhoneContact) c).client_id);
-                        imported.add(ic);
-                        users.add(cu.toUser(context.getApiLayer()));
-                    } else {
-                        DatabaseConnection.getInstance().saveContact(akm.user_id, ((InputPhoneContact) c).client_id,
-                                ((InputPhoneContact) c).phone.replace("+", ""),
-                                ((InputPhoneContact) c).first_name,
-                                ((InputPhoneContact) c).last_name, true);
+                        if (cu != null) {
+                            DatabaseConnection.getInstance().saveContact(akm.user_id, ((InputPhoneContact) c).client_id,
+                                    ((InputPhoneContact) c).phone.replace("+", ""),
+                                    ((InputPhoneContact) c).first_name,
+                                    ((InputPhoneContact) c).last_name, true);
+                            ImportedContact ic = new ImportedContact(cu.user_id, ((InputPhoneContact) c).client_id);
+                            imported.add(ic);
+                            users.add(cu.toUser(context.getApiLayer()));
+                        } else {
+                            DatabaseConnection.getInstance().saveContact(akm.user_id, ((InputPhoneContact) c).client_id,
+                                    ((InputPhoneContact) c).phone.replace("+", ""),
+                                    ((InputPhoneContact) c).first_name,
+                                    ((InputPhoneContact) c).last_name, true);
+                        }
                     }
                 }
             }

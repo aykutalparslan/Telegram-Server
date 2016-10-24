@@ -1,5 +1,6 @@
 package org.telegram.mtproto.secure;
 
+import io.netty.buffer.ByteBuf;
 import org.telegram.mtproto.secure.aes.AESImplementation;
 import org.telegram.mtproto.secure.aes.DefaultAESImplementation;
 

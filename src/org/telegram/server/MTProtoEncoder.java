@@ -40,8 +40,6 @@ public class MTProtoEncoder extends MessageToByteEncoder<ProtocolBuffer> {
             bufferLen += 4;
         }
 
-        ProtocolBuffer buffer = new ProtocolBuffer(bufferLen);
-
         if(abridged){
             boolean reportAck = false;
 
@@ -49,24 +47,24 @@ public class MTProtoEncoder extends MessageToByteEncoder<ProtocolBuffer> {
                 if (reportAck) {
                     packetLength |= (1 << 7);
                 }
-                buffer.writeByte(packetLength);
+                out.writeByte(packetLength);
             } else {
                 packetLength = (packetLength << 8) + 0x7f;
                 if (reportAck) {
                     packetLength |= (1 << 7);
                 }
-                buffer.writeInt(packetLength);
+                out.writeIntLE(packetLength);
             }
         } else{
             packetLength = bufferLen;
             int packetNum=1;
 
-            buffer.writeInt(packetLength);
-            buffer.writeInt(packetNum);
+            out.writeIntLE(packetLength);
+            out.writeIntLE(packetNum);
         }
 
-        buffer.write(buff);
+        out.writeBytes(buff.getBuffer());
 
-        out.writeBytes(buffer.getBytes());
+        buff.release();
     }
 }

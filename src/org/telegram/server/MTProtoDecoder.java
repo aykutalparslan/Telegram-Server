@@ -76,10 +76,8 @@ public class MTProtoDecoder  extends ByteToMessageDecoder {
         }
 
         ProtocolBuffer received = new ProtocolBuffer(currentPacketLength);
-        byte[] bytes = new byte[currentPacketLength];
 
-        in.readBytes(bytes, 0, currentPacketLength);
-        received.write(bytes);
+        in.readBytes(received.getBuffer(), currentPacketLength);
 
         out.add(received);
         currentPacketLength = 0;

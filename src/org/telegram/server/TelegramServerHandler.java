@@ -65,6 +65,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             long messageId = data.readLong();
             data.readInt();
             TLObject message = APIContext.getInstance().deserialize(data);
+            data.release();
             if (message != null) {
                 System.out.println("TLObject:" + message.toString());
             } else {
@@ -97,6 +98,8 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             byte[] message_key = data.read(16);
             byte[] encrypted_bytes = data.read(data.length() - (8 + 16));
 
+            data.release();
+
             ProtocolBuffer buff = decryptRpc(tlContext, encrypted_bytes, message_key);
 
             long server_salt = buff.readLong();
@@ -112,6 +115,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             }
 
             TLObject rpc = APIContext.getInstance().deserialize(buff);
+            buff.release();
             processRPC(ctx, rpc, message_id);
             //} catch (Exception e){
 
@@ -179,6 +183,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         } else if (rpc instanceof gzip_packed) {
             ProtocolBuffer data = new ProtocolBuffer(((gzip_packed) rpc).getUncompressed());
             TLObject gzip_rpc = APIContext.getInstance().deserialize(data);
+            data.release();
             processRPC(ctx, gzip_rpc, messageId);
         }
 

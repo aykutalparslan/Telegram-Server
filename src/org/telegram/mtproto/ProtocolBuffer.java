@@ -18,6 +18,9 @@
 
 package org.telegram.mtproto;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.buffer.PooledByteBufAllocator;
 import org.telegram.tl.DeserializationContext;
 import org.telegram.tl.TLObject;
 import org.telegram.tl.TLVector;
@@ -28,17 +31,15 @@ import java.io.Serializable;
  * Created by aykut on 21/09/15.
  */
 public class ProtocolBuffer implements Serializable {
-    private byte[] _bytes;
-    private int _readerIndex = 0;
-    private int _writerIndex = 0;
-    private int _limit = 0;
+    private static final ByteBufAllocator _alloc = PooledByteBufAllocator.DEFAULT;
+    private ByteBuf _buffer;
 
     /**
      *
      * @param initialCapacity
      */
     public ProtocolBuffer(int initialCapacity){
-        _bytes = new byte[initialCapacity];
+        _buffer = _alloc.directBuffer(initialCapacity);
     }
 
     /**
@@ -46,8 +47,8 @@ public class ProtocolBuffer implements Serializable {
      * @param rawBytes
      */
     public ProtocolBuffer(byte[] rawBytes){
-        _bytes = rawBytes;
-        _limit = rawBytes.length;
+        _buffer = _alloc.directBuffer(rawBytes.length);
+        _buffer.writeBytes(rawBytes);
     }
 
     /**
@@ -56,9 +57,7 @@ public class ProtocolBuffer implements Serializable {
      */
     public void writeByte(byte value) {
         expandIfNecessary(1);
-        _bytes[_writerIndex] = value;
-        _writerIndex ++;
-        set_limit();
+        _buffer.writeByte(value);
     }
 
     /**
@@ -67,9 +66,7 @@ public class ProtocolBuffer implements Serializable {
      */
     public void writeByte(int value) {
         expandIfNecessary(1);
-        _bytes[_writerIndex] = (byte)value;
-        _writerIndex ++;
-        set_limit();
+        _buffer.writeByte(value);
     }
 
     /**
@@ -78,13 +75,7 @@ public class ProtocolBuffer implements Serializable {
      */
     public void writeInt(int value) {
         expandIfNecessary(4);
-        _bytes[_writerIndex] = (byte) (value & 0xff);
-        _bytes[_writerIndex + 1] = (byte) ((value >> 8) & 0xff);
-        _bytes[_writerIndex + 2] = (byte) ((value >> 16) & 0xff);
-        _bytes[_writerIndex + 3] = (byte) ((value >> 24) & 0xff);
-
-        _writerIndex += 4;
-        set_limit();
+        _buffer.writeIntLE(value);
     }
 
     /**
@@ -93,17 +84,7 @@ public class ProtocolBuffer implements Serializable {
      */
     public void writeLong(long value) {
         expandIfNecessary(8);
-        _bytes[_writerIndex] = (byte) (value & 0xff);
-        _bytes[_writerIndex + 1] = (byte) ((value >> 8) & 0xff);
-        _bytes[_writerIndex + 2] = (byte) ((value >> 16) & 0xff);
-        _bytes[_writerIndex + 3] = (byte) ((value >> 24) & 0xff);
-        _bytes[_writerIndex + 4] = (byte) ((value >> 32) & 0xff);
-        _bytes[_writerIndex + 5] = (byte) ((value >> 40) & 0xff);
-        _bytes[_writerIndex + 6] = (byte) ((value >> 48) & 0xff);
-        _bytes[_writerIndex + 7] = (byte) ((value >> 56) & 0xff);
-
-        _writerIndex += 8;
-        set_limit();
+        _buffer.writeLongLE(value);
     }
 
     /**
@@ -157,12 +138,14 @@ public class ProtocolBuffer implements Serializable {
     public void writeBytes(byte[] value, int offset, int count) {
         int lenBytes = 1;
         if (count >= 254) {
+            expandIfNecessary(value.length + 4);
             lenBytes = 4;
             writeByte(254);
             writeByte(count & 0xff);
             writeByte((count >> 8) & 0xff);
             writeByte((count >> 16) & 0xff);
         } else {
+            expandIfNecessary(value.length + 1);
             writeByte(count);
         }
 
@@ -180,12 +163,14 @@ public class ProtocolBuffer implements Serializable {
     public void writeBytes(byte[] value) {
         int lenBytes = 1;
         if (value.length >= 254) {
+            expandIfNecessary(value.length + 4);
             lenBytes = 4;
             writeByte(254);
             writeByte(value.length & 0xff);
             writeByte((value.length >> 8) & 0xff);
             writeByte((value.length >> 16) & 0xff);
         } else {
+            expandIfNecessary(value.length + 1);
             writeByte(value.length);
         }
 
@@ -209,9 +194,7 @@ public class ProtocolBuffer implements Serializable {
     public void write(byte[] arr, int offset, int count) {
         expandIfNecessary(arr.length);
 
-        System.arraycopy(arr, offset, _bytes, _writerIndex, count);
-        _writerIndex += count;
-        set_limit();
+        _buffer.writeBytes(arr, offset, count);
     }
 
     /**
@@ -221,61 +204,38 @@ public class ProtocolBuffer implements Serializable {
     public void write(byte[] arr) {
         expandIfNecessary(arr.length);
 
-        System.arraycopy(arr, 0, _bytes, _writerIndex, arr.length);
-        _writerIndex += arr.length;
-        set_limit();
+        _buffer.writeBytes(arr);
     }
 
     private void expandIfNecessary(int length) {
-        if (_bytes == null) {
-            _bytes = new byte[length];
-            _writerIndex = 0;
-        } else if ((_bytes.length - _writerIndex) < length) {
-            byte[] tmp = new byte[_bytes.length + (length - (_bytes.length - _writerIndex))];
-            System.arraycopy(_bytes, 0, tmp, 0, _bytes.length);
-            _bytes = tmp;
+        if (_buffer == null) {
+            _buffer = _alloc.directBuffer(length);
+        } else if (_buffer.capacity() - _buffer.writerIndex() < length) {
+            _buffer.capacity(Math.max(_buffer.capacity() + length, _buffer.capacity() * 2));
         }
     }
 
-    public void skipBytes(int count) {
-        _readerIndex += count;
-    }
 
     public byte readByte() throws IndexOutOfBoundsException{
-        if(remaining() < 1){
+        if (_buffer.readableBytes() < 1) {
             throw new IndexOutOfBoundsException("There is no bytes remaining in the buffer");
         }
-        byte result = _bytes[_readerIndex];
-        _readerIndex++;
-        return result;
+
+        return read(1)[0];
     }
 
     public int readInt() throws IndexOutOfBoundsException{
-        if(remaining() < 4){
+        if (_buffer.readableBytes() < 4) {
             throw new IndexOutOfBoundsException("There is no bytes remaining in the buffer");
         }
-        int result = (_bytes[_readerIndex + 3] & 0xff) << 24 |
-                     (_bytes[_readerIndex + 2] & 0xff) << 16 |
-                     (_bytes[_readerIndex + 1] & 0xff) << 8 |
-                     (_bytes[_readerIndex] & 0xff);
-        _readerIndex += 4;
-        return  result;
+        return _buffer.readIntLE();
     }
 
     public long readLong() throws IndexOutOfBoundsException{
-        if(remaining() < 8){
+        if (_buffer.readableBytes() < 8) {
             throw new IndexOutOfBoundsException("There is no bytes remaining in the buffer");
         }
-        long result = ((((long)_bytes[_readerIndex + 7]) << 56) |
-                (((long)_bytes[_readerIndex + 6] & 0xff) << 48) |
-                (((long)_bytes[_readerIndex + 5] & 0xff) << 40) |
-                (((long)_bytes[_readerIndex + 4] & 0xff) << 32) |
-                (((long)_bytes[_readerIndex + 3] & 0xff) << 24) |
-                (((long)_bytes[_readerIndex + 2] & 0xff) << 16) |
-                (((long)_bytes[_readerIndex + 1] & 0xff) <<  8) |
-                (((long)_bytes[_readerIndex] & 0xff)));
-        _readerIndex += 8;
-        return  result;
+        return _buffer.readLongLE();
     }
 
     public double readDouble() throws IndexOutOfBoundsException{
@@ -297,24 +257,18 @@ public class ProtocolBuffer implements Serializable {
     }
 
     public byte[] readBytes() {
-        int extra = 1;
         int len = getIntFromByte(readByte());
         if(len >= 254) {
             len = getIntFromByte(readByte()) | (getIntFromByte(readByte()) << 8) | (getIntFromByte(readByte()) << 16);
-            extra = 4;
         }
 
         byte[] raw = read(len);
-
-        if ((len + extra) % 4 != 0) {
-            skipBytes(4 - ((len + extra) % 4));
-        }
-
         return raw;
     }
 
     public String readString() throws IndexOutOfBoundsException{
-        return new String(readBytes());
+        byte[] stringBytes = readBytes();
+        return new String(stringBytes);
     }
 
     public TLObject readTLObject(DeserializationContext context) {
@@ -341,10 +295,9 @@ public class ProtocolBuffer implements Serializable {
      * @return
      */
     public byte[] read(int length) {
-        if (_bytes != null && length <= remaining()) {
+        if (_buffer != null && length <= _buffer.readableBytes()) {
             byte[] tmp = new byte[length];
-            System.arraycopy(_bytes, _readerIndex, tmp, 0, length);
-            _readerIndex += length;
+            _buffer.readBytes(tmp, 0, length);
             return tmp;
         } else {
             return null;
@@ -360,21 +313,29 @@ public class ProtocolBuffer implements Serializable {
      * @return
      */
     public byte[] getBytes(){
-        byte[] tmp = new byte[_limit];
-        System.arraycopy(_bytes, 0, tmp, 0, _limit);
+        byte[] tmp = new byte[_buffer.writerIndex()];
+        _buffer.getBytes(0, tmp, 0, _buffer.writerIndex());
         return tmp;
     }
 
+    /**
+     * Returns underlying buffer.
+     *
+     * @return
+     */
+    public ByteBuf getBuffer() {
+        return _buffer;
+    }
+
+
     public byte[] getSHA1() {
-        return Utilities.computeSHA1(_bytes, 0, _limit);
+        return Utilities.computeSHA1(getBytes());
     }
 
-    private void set_limit(){
-        _limit = Math.max(_writerIndex, _limit);
-    }
 
-    public int resetReaderIndex(){
-        return _readerIndex = 0;
+    public int resetReaderIndex() {
+        _buffer.resetReaderIndex();
+        return _buffer.readerIndex();
     }
 
 
@@ -382,15 +343,11 @@ public class ProtocolBuffer implements Serializable {
      * Gets the length of the buffer
      * @return
      */
-    public int remaining(){
-        return _limit - _readerIndex;
+    public int length() {
+        return _buffer.writerIndex();
     }
 
-    /**
-     * Gets the length of the buffer
-     * @return
-     */
-    public int length(){
-        return _limit;
+    public boolean release() {
+        return _buffer.release();
     }
 }

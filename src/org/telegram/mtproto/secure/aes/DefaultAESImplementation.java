@@ -1,5 +1,6 @@
 package org.telegram.mtproto.secure.aes;
 
+import io.netty.buffer.ByteBuf;
 import org.telegram.mtproto.secure.KeyParameter;
 
 import java.io.*;

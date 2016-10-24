@@ -1,5 +1,7 @@
 package org.telegram.mtproto.secure.aes;
 
+import io.netty.buffer.ByteBuf;
+
 import java.io.IOException;
 
 /**
