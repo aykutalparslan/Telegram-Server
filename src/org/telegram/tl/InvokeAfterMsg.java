@@ -20,6 +20,7 @@ package org.telegram.tl;
 
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.service.message;
 
 public class InvokeAfterMsg extends TLObject {
 
@@ -39,7 +40,8 @@ public class InvokeAfterMsg extends TLObject {
     @Override
     public void deserialize(ProtocolBuffer buffer) {
         msg_id = buffer.readLong();
-        query = (TLObject) buffer.readTLObject(APIContext.getInstance());
+        //query = (TLObject) buffer.readTLObject(APIContext.getInstance());
+        query = buffer.readBareTLType(new message());
     }
 
     @Override

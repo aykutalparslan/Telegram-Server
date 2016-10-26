@@ -50,6 +50,9 @@ public class APIContext implements DeserializationContext {
     private HashMap<Integer, Class> schema;
 
     private APIContext(){
+        addToSchema(org.telegram.tl.L57.User.class);
+        addToSchema(org.telegram.tl.L57.messages.DeleteHistory.class);
+        addToSchema(org.telegram.tl.L57.messages.GetPeerDialogs.class);//TODO: implement messages.GetPeerDialogs
         addToSchema(org.telegram.tl.L57.MessageMediaDocument.class);
         addToSchema(org.telegram.tl.L57.DocumentAttributeAudio.class);
         addToSchema(org.telegram.tl.L57.InputMediaUploadedDocument.class);
@@ -612,7 +615,7 @@ public class APIContext implements DeserializationContext {
 
     @Override
     public TLObject deserialize(ProtocolBuffer buffer) {
-        int constructor = buffer.readInt();
+        final int constructor = buffer.readInt();
         Class obj = schema.get(constructor);
         if (obj != null) {
             TLObject req;
@@ -624,8 +627,13 @@ public class APIContext implements DeserializationContext {
             req.deserialize(buffer);
             return req;
         } else {
-            System.out.println("constructor: " + Integer.toHexString(constructor) + " not found");
+            new Exception("constructor: " + Integer.toHexString(constructor) + " not found").printStackTrace();
         }
-        return null;
+        return new TLObject() {
+            @Override
+            public int getConstructor() {
+                return constructor;
+            }
+        };
     }
 }

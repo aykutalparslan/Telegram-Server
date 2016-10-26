@@ -99,20 +99,22 @@ public class GetHistoryL48 extends TLObject implements TLMethod {
         if (context.isAuthorized()) {
             int peer_id = 0;
             if (peer instanceof InputPeerUser) {
-                Message[] messages_in_old = DatabaseConnection.getInstance().getIncomingMessages(context.getUserId(), ((InputPeerUser) peer).user_id, max_id);
-                Message[] messages_out_old = DatabaseConnection.getInstance().getOutgoingMessages(context.getUserId(), ((InputPeerUser) peer).user_id, max_id);
+                Message[] messages_in_old = DatabaseConnection.getInstance().getIncomingMessages(context.getUserId(),
+                        ((InputPeerUser) peer).user_id, offset_id);
+                Message[] messages_out_old = DatabaseConnection.getInstance().getOutgoingMessages(context.getUserId(),
+                        ((InputPeerUser) peer).user_id, offset_id);
                 MessageL48[] messages_in = new MessageL48[messages_in_old.length];
                 for (int i = 0; i < messages_in.length; i++) {
-                    messages_in[i] = new MessageL48(0, messages_in_old[i].id, messages_in_old[i].from_id, messages_in_old[i].to_id, null,
-                            0, 0, messages_in_old[i].date, messages_in_old[i].message, messages_in_old[i].media, null,
-                            null, 0, 0);
+                    messages_in[i] = new MessageL48(0, messages_in_old[i].id, messages_in_old[i].from_id,
+                            messages_in_old[i].to_id, null, 0, 0, messages_in_old[i].date, messages_in_old[i].message,
+                            null, null, null, 0, 0);
                 }
 
                 MessageL48[] messages_out = new MessageL48[messages_out_old.length];
                 for (int i = 0; i < messages_out.length; i++) {
-                    messages_out[i] = new MessageL48(0, messages_out_old[i].id, messages_out_old[i].from_id, messages_out_old[i].to_id, null,
-                            0, 0, messages_out_old[i].date, messages_out_old[i].message, messages_out_old[i].media, null,
-                            null, 0, 0);
+                    messages_out[i] = new MessageL48(0, messages_out_old[i].id, messages_out_old[i].from_id,
+                            messages_out_old[i].to_id, null, 0, 0, messages_out_old[i].date, messages_out_old[i].message,
+                            null, null, null, 0, 0);
                 }
                 for (MessageL48 m : messages_in) {
                     m.flags = 0;
@@ -123,20 +125,22 @@ public class GetHistoryL48 extends TLObject implements TLMethod {
                     processMessage(context, tlMessages, tlUsers, tlChats, m);
                 }
             } else if (peer instanceof InputPeerChat) {
-                Message[] messages_in_old = DatabaseConnection.getInstance().getIncomingChatMessages(context.getUserId(), ((InputPeerChat) peer).chat_id, max_id);
-                Message[] messages_out_old = DatabaseConnection.getInstance().getOutgoingChatMessages(context.getUserId(), ((InputPeerChat) peer).chat_id, max_id);
+                Message[] messages_in_old = DatabaseConnection.getInstance().getIncomingChatMessages(context.getUserId(),
+                        ((InputPeerChat) peer).chat_id, max_id);
+                Message[] messages_out_old = DatabaseConnection.getInstance().getOutgoingChatMessages(context.getUserId(),
+                        ((InputPeerChat) peer).chat_id, max_id);
                 MessageL48[] messages_in = new MessageL48[messages_in_old.length];
                 for (int i = 0; i < messages_in.length; i++) {
-                    messages_in[i] = new MessageL48(0, messages_in_old[i].id, messages_in_old[i].from_id, messages_in_old[i].to_id, null,
-                            0, 0, messages_in_old[i].date, messages_in_old[i].message, messages_in_old[i].media, null,
-                            null, 0, 0);
+                    messages_in[i] = new MessageL48(0, messages_in_old[i].id, messages_in_old[i].from_id,
+                            messages_in_old[i].to_id, null, 0, 0, messages_in_old[i].date, messages_in_old[i].message,
+                            null, null, null, 0, 0);
                 }
 
                 MessageL48[] messages_out = new MessageL48[messages_out_old.length];
                 for (int i = 0; i < messages_out.length; i++) {
-                    messages_out[i] = new MessageL48(0, messages_out_old[i].id, messages_out_old[i].from_id, messages_out_old[i].to_id, null,
-                            0, 0, messages_out_old[i].date, messages_out_old[i].message, messages_out_old[i].media, null,
-                            null, 0, 0);
+                    messages_out[i] = new MessageL48(0, messages_out_old[i].id, messages_out_old[i].from_id,
+                            messages_out_old[i].to_id, null, 0, 0, messages_out_old[i].date, messages_out_old[i].message,
+                            null, null, null, 0, 0);
                 }
                 for (MessageL48 m : messages_in) {
                     m.flags = 0;
@@ -160,16 +164,17 @@ public class GetHistoryL48 extends TLObject implements TLMethod {
         return new Messages(tlMessages, tlChats, tlUsers);
     }
 
-    private void processMessage(TLContext context, TLVector<TLMessage> tlMessages, TLVector<TLUser> tlUsers, TLVector<TLChat> tlChats, MessageL48 m) {
+    private void processMessage(TLContext context, TLVector<TLMessage> tlMessages, TLVector<TLUser> tlUsers,
+                                TLVector<TLChat> tlChats, MessageL48 m) {
         tlMessages.add(m);
         boolean user_exists_from = false;
         boolean user_exists_to = false;
         for (TLUser d : tlUsers) {
-            if (d instanceof UserContact) {
-                if (((UserContact) d).id == m.from_id) {
+            if (d instanceof UserL45) {
+                if (((UserL45) d).id == m.from_id) {
                     user_exists_from = true;
                 }
-                if (((UserContact) d).id == ((PeerUser) m.to_id).user_id) {
+                if (((UserL45) d).id == ((PeerUser) m.to_id).user_id) {
                     user_exists_to = true;
                 }
             }

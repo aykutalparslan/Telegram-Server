@@ -4,6 +4,7 @@ import io.netty.buffer.ByteBuf;
 import org.telegram.mtproto.secure.KeyParameter;
 
 import java.io.*;
+import java.nio.ByteBuffer;
 
 import static org.telegram.mtproto.secure.CryptoUtils.substring;
 

@@ -18,13 +18,16 @@
 
 package org.telegram.tl.L57.messages;
 
+import org.telegram.core.TLContext;
+import org.telegram.core.TLMethod;
+import org.telegram.data.DatabaseConnection;
 import org.telegram.mtproto.ProtocolBuffer;
-import org.telegram.tl.TLObject;
-import org.telegram.tl.TLVector;
-import org.telegram.tl.APIContext;
+import org.telegram.tl.*;
 import org.telegram.tl.L57.*;
+import org.telegram.tl.L57.InputPeerUser;
+import org.telegram.tl.service.rpc_error;
 
-public class DeleteHistory extends TLObject {
+public class DeleteHistory extends TLObject implements TLMethod {
 
     public static final int ID = 0x1c015b09;
 
@@ -81,5 +84,23 @@ public class DeleteHistory extends TLObject {
 
     public int getConstructor() {
         return ID;
+    }
+
+    @Override
+    public TLObject execute(TLContext context, long messageId, long reqMessageId) {
+        if (context.isAuthorized()) {
+            if (peer instanceof org.telegram.tl.InputPeerUser) {
+                DatabaseConnection.getInstance().deleteHistory(context.getUserId(), ((org.telegram.tl.InputPeerUser) peer).user_id);
+            }
+            if (peer instanceof InputPeerContact) {
+                DatabaseConnection.getInstance().deleteHistory(context.getUserId(), ((InputPeerContact) peer).user_id);
+            }
+            if (peer instanceof InputPeerForeign) {
+                DatabaseConnection.getInstance().deleteHistory(context.getUserId(), ((InputPeerForeign) peer).user_id);
+            }
+
+            return new AffectedHistory(0, 0, 0);
+        }
+        return rpc_error.UNAUTHORIZED();
     }
 }

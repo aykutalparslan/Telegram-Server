@@ -25,11 +25,14 @@ import org.telegram.core.AuthKeyStore;
 import org.telegram.core.TLContext;
 import org.telegram.data.AuthKeyModel;
 import org.telegram.mtproto.MessageKeyData;
+import org.telegram.mtproto.OpenSSL;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.mtproto.secure.CryptoUtils;
 import org.telegram.tl.APIContext;
 import org.telegram.tl.TLObject;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.List;
@@ -98,16 +101,19 @@ public class MTProtoDecoder  extends ByteToMessageDecoder {
 
             AuthKeyModel authKey = AuthKeyStore.getInstance().getAuthKey(message.auth_key_id);
 
-            ProtocolBuffer buff = decryptRpc(authKey.auth_key, encrypted_bytes, message_key);
-            message.server_salt = buff.readLong();
-            message.session_id = buff.readLong();
-            message.message_id = buff.readLong();
-            message.seq_no = buff.readInt();
-            message.message_data_length = buff.readInt();
-            message.message_data = APIContext.getInstance().deserialize(buff);
-            buff.release();
+            if (authKey.auth_key != null) {
+                ProtocolBuffer buff = decryptRpc(authKey.auth_key, encrypted_bytes, message_key);
 
-            out.add(message);
+                message.server_salt = buff.readLong();
+                message.session_id = buff.readLong();
+                message.message_id = buff.readLong();
+                message.seq_no = buff.readInt();
+                message.message_data_length = buff.readInt();
+                message.message_data = APIContext.getInstance().deserialize(buff);
+                buff.release();
+
+                out.add(message);
+            }
         }
 
         currentPacketLength = 0;

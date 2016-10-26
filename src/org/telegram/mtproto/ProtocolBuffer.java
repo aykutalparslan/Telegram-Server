@@ -18,12 +18,14 @@
 
 package org.telegram.mtproto;
 
+import com.sun.prism.shader.DrawCircle_RadialGradient_PAD_Loader;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.PooledByteBufAllocator;
 import org.telegram.tl.DeserializationContext;
 import org.telegram.tl.TLObject;
 import org.telegram.tl.TLVector;
+import sun.util.resources.CalendarData_ro;
 
 import java.io.Serializable;
 import java.security.MessageDigest;
@@ -34,7 +36,7 @@ import java.security.MessageDigest;
 public class ProtocolBuffer implements Serializable {
     private static final ByteBufAllocator _alloc = PooledByteBufAllocator.DEFAULT;
     private ByteBuf _buffer;
-
+    byte[] _rawBytes;
     /**
      *
      * @param initialCapacity
@@ -50,6 +52,7 @@ public class ProtocolBuffer implements Serializable {
     public ProtocolBuffer(byte[] rawBytes){
         _buffer = _alloc.directBuffer(rawBytes.length);
         _buffer.writeBytes(rawBytes);
+        _rawBytes = rawBytes;
     }
 
     /**
@@ -57,6 +60,9 @@ public class ProtocolBuffer implements Serializable {
      */
     public ProtocolBuffer(ByteBuf buffer) {
         _buffer = buffer;
+        _rawBytes = new byte[_buffer.readableBytes()];
+        _buffer.readBytes(_rawBytes);
+        _buffer.readerIndex(buffer.readerIndex() - _rawBytes.length);
     }
 
     /**
@@ -120,7 +126,11 @@ public class ProtocolBuffer implements Serializable {
      * @param value
      */
     public void writeString(String value) {
-        writeBytes(value.getBytes());
+        if (value == null) {
+            writeBytes("".getBytes());
+        } else {
+            writeBytes(value.getBytes());
+        }
     }
 
     /**
@@ -266,17 +276,31 @@ public class ProtocolBuffer implements Serializable {
     }
 
     public byte[] readBytes() {
+        int extra = 1;
         int len = getIntFromByte(readByte());
-        if(len >= 254) {
+        if (len >= 254 || len == 0) {
             len = getIntFromByte(readByte()) | (getIntFromByte(readByte()) << 8) | (getIntFromByte(readByte()) << 16);
+            extra = 4;
         }
 
         byte[] raw = read(len);
+
+        if ((len + extra) % 4 != 0) {
+            _buffer.readerIndex(_buffer.readerIndex() + (4 - ((len + extra) % 4)));
+        }
+
         return raw;
+    }
+
+    public void skipBytes(int count) {
+        _buffer.readerIndex(_buffer.readerIndex() + count);
     }
 
     public String readString() throws IndexOutOfBoundsException{
         byte[] stringBytes = readBytes();
+        if (stringBytes == null) {
+            return "";
+        }
         return new String(stringBytes);
     }
 
@@ -304,6 +328,9 @@ public class ProtocolBuffer implements Serializable {
      * @return
      */
     public byte[] read(int length) {
+        if (length <= 0) {
+            return null;
+        }
         if (_buffer != null && length <= _buffer.readableBytes()) {
             byte[] tmp = new byte[length];
             _buffer.readBytes(tmp, 0, length);

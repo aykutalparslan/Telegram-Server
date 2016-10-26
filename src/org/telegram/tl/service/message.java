@@ -59,7 +59,6 @@ public class message extends TLObject {
 
     @Override
     public void serializeTo(ProtocolBuffer buff) {
-        buff.writeInt(getConstructor());
         buff.writeLong(msg_id);
         buff.writeInt(seq_no);
         buff.writeInt(bytes);

@@ -77,6 +77,11 @@ public class TelegramHTTPServerHandler extends ChannelInboundHandlerAdapter {
             TLObject message = APIContext.getInstance().deserialize(data);
             if (message != null) {
                 System.out.println("TLObject:" + message.toString());
+                if (message instanceof msg_container) {
+                    for (message m : ((msg_container) message).messages) {
+                        //processRPC(ctx, m.body, m.msg_id);
+                    }
+                }
             } else {
                 System.out.println("null message");
             }
@@ -180,7 +185,7 @@ public class TelegramHTTPServerHandler extends ChannelInboundHandlerAdapter {
             processRPC(ctx, ((InitConnection) rpc).query, messageId);
         } else if (rpc instanceof msg_container) {
             for (message m : ((msg_container) rpc).messages) {
-                processRPC(ctx, m.body, m.msg_id);
+                //processRPC(ctx, m.body, m.msg_id);
             }
         } else if (rpc instanceof InvokeAfterMsg) {
             processRPC(ctx, ((InvokeAfterMsg) rpc).query, ((InvokeAfterMsg) rpc).msg_id);

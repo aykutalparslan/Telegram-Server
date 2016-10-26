@@ -32,6 +32,7 @@ public class TLContext {
     public boolean isAuthorized() {
         if (!authorized) {//temporary fix
             AuthKeyModel akm = AuthKeyStore.getInstance().getAuthKey(authKeyId);
+            setApiLayer(akm.api_layer);
             SessionModel sm = SessionStore.getInstance().getSession(sessionId);
             if (sm == null) {
                 sm = new SessionModel();
@@ -47,7 +48,7 @@ public class TLContext {
             authorized = true;
             setPhone(um.phone);
             setUserId(um.user_id);
-            setApiLayer(akm.api_layer);
+
         }
         return authorized;
     }

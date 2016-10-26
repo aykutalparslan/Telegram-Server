@@ -80,11 +80,15 @@ public class ReadHistory extends TLObject implements TLMethod {
                 Object[] sessions = Router.getInstance().getActiveSessions(umc.user_id);
                 for (Object session : sessions) {
                     if (((ActiveSession) session).layer >= 48) {
-                        UpdateShort update = new UpdateShort(new UpdateReadHistoryOutbox(um.toPeerUser(), umc.received_messages + umc.sent_messages + 1, umc.pts, 1), date);
-                        Router.getInstance().Route(((ActiveSession) session).session_id, ((ActiveSession) session).auth_key_id, update, false);
+                        UpdateShort update = new UpdateShort(new UpdateReadHistoryOutbox(um.toPeerUser(),
+                                umc.received_messages + umc.sent_messages + 1, umc.pts, 1), date);
+                        Router.getInstance().Route(((ActiveSession) session).session_id,
+                                ((ActiveSession) session).auth_key_id, update, false);
                     } else {
-                        UpdateShort update = new UpdateShort(new UpdateReadHistoryOutbox(um.toPeerUser(), umc.received_messages + umc.sent_messages + 1, umc.pts, 0), date);
-                        Router.getInstance().Route(((ActiveSession) session).session_id, ((ActiveSession) session).auth_key_id, update, false);
+                        UpdateShort update = new UpdateShort(new UpdateReadHistoryOutbox(um.toPeerUser(),
+                                umc.received_messages + umc.sent_messages + 1, umc.pts, 0), date);
+                        Router.getInstance().Route(((ActiveSession) session).session_id,
+                                ((ActiveSession) session).auth_key_id, update, false);
                     }
                 }
 

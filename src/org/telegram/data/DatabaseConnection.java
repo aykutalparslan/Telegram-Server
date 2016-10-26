@@ -464,7 +464,7 @@ public class DatabaseConnection {
         Message[] messages = new Message[results.getAvailableWithoutFetching()];
         int i = 0;
         for (Row row : results) {
-            ByteBuffer buff = row.getBytes("media");
+            //ByteBuffer buff = row.getBytes("media");
             TLPeer peer;
             int to_chat_id = row.getInt("to_chat_id");
             if (to_chat_id != 0) {
@@ -472,7 +472,7 @@ public class DatabaseConnection {
             } else {
                 peer = new PeerUser(user_id);
             }
-            if (buff != null) {
+            /*if (buff != null) {
                 byte[] bytes = new byte[buff.remaining()];
                 if (buff.remaining() > 0) {
                     buff.get(bytes);
@@ -484,11 +484,11 @@ public class DatabaseConnection {
                             peer, row.getInt("date"), "", (TLMessageMedia) media);
                     messages[i] = m;
                 }
-            } else {
+            } else {*/
                 Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
                         peer, row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
                 messages[i] = m;
-            }
+            //}
 
             i++;
         }
@@ -509,7 +509,7 @@ public class DatabaseConnection {
         Message[] messages = new Message[results.getAvailableWithoutFetching()];
         int i = 0;
         for (Row row : results) {
-            ByteBuffer buff = row.getBytes("media");
+            /*ByteBuffer buff = row.getBytes("media");
             if (buff != null) {
                 byte[] bytes = new byte[buff.remaining()];
                 if (buff.remaining() > 0) {
@@ -522,11 +522,11 @@ public class DatabaseConnection {
                             new PeerUser(user_id), row.getInt("date"), "", (TLMessageMedia) media);
                     messages[i] = m;
                 }
-            } else {
+            } else {*/
                 Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
                         new PeerUser(user_id), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
                 messages[i] = m;
-            }
+            //}
 
             i++;
         }
@@ -541,7 +541,7 @@ public class DatabaseConnection {
         Message[] messages = new Message[results.getAvailableWithoutFetching()];
         int i = 0;
         for (Row row : results) {
-            ByteBuffer buff = row.getBytes("media");
+            /*ByteBuffer buff = row.getBytes("media");
             if (buff != null) {
                 byte[] bytes = new byte[buff.remaining()];
                 if (buff.remaining() > 0) {
@@ -554,11 +554,11 @@ public class DatabaseConnection {
                             new PeerChat(to_chat_id), row.getInt("date"), "", (TLMessageMedia) media);
                     messages[i] = m;
                 }
-            } else {
+            } else {*/
                 Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
                         new PeerChat(to_chat_id), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
                 messages[i] = m;
-            }
+            //}
 
             i++;
         }
@@ -573,7 +573,7 @@ public class DatabaseConnection {
         Message[] messages = new Message[results.getAvailableWithoutFetching()];
         int i = 0;
         for (Row row : results) {
-            ByteBuffer buff = row.getBytes("media");
+            //ByteBuffer buff = row.getBytes("media");
             int to_chat_id = row.getInt("to_chat_id");
             TLPeer peer;
             if (to_chat_id != 0) {
@@ -581,7 +581,7 @@ public class DatabaseConnection {
             } else {
                 peer = new PeerUser(row.getInt("to_user_id"));
             }
-            if (buff != null) {
+            /*if (buff != null) {
                 byte[] bytes = new byte[buff.remaining()];
                 if (buff.remaining() > 0) {
                     buff.get(bytes);
@@ -593,11 +593,11 @@ public class DatabaseConnection {
                             peer, row.getInt("date"), "", (TLMessageMedia) media);
                     messages[i] = m;
                 }
-            } else {
+            } else {*/
                 Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
                         peer, row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
                 messages[i] = m;
-            }
+            //}
 
             i++;
         }
@@ -619,7 +619,7 @@ public class DatabaseConnection {
         Message[] messages = new Message[results.getAvailableWithoutFetching()];
         int i = 0;
         for (Row row : results) {
-            ByteBuffer buff = row.getBytes("media");
+            /*ByteBuffer buff = row.getBytes("media");
             if (buff != null) {
                 byte[] bytes = new byte[buff.remaining()];
                 if (buff.remaining() > 0) {
@@ -631,11 +631,11 @@ public class DatabaseConnection {
                             new PeerUser(row.getInt("to_user_id")), row.getInt("date"), "", (TLMessageMedia) media);
                     messages[i] = m;
                 }
-            } else {
+            } else {*/
                 Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
                         new PeerUser(row.getInt("to_user_id")), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
                 messages[i] = m;
-            }
+            //}
 
             i++;
         }
@@ -650,7 +650,7 @@ public class DatabaseConnection {
         Message[] messages = new Message[results.getAvailableWithoutFetching()];
         int i = 0;
         for (Row row : results) {
-            ByteBuffer buff = row.getBytes("media");
+            /*ByteBuffer buff = row.getBytes("media");
             if (buff != null) {
                 byte[] bytes = new byte[buff.remaining()];
                 if (buff.remaining() > 0) {
@@ -662,11 +662,11 @@ public class DatabaseConnection {
                             new PeerChat(to_chat_id), row.getInt("date"), "", (TLMessageMedia) media);
                     messages[i] = m;
                 }
-            } else {
+            } else {*/
                 Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
                         new PeerChat(to_chat_id), row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
                 messages[i] = m;
-            }
+            //}
 
             i++;
         }

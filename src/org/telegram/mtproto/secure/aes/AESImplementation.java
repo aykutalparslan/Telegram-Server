@@ -3,6 +3,7 @@ package org.telegram.mtproto.secure.aes;
 import io.netty.buffer.ByteBuf;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * Created by ex3ndr on 12.02.14.
