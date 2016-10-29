@@ -292,10 +292,6 @@ public class ProtocolBuffer implements Serializable {
         return raw;
     }
 
-    public void skipBytes(int count) {
-        _buffer.readerIndex(_buffer.readerIndex() + count);
-    }
-
     public String readString() throws IndexOutOfBoundsException{
         byte[] stringBytes = readBytes();
         if (stringBytes == null) {
@@ -388,6 +384,16 @@ public class ProtocolBuffer implements Serializable {
      */
     public int length() {
         return _buffer.writerIndex();
+    }
+
+    public void advance(int position) {
+        if (_buffer.readerIndex() < position) {
+            _buffer.readerIndex(position);
+        }
+    }
+
+    public void skipBytes(int count) {
+        _buffer.readerIndex(_buffer.readerIndex() + count);
     }
 
     public boolean release() {

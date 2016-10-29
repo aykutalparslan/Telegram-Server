@@ -47,7 +47,8 @@ public class message extends TLObject {
         msg_id = buffer.readLong();
         seq_no = buffer.readInt();
         bytes = buffer.readInt();
-        body = buffer.readTLObject(APIContext.getInstance());
+        byte[] body_bytes = buffer.read(bytes);
+        body = APIContext.getInstance().deserialize(new ProtocolBuffer(body_bytes));
     }
 
     @Override
