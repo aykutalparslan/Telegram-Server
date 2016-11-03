@@ -62,10 +62,10 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
         if (message.auth_key_id == 0) {
 
             if (message != null) {
-                System.out.println("TLObject:" + message.toString());
+                //System.out.println("TLObject:" + message.toString());
 
             } else {
-                System.out.println("null message");
+                //System.out.println("null message");
             }
 
             MTProtoAuth auth2 = null;
@@ -112,9 +112,9 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
 
     private void processRPC(ChannelHandlerContext ctx, TLObject rpc, long messageId) {
         if (rpc != null) {
-            System.out.println("TLObject:" + rpc.toString());
+            //System.out.println("TLObject:" + rpc.toString());
         } else {
-            System.out.println("null rpc");
+            //System.out.println("null rpc");
         }
 
         if (tlContext.isAuthorized()) {
@@ -176,7 +176,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
             if (response != null) {
                 ctx.writeAndFlush(encryptRpc(result, getMessageSeqNo(true), generateMessageId(true)));
 
-                System.out.println("TLMethod: " + response.toString());
+                //System.out.println("TLMethod: " + response.toString());
 
                 if (rpc instanceof SignIn && response instanceof Authorization) {
                     if (((Authorization) response).user instanceof User) {
@@ -188,7 +188,7 @@ public class TelegramServerHandler extends ChannelInboundHandlerAdapter {
                     }
 
                     tlContext.setAuthorized(true);
-                    System.out.println("SignIn");
+                    //System.out.println("SignIn");
                 }
             }
         }

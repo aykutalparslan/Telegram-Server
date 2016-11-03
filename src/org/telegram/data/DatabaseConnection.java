@@ -472,26 +472,28 @@ public class DatabaseConnection {
             } else {
                 peer = new PeerUser(user_id);
             }
-            /*if (buff != null) {
-                byte[] bytes = new byte[buff.remaining()];
-                if (buff.remaining() > 0) {
-                    buff.get(bytes);
-                }
+            //if (buff != null) {
+            //    byte[] bytes = new byte[buff.remaining()];
+            //    if (buff.remaining() > 0) {
+            //        buff.get(bytes);
+            //    }
 
-                if (bytes != null && bytes.length > 0) {
-                    TLObject media = APIContext.getInstance().deserialize(new ProtocolBuffer(bytes));
-                    Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
-                            peer, row.getInt("date"), "", (TLMessageMedia) media);
-                    messages[i] = m;
-                }
-            } else {*/
+            //    if (bytes != null && bytes.length > 0) {
+            //        TLObject media = APIContext.getInstance().deserialize(new ProtocolBuffer(bytes));
+            //        Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
+            //                peer, row.getInt("date"), "", (TLMessageMedia) media);
+            //        messages[i] = m;
+            //    }
+            //} else {
                 Message m = new Message(row.getInt("flags"), row.getInt("message_id"), row.getInt("from_user_id"),
                         peer, row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
                 messages[i] = m;
             //}
-
+            row = null;
             i++;
         }
+
+        results = null;
 
         return messages;
     }
@@ -581,26 +583,28 @@ public class DatabaseConnection {
             } else {
                 peer = new PeerUser(row.getInt("to_user_id"));
             }
-            /*if (buff != null) {
-                byte[] bytes = new byte[buff.remaining()];
-                if (buff.remaining() > 0) {
-                    buff.get(bytes);
-                }
-                if (bytes != null && bytes.length > 0) {
-                    TLObject media = APIContext.getInstance().deserialize(new ProtocolBuffer(bytes));
+            //if (buff != null) {
+            //    byte[] bytes = new byte[buff.remaining()];
+            //    if (buff.remaining() > 0) {
+            //        buff.get(bytes);
+            //    }
+            //    if (bytes != null && bytes.length > 0) {
+            //        TLObject media = APIContext.getInstance().deserialize(new ProtocolBuffer(bytes));
 
-                    Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
-                            peer, row.getInt("date"), "", (TLMessageMedia) media);
-                    messages[i] = m;
-                }
-            } else {*/
+            //        Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
+            //                peer, row.getInt("date"), "", (TLMessageMedia) media);
+            //        messages[i] = m;
+            //    }
+            //} else {
                 Message m = new Message(row.getInt("flags"), row.getInt("message_id"), user_id,
                         peer, row.getInt("date"), row.getString("message"), new MessageMediaEmpty());
                 messages[i] = m;
             //}
-
+            row = null;
             i++;
         }
+
+        results = null;
 
         return messages;
     }

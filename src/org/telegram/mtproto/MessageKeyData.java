@@ -67,28 +67,33 @@ public class MessageKeyData {
         data.write(messageKey);
         data.write(authKey, x, 32);
         byte[] sha1_a = computeSHA1(data.getBytes());
+        data.release();
 
         data = new ProtocolBuffer(64);
         data.write(authKey, 32 + x, 16);
         data.write(messageKey);
         data.write(authKey, 48 + x, 16);
         byte[] sha1_b = computeSHA1(data.getBytes());
+        data.release();
 
         data = new ProtocolBuffer(64);
         data.write(authKey, 64 + x, 32);
         data.write(messageKey);
         byte[] sha1_c = computeSHA1(data.getBytes());
+        data.release();
 
         data = new ProtocolBuffer(64);
         data.write(messageKey);
         data.write(authKey, 96 + x, 32);
         byte[] sha1_d = computeSHA1(data.getBytes());
+        data.release();
 
         data = new ProtocolBuffer(64);
         data.write(sha1_a, 0, 8);
         data.write(sha1_b, 8, 12);
         data.write(sha1_c, 4, 12);
         keyData.aesKey = data.getBytes();
+        data.release();
 
         data = new ProtocolBuffer(64);
         data.write(sha1_a, 8, 12);
@@ -96,6 +101,7 @@ public class MessageKeyData {
         data.write(sha1_c, 16, 4);
         data.write(sha1_d, 0, 8);
         keyData.aesIv = data.getBytes();
+        data.release();
 
         return keyData;
     }

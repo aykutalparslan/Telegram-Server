@@ -18,14 +18,12 @@
 
 package org.telegram.mtproto;
 
-import com.sun.prism.shader.DrawCircle_RadialGradient_PAD_Loader;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.PooledByteBufAllocator;
 import org.telegram.tl.DeserializationContext;
 import org.telegram.tl.TLObject;
 import org.telegram.tl.TLVector;
-import sun.util.resources.CalendarData_ro;
 
 import java.io.Serializable;
 import java.security.MessageDigest;
@@ -36,13 +34,15 @@ import java.security.MessageDigest;
 public class ProtocolBuffer implements Serializable {
     private static final ByteBufAllocator _alloc = PooledByteBufAllocator.DEFAULT;
     private ByteBuf _buffer;
-    byte[] _rawBytes;
+    private int _limit;
     /**
      *
      * @param initialCapacity
      */
     public ProtocolBuffer(int initialCapacity){
         _buffer = _alloc.directBuffer(initialCapacity);
+        _buffer.writerIndex(0);
+        _limit = 0;
     }
 
     /**
@@ -51,8 +51,9 @@ public class ProtocolBuffer implements Serializable {
      */
     public ProtocolBuffer(byte[] rawBytes){
         _buffer = _alloc.directBuffer(rawBytes.length);
+        _buffer.writerIndex(0);
         _buffer.writeBytes(rawBytes);
-        _rawBytes = rawBytes;
+        _limit = 0;
     }
 
     /**
@@ -60,9 +61,7 @@ public class ProtocolBuffer implements Serializable {
      */
     public ProtocolBuffer(ByteBuf buffer) {
         _buffer = buffer;
-        _rawBytes = new byte[_buffer.readableBytes()];
-        _buffer.readBytes(_rawBytes);
-        _buffer.readerIndex(buffer.readerIndex() - _rawBytes.length);
+        _limit = 0;
     }
 
     /**
@@ -72,6 +71,7 @@ public class ProtocolBuffer implements Serializable {
     public void writeByte(byte value) {
         expandIfNecessary(1);
         _buffer.writeByte(value);
+        _limit++;
     }
 
     /**
@@ -81,6 +81,7 @@ public class ProtocolBuffer implements Serializable {
     public void writeByte(int value) {
         expandIfNecessary(1);
         _buffer.writeByte(value);
+        _limit++;
     }
 
     /**
@@ -90,6 +91,7 @@ public class ProtocolBuffer implements Serializable {
     public void writeInt(int value) {
         expandIfNecessary(4);
         _buffer.writeIntLE(value);
+        _limit += 4;
     }
 
     /**
@@ -99,6 +101,7 @@ public class ProtocolBuffer implements Serializable {
     public void writeLong(long value) {
         expandIfNecessary(8);
         _buffer.writeLongLE(value);
+        _limit += 8;
     }
 
     /**
@@ -138,7 +141,9 @@ public class ProtocolBuffer implements Serializable {
      * @param value
      */
     public void writeTLObject(TLObject value) {
-        write(value.serialize().getBytes());
+        ProtocolBuffer buffer = value.serialize();
+        write(buffer.getBytes());
+        buffer.release();
     }
 
     /**
@@ -213,6 +218,7 @@ public class ProtocolBuffer implements Serializable {
         expandIfNecessary(arr.length);
 
         _buffer.writeBytes(arr, offset, count);
+        _limit += count;
     }
 
     /**
@@ -223,6 +229,7 @@ public class ProtocolBuffer implements Serializable {
         expandIfNecessary(arr.length);
 
         _buffer.writeBytes(arr);
+        _limit += arr.length;
     }
 
     private void expandIfNecessary(int length) {
@@ -383,7 +390,10 @@ public class ProtocolBuffer implements Serializable {
      * @return
      */
     public int length() {
-        return _buffer.writerIndex();
+        if (_limit == 0) {
+            return _buffer.writerIndex();
+        }
+        return _limit;
     }
 
     public void advance(int position) {

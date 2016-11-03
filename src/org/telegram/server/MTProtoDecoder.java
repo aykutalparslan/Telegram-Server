@@ -50,7 +50,7 @@ public class MTProtoDecoder  extends ByteToMessageDecoder {
             if (in.readableBytes() < 1) {
                 return;
             }
-            int index = in.readerIndex();
+
             fByte = in.readByte();
             if ((byte) 0xef == fByte) {
                 if (in.readableBytes() < 1) {
@@ -85,6 +85,11 @@ public class MTProtoDecoder  extends ByteToMessageDecoder {
             return;
         }
 
+        /*byte[] rawRequest = new byte[currentPacketLength];
+        in.readBytes(rawRequest);
+        in.readerIndex(in.readerIndex() - currentPacketLength);*/
+
+
         ProtocolBuffer buffer = new ProtocolBuffer(in);
 
         MTProtoMessage message = new MTProtoMessage();
@@ -114,6 +119,23 @@ public class MTProtoDecoder  extends ByteToMessageDecoder {
                 buff.release();
 
                 out.add(message);
+
+                /*String dir = "dump/";
+                File theDir = new File(dir);
+                if (!theDir.exists()) {
+                    try{
+                        theDir.mkdir();
+                    }
+                    catch(SecurityException se){
+                    }
+                }
+                try{
+                    FileOutputStream fos = new FileOutputStream(dir+ message.message_data.toString());
+                    fos.write(rawRequest);
+                    fos.close();
+                } catch(Exception se){
+                }*/
+
             }
         }
 
