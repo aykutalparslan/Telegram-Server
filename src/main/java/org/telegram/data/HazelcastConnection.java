@@ -18,13 +18,8 @@
 
 package org.telegram.data;
 
-import com.hazelcast.config.Config;
-import com.hazelcast.config.InterfacesConfig;
-import com.hazelcast.config.NetworkConfig;
-import com.hazelcast.config.SerializerConfig;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
-import com.sun.deploy.config.ClientConfig;
 
 /**
  * Created by aykut on 09/11/15.

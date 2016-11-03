@@ -1055,7 +1055,7 @@ public class DatabaseConnection {
     public static DatabaseConnection getInstance() {
         if(instance == null) {
             instance = new DatabaseConnection();
-            instance.connect("127.0.0.1");
+            instance.connect("192.168.56.1");
             instance.createSchema();
         }
         return instance;

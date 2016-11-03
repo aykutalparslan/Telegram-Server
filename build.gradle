@@ -1,10 +1,13 @@
 group 'org.telegram.TelegramServer'
-version '1.0-SNAPSHOT'
+version '0.1'
 
 apply plugin: 'java'
 apply plugin: 'idea'
+apply plugin: 'application'
 
-sourceCompatibility = 1.5
+sourceCompatibility = 1.7
+
+mainClassName = 'org.telegram.server.TelegramServer'
 
 repositories {
     mavenCentral()
@@ -12,10 +15,19 @@ repositories {
 
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.11'
-    compile 'io.netty:netty-all:4.1.5.Final'
+    compile group: 'io.netty', name: 'netty-all', version: '4.1.6.Final'
     compile 'org.bouncycastle:bcprov-jdk15on:1.52'
-    compile 'com.datastax.cassandra:cassandra-driver-core:3.1.0'
+    compile 'com.datastax.cassandra:cassandra-driver-core:3.1.2'
     compile "com.hazelcast:hazelcast:3.5.3"
+}
+
+configurations.all {
+    resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+        if (details.requested.group == 'io.netty' && details.requested.name == 'netty-handler' && details.requested.version == '4.0.37.Final') {
+            //prefer different version which contains some necessary fixes
+            details.useVersion '4.1.6.Final'
+        }
+    }
 }
 
 idea {
@@ -26,4 +38,28 @@ idea {
         //and hate reading sources :)
         downloadSources = false
     }
+}
+
+distTar.shouldRunAfter(build)
+
+distZip.shouldRunAfter(build)
+
+jar {
+    // Keep jar clean:
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/*.MF'
+
+    manifest {
+        attributes 'Main-Class': 'org.telegram.server.TelegramServer',
+                'Class-Path': configurations.runtime.files.collect { "lib/$it.name" }.join(' ')
+    }
+    // How-to add class path:
+    //     http://stackoverflow.com/questions/22659463/add-classpath-in-manifest-using-gradle
+    //     https://gist.github.com/simon04/6865179
+    from {
+        configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+run {
+
 }
