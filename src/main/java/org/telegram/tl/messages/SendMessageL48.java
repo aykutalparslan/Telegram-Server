@@ -152,6 +152,7 @@ public class SendMessageL48 extends TLObject implements TLMethod {
                 int toUserId = ((InputPeerUser) peer).user_id;
 
                 UserModel umc = UserStore.getInstance().increment_pts_getUser(toUserId, 1, 0, 1);
+
                 msg_id = umc.sent_messages + umc.received_messages + 1;
 
                 UpdateShortMessageL48 msg_48 = crateShortMessageL48(msg_id, umc.pts, context.getUserId(), this.message, this.entities);
@@ -160,13 +161,7 @@ public class SendMessageL48 extends TLObject implements TLMethod {
                 DatabaseConnection.getInstance().saveIncomingMessage(toUserId, context.getUserId(), 0, msg_48.id, msg_id,
                         msg_48.message, msg_48.flags, msg_48.date);
 
-                UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 1, 1, 0);
-                msg_id = um.sent_messages + um.received_messages + 1;
 
-                DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, 0, msg_id, msg_48.id,
-                        msg_48.message, 2, msg_48.date);
-
-                pts = um.pts;
 
                 Object[] sessions = Router.getInstance().getActiveSessions(toUserId);
 
@@ -177,13 +172,33 @@ public class SendMessageL48 extends TLObject implements TLMethod {
                         Router.getInstance().Route(((ActiveSession) session).session_id, ((ActiveSession) session).auth_key_id, msg, false);
                     }
                 }
+                UserModel um;
+                if (context.getApiLayer() >= 57) {
+                    um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
+                    msg_id = um.sent_messages + um.received_messages + 1;
+                    DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, 0, msg_id, msg_48.id,
+                            msg_48.message, 2, msg_48.date);
 
-                if (context.getApiLayer() >= 48) {
-                    UpdateShortSentMessage updateShortSentMessage = new UpdateShortSentMessage(0, msg_id, pts, 1, date,
+                    UpdateShortSentMessage updateShortSentMessage = new UpdateShortSentMessage(0, msg_id, um.pts, 0, date,
+                            new MessageMediaEmpty(), entities);
+                    updateShortSentMessage.set_updateShortSentMessage_out();
+                    return updateShortSentMessage;
+                } else if (context.getApiLayer() >= 48) {
+                    um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 1, 1, 0);
+                    msg_id = um.sent_messages + um.received_messages + 1;
+                    DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, 0, msg_id, msg_48.id,
+                            msg_48.message, 2, msg_48.date);
+
+                    UpdateShortSentMessage updateShortSentMessage = new UpdateShortSentMessage(0, msg_id, um.pts, 1, date,
                             new MessageMediaEmpty(), entities);
                     updateShortSentMessage.set_updateShortSentMessage_out();
                     return updateShortSentMessage;
                 } else {
+                    um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 1, 0);
+                    msg_id = um.sent_messages + um.received_messages + 1;
+                    DatabaseConnection.getInstance().saveOutgoingMessage(context.getUserId(), toUserId, 0, msg_id, msg_48.id,
+                            msg_48.message, 2, msg_48.date);
+
                     return new SentMessage(msg_id, date, new MessageMediaEmpty(),
                             new TLVector<TLMessageEntity>(), pts, 0, pts);
                 }

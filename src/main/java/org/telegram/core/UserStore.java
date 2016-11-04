@@ -142,6 +142,26 @@ public class UserStore {
         usersShared.set(user_id, user);
         db.updateUser_pts(user_id, user.pts, user.sent_messages, user.received_messages);
 
+        return user;
+    }
+
+    public UserModel decement_pts_getUser(int user_id, int pts_dec) {
+        UserModel user = usersShared.get(user_id);
+        if (user == null) {
+            user = db.getUser(user_id);
+            if (user != null) {
+                usersShared.set(user_id, user);
+                userPhoneToId.set(user.phone, user_id);
+                usernameToId.set(user.username, user_id);
+            }
+        }
+        if (user == null) {
+            return null;
+        }
+        user.pts -= pts_dec;
+
+        usersShared.set(user_id, user);
+        db.updateUser_pts(user_id, user.pts, user.sent_messages, user.received_messages);
 
         return user;
     }

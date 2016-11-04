@@ -75,13 +75,13 @@ public class ReadHistory extends TLObject implements TLMethod {
         }
         UserModel um = UserStore.getInstance().getUser(context.getUserId());
         if (peer instanceof InputPeerUser) {
-            UserModel umc = UserStore.getInstance().increment_pts_getUser(((InputPeerUser) peer).user_id, 1, 0, 0);
+            UserModel umc = UserStore.getInstance().getUser(((InputPeerUser) peer).user_id);
             if (um != null && umc != null) {
                 Object[] sessions = Router.getInstance().getActiveSessions(umc.user_id);
                 for (Object session : sessions) {
                     if (((ActiveSession) session).layer >= 48) {
                         UpdateShort update = new UpdateShort(new UpdateReadHistoryOutbox(um.toPeerUser(),
-                                umc.received_messages + umc.sent_messages + 1, umc.pts, 1), date);
+                                umc.received_messages + umc.sent_messages + 1, umc.pts, 0), date);
                         Router.getInstance().Route(((ActiveSession) session).session_id,
                                 ((ActiveSession) session).auth_key_id, update, false);
                     } else {
