@@ -26,6 +26,13 @@ import org.telegram.data.DatabaseConnection;
 import org.telegram.data.UserModel;
 import org.telegram.mtproto.ProtocolBuffer;
 import org.telegram.tl.*;
+import org.telegram.tl.EncryptedChatRequested;
+import org.telegram.tl.EncryptedChatWaiting;
+import org.telegram.tl.InputUser;
+import org.telegram.tl.InputUserSelf;
+import org.telegram.tl.L57.*;
+import org.telegram.tl.UpdateEncryption;
+import org.telegram.tl.Updates;
 
 public class RequestEncryption extends TLObject implements TLMethod {
 
@@ -73,8 +80,13 @@ public class RequestEncryption extends TLObject implements TLMethod {
     @Override
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
         int date = (int) (System.currentTimeMillis() / 1000L);
+        if(user_id instanceof InputUserSelf || user_id instanceof org.telegram.tl.L57.InputUserSelf){
+            DatabaseConnection.getInstance().addSecretChat(random_id, context.getUserId(), context.getUserId());
+        } else {
+            DatabaseConnection.getInstance().addSecretChat(random_id, context.getUserId(), ((InputUser) user_id).user_id);
+        }
 
-        DatabaseConnection.getInstance().addSecretChat(random_id, context.getUserId(), ((InputUser) user_id).user_id);
+
 
         EncryptedChatRequested encryptedChatRequested = new EncryptedChatRequested(random_id, random_id, date, context.getUserId(), ((InputUser) user_id).user_id, g_a);
         UpdateEncryption updateEncryption = new UpdateEncryption(encryptedChatRequested, date);

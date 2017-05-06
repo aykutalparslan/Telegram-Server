@@ -166,7 +166,7 @@ public class UserStore {
         return user;
     }
 
-    public UserModel increment_qts_getUser(int user_id, int pts_inc) {
+    public UserModel increment_qts_getUser(int user_id, int qts_inc) {
         UserModel user = usersShared.get(user_id);
         if (user == null) {
             user = db.getUser(user_id);
@@ -176,7 +176,7 @@ public class UserStore {
                 usernameToId.set(user.username, user_id);
             }
         }
-        user.pts += pts_inc;
+        user.qts += qts_inc;
 
         usersShared.set(user_id, user);
         db.updateUser_qts(user_id, user.qts);

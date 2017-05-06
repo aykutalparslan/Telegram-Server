@@ -58,7 +58,7 @@ public class GetState extends TLObject implements TLMethod {
     public TLObject execute(TLContext context, long messageId, long reqMessageId) {
         if (context.isAuthorized()) {
             UserModel um = UserStore.getInstance().increment_pts_getUser(context.getUserId(), 0, 0, 0);
-            return new State(um.pts, 0, (int) (System.currentTimeMillis() / 1000L), um.pts, 0);
+            return new State(um.pts, um.qts, (int) (System.currentTimeMillis() / 1000L), um.pts, 0);
         }
         return new rpc_error(401, "UNAUTRORIZED");
     }
