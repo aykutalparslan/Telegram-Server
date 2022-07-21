@@ -1,4 +1,5 @@
-# This Project is not maintained please visit my new project [Project Ferrite] as I plan to maintain that one.
+# This Project is not maintained anymore. 
+Please visit my new project [Project Ferrite] as I plan to maintain that one.
 
 # Telegram Server (Unofficial)
 
