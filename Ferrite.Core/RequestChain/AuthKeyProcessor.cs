@@ -1,49 +1,24 @@
-﻿//
-//  Project Ferrite is an Implementation Telegram Server API
-//  Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-//
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU Affero General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU Affero General Public License for more details.
-//
-//  You should have received a copy of the GNU Affero General Public License
-//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using System.Buffers;
-using System.Runtime.InteropServices;
 using Ferrite.Core.Connection;
 using Ferrite.Core.Execution;
-using Ferrite.Data;
 using Ferrite.Services;
 using Ferrite.TL;
 using Ferrite.TL.mtproto;
-using Ferrite.TL.slim;
-using Ferrite.TL.slim.mtproto;
 using Ferrite.Utils;
-using MessagePack;
-using ReqDhParams = Ferrite.TL.mtproto.ReqDhParams;
-using ReqPqMulti = Ferrite.TL.slim.mtproto.ReqPqMulti;
-using SetClientDhParams = Ferrite.TL.mtproto.SetClientDhParams;
+using ReqPqMulti = Ferrite.TL.mtproto.ReqPqMulti;
 
 namespace Ferrite.Core.RequestChain;
 
 public class AuthKeyProcessor : ILinkedHandler
 {
     private readonly ISessionService _sessionManager;
-    private readonly IMessagePipe _pipe;
     private readonly ILogger _log;
     private readonly IExecutionEngine _api;
-    public AuthKeyProcessor(ISessionService sessionManager, IMessagePipe pipe, ILogger log, IExecutionEngine api)
+    public AuthKeyProcessor(ISessionService sessionManager, ILogger log, IExecutionEngine api)
     {
         _sessionManager = sessionManager;
-        _pipe = pipe;
         _log = log;
         _api = api;
     }
@@ -56,196 +31,109 @@ public class AuthKeyProcessor : ILinkedHandler
         return Next;
     }
 
-    public async ValueTask Process(object? sender, ITLObject input, TLExecutionContext ctx)
-    {
-        if (ctx.AuthKeyId != 0)
-        {
-            if (Next != null) await Next.Process(sender, input, ctx);
-            return;
-        }
-        if (input.Constructor != TLConstructor.ReqPqMulti &&
-            input.Constructor != TLConstructor.ReqDhParams &&
-            input.Constructor != TLConstructor.SetClientDhParams)
-        {
-            return;
-        }
-        if (input is TL.mtproto.ReqPqMulti reqPq &&
-            sender is MTProtoConnection connection)
-        {
-            var result = await reqPq.ExecuteAsync(ctx);
-            if (result == null)
-            {
-                return;
-            }
-            Services.MTProtoMessage message = new Services.MTProtoMessage();
-            message.SessionId = ctx.SessionId;
-            message.IsResponse = true;
-            message.IsContentRelated = true;
-            message.Data = result.TLBytes.ToArray();
-            await _sessionManager.AddAuthSessionAsync(reqPq.Nonce,
-                new AuthSessionState() { NodeId = _sessionManager.NodeId, SessionData = ctx.SessionData },
-                new ActiveSession(connection));
-            message.Nonce = reqPq.Nonce;
-            message.MessageType = MTProtoMessageType.Unencrypted;
-            var bytes = MessagePackSerializer.Serialize(message);
-            await connection.SendAsync(message);
-
-            _log.Information($"{result} sent.");
-        }
-        else if (input is ReqDhParams reqDhParams &&
-            await _sessionManager.GetAuthSessionStateAsync(reqDhParams.Nonce)
-            is { } state)
-        {
-            ctx.SessionData = state.SessionData;
-            var result = await reqDhParams.ExecuteAsync(ctx);
-            Services.MTProtoMessage message = new Services.MTProtoMessage();
-            message.SessionId = ctx.SessionId;
-            message.IsResponse = true;
-            message.IsContentRelated = true;
-            message.Data = result.TLBytes.ToArray();
-            message.MessageType = MTProtoMessageType.Unencrypted;
-            message.Nonce = reqDhParams.Nonce;
-            
-            await _sessionManager.UpdateAuthSessionAsync(reqDhParams.Nonce, new AuthSessionState()
-            {
-                NodeId = _sessionManager.NodeId,
-                SessionData = ctx.SessionData
-            });
-            if (sender != null)
-            {
-                await ((MTProtoConnection)sender).SendAsync(message);
-            }
-            _log.Information($"{result} sent.");
-        }
-        else if (input is SetClientDhParams setClientDhParams &&
-           await _sessionManager.GetAuthSessionStateAsync(setClientDhParams.Nonce)
-           is { } state2)
-        {
-            ctx.SessionData = state2.SessionData;
-            var result = await setClientDhParams.ExecuteAsync(ctx);
-            Services.MTProtoMessage message = new Services.MTProtoMessage();
-            message.SessionId = ctx.SessionId;
-            message.IsResponse = true;
-            message.IsContentRelated = true;
-            message.Data = result.TLBytes.ToArray();
-            message.MessageType = MTProtoMessageType.Unencrypted;
-            message.Nonce = setClientDhParams.Nonce;
-            await _sessionManager.UpdateAuthSessionAsync(setClientDhParams.Nonce, new AuthSessionState()
-            {
-                NodeId = _sessionManager.NodeId,
-                SessionData = ctx.SessionData
-            });
-            if (sender != null)
-            {
-                await ((MTProtoConnection)sender).SendAsync(message);
-            }
-            _log.Information($"{result} sent.");
-        }
-    }
-
     public async ValueTask Process(object? sender, TLBytes input, TLExecutionContext ctx)
     {
-        var constructor = MemoryMarshal.Read<int>(input.AsSpan());
+        var constructor = input.Constructor;
         if (constructor == Constructors.mtproto_ReqPqMulti &&
             sender is MTProtoConnection connection)
         {
-            var result = await _api.Invoke(input, ctx);
-            if (result == null)
+            try
+            {
+                var result = await _api.Invoke(input, ctx);
+                if (result == null) return;
+                using var response = result.Value;
+
+                Services.MTProtoMessage message = new Services.MTProtoMessage();
+                message.SessionId = ctx.SessionId;
+                message.IsResponse = true;
+                message.IsContentRelated = true;
+                message.Data = response.AsSpan().ToArray();
+                var nonce = new ReqPqMulti(input.AsSpan()).Nonce.ToArray();
+                await _sessionManager.AddAuthSessionAsync(nonce,
+                    AuthSessionState.FromSessionData(_sessionManager.NodeId,
+                        ctx.SessionData),
+                    new ActiveSession(connection));
+                message.Nonce = nonce;
+                message.MessageType = MTProtoMessageType.Unencrypted;
+                await connection.SendAsync(message);
+
+                _log.Information("Result for req_pq_multi sent.");
+            }
+            finally
             {
                 input.Dispose();
-                return;
             }
-
-            Services.MTProtoMessage message = new Services.MTProtoMessage();
-            message.SessionId = ctx.SessionId;
-            message.IsResponse = true;
-            message.IsContentRelated = true;
-            message.Data = result.Value.AsSpan().ToArray();
-            var nonce = new ReqPqMulti(input.AsSpan()).Nonce.ToArray();
-            await _sessionManager.AddAuthSessionAsync(nonce,
-                new AuthSessionState() { NodeId = _sessionManager.NodeId, SessionData = ctx.SessionData },
-                new ActiveSession(connection));
-            message.Nonce = nonce;
-            message.MessageType = MTProtoMessageType.Unencrypted;
-            var bytes = MessagePackSerializer.Serialize(message);
-            await connection.SendAsync(message);
-
-            _log.Information("Result for req_pq_multi sent.");
         }
         else if (constructor == Constructors.mtproto_ReqDhParams)
         {
-            var nonce = new TL.slim.mtproto.ReqDhParams(input.AsSpan()).Nonce.ToArray();
-            var state = await _sessionManager.GetAuthSessionStateAsync(nonce);
-            if (state == null)
+            try
+            {
+                var nonce = new TL.mtproto.ReqDhParams(input.AsSpan()).Nonce.ToArray();
+                var state = await _sessionManager.GetAuthSessionStateAsync(nonce);
+                if (state == null) return;
+
+                RestoreMissingSessionData(ctx, state);
+                var result = await _api.Invoke(input, ctx);
+                if (result == null) return;
+                using var response = result.Value;
+
+                Services.MTProtoMessage message = new Services.MTProtoMessage();
+                message.SessionId = ctx.SessionId;
+                message.IsResponse = true;
+                message.IsContentRelated = true;
+                message.Data = response.AsSpan().ToArray();
+                message.MessageType = MTProtoMessageType.Unencrypted;
+                message.Nonce = nonce;
+
+                await _sessionManager.UpdateAuthSessionAsync(nonce,
+                    AuthSessionState.FromSessionData(_sessionManager.NodeId,
+                        ctx.SessionData));
+                if (sender is MTProtoConnection dhConnection)
+                {
+                    await dhConnection.SendAsync(message);
+                }
+
+                _log.Information("Result for req_DH_params sent.");
+            }
+            finally
             {
                 input.Dispose();
-                return;
             }
-
-            var result = await _api.Invoke(input, ctx);
-            if (result == null)
-            {
-                input.Dispose();
-                return;
-            }
-
-            ctx.SessionData = state.SessionData;
-            Services.MTProtoMessage message = new Services.MTProtoMessage();
-            message.SessionId = ctx.SessionId;
-            message.IsResponse = true;
-            message.IsContentRelated = true;
-            message.Data = result.Value.AsSpan().ToArray();
-            message.MessageType = MTProtoMessageType.Unencrypted;
-            message.Nonce = nonce;
-
-            await _sessionManager.UpdateAuthSessionAsync(nonce, new AuthSessionState()
-            {
-                NodeId = _sessionManager.NodeId,
-                SessionData = ctx.SessionData
-            });
-            if (sender != null)
-            {
-                await ((MTProtoConnection)sender).SendAsync(message);
-            }
-
-            _log.Information("Result for req_DH_params sent.");
         }
         else if (constructor == Constructors.mtproto_SetClientDhParams)
         {
-            var nonce = new TL.slim.mtproto.SetClientDhParams(input.AsSpan()).Nonce.ToArray();
-            var state = await _sessionManager.GetAuthSessionStateAsync(nonce);
-            if (state == null)
+            try
+            {
+                var nonce = new TL.mtproto.SetClientDhParams(input.AsSpan()).Nonce.ToArray();
+                var state = await _sessionManager.GetAuthSessionStateAsync(nonce);
+                if (state == null) return;
+
+                RestoreMissingSessionData(ctx, state);
+                var result = await _api.Invoke(input, ctx);
+                if (result == null) return;
+                using var response = result.Value;
+
+                MTProtoMessage message = new Services.MTProtoMessage();
+                message.SessionId = ctx.SessionId;
+                message.IsResponse = true;
+                message.IsContentRelated = true;
+                message.Data = response.AsSpan().ToArray();
+                message.MessageType = MTProtoMessageType.Unencrypted;
+                message.Nonce = nonce;
+                await _sessionManager.UpdateAuthSessionAsync(nonce,
+                    AuthSessionState.FromSessionData(_sessionManager.NodeId,
+                        ctx.SessionData));
+                if (sender is MTProtoConnection clientDhConnection)
+                {
+                    await clientDhConnection.SendAsync(message);
+                }
+
+                _log.Information("Result for set_client_DH_params sent.");
+            }
+            finally
             {
                 input.Dispose();
-                return;
             }
-
-            var result = await _api.Invoke(input, ctx);
-            if (result == null)
-            {
-                input.Dispose();
-                return;
-            }
-
-            ctx.SessionData = state.SessionData;
-            MTProtoMessage message = new Services.MTProtoMessage();
-            message.SessionId = ctx.SessionId;
-            message.IsResponse = true;
-            message.IsContentRelated = true;
-            message.Data = result.Value.AsSpan().ToArray();
-            message.MessageType = MTProtoMessageType.Unencrypted;
-            message.Nonce = nonce;
-            await _sessionManager.UpdateAuthSessionAsync(nonce, new AuthSessionState()
-            {
-                NodeId = _sessionManager.NodeId,
-                SessionData = ctx.SessionData
-            });
-            if (sender != null)
-            {
-                await ((MTProtoConnection)sender).SendAsync(message);
-            }
-
-            _log.Information("Result for set_client_DH_params sent.");
         }
         else
         {
@@ -253,5 +141,17 @@ public class AuthKeyProcessor : ILinkedHandler
             else input.Dispose();
         }
     }
-}
 
+    public async ValueTask Process(object? sender, ITLStreamingObject input, TLExecutionContext ctx)
+    {
+        if (Next != null) await Next.Process(sender, input, ctx);
+    }
+
+    private static void RestoreMissingSessionData(TLExecutionContext context,
+        AuthSessionState persisted)
+    {
+        // A live handshake context remains authoritative. Persisted TL state is
+        // only a typed fallback for a resumed stage.
+        persisted.RestoreInto(context.SessionData);
+    }
+}

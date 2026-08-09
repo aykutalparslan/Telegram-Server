@@ -1,31 +1,19 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.TL.slim;
-using Ferrite.TL.slim.baseLayer;
-using Ferrite.TL.slim.baseLayer.dto;
-using MessagePack;
-using TLUserStatus = Ferrite.TL.slim.baseLayer.TLUserStatus;
+using Ferrite.TL;
+using Ferrite.TL.baseLayer;
+using Ferrite.TL.baseLayer.dto;
+using TLUserStatus = Ferrite.TL.baseLayer.TLUserStatus;
 
 namespace Ferrite.Data.Repositories;
 
 public class UserStatusRepository : IUserStatusRepository
 {
+    private const int OnlineStatusExpiresInSeconds = 60;
+    private const int OneDayInSeconds = 24 * 60 * 60;
+    private const int OneWeekInSeconds = 7 * OneDayInSeconds;
+    private const int OneMonthInSeconds = 30 * OneDayInSeconds;
     private readonly IKVStore _store;
     public UserStatusRepository(IKVStore store)
     {
@@ -36,12 +24,13 @@ public class UserStatusRepository : IUserStatusRepository
     }
     public bool PutUserStatus(long userId, bool status)
     {
-        var statusBytes = UserStatusFull.Builder()
+        var now = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        using var statusBytes = UserStatusFull.Builder()
                 .Status(status)
-                .WasOnline((int)DateTimeOffset.Now.ToUnixTimeSeconds())
-                .Expires(10)
-                .Build().TLBytes!.Value;
-        return _store.Put(statusBytes.AsSpan().ToArray(), userId);
+                .WasOnline(now)
+                .Expires(status ? now + OnlineStatusExpiresInSeconds : now)
+                .Build();
+        return _store.Put(statusBytes.ToReadOnlySpan().ToArray(), userId);
     }
 
     public async ValueTask<TLUserStatus> GetUserStatusAsync(long userId)
@@ -53,28 +42,26 @@ public class UserStatusRepository : IUserStatusRepository
         }
 
         var userStatus = new TLUserStatusFull(serialized, 0, serialized.Length);
-        if (!userStatus.AsUserStatusFull().Status)
+        var full = userStatus.AsUserStatusFull();
+        int wasOnline = full.WasOnline;
+        int now = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        if (full.Status && full.Expires > now)
         {
-            return new UserStatusOffline();
+            return new UserStatusOnline(full.Expires);
         }
 
-        int wasOnline = userStatus.AsUserStatusFull().WasOnline;
-        if (wasOnline + userStatus.AsUserStatusFull().Expires < DateTimeOffset.Now.ToUnixTimeSeconds())
+        if (wasOnline >= now - OneDayInSeconds)
         {
-            return new UserStatusOnline(userStatus.AsUserStatusFull().Expires);
+            return new UserStatusOffline(wasOnline);
         }
-        if(wasOnline < DateTimeOffset.Now.AddDays(-1).ToUnixTimeSeconds())
+        if (wasOnline >= now - OneWeekInSeconds)
         {
             return new UserStatusRecently();
         }
-        if(wasOnline < DateTimeOffset.Now.AddDays(-7).ToUnixTimeSeconds())
+        if (wasOnline >= now - OneMonthInSeconds)
         {
             return new UserStatusLastWeek();
         }
-        if(wasOnline < DateTimeOffset.Now.AddDays(-30).ToUnixTimeSeconds())
-        {
-            return new UserStatusLastMonth();
-        }
-        return new UserStatusOffline();
+        return new UserStatusLastMonth();
     }
 }

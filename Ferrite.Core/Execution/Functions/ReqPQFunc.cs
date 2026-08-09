@@ -1,29 +1,15 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Numerics;
 using Ferrite.Crypto;
+using Ferrite.Core.Execution;
 using Ferrite.TL;
-using Ferrite.TL.slim;
-using Ferrite.TL.slim.mtproto;
+using Ferrite.TL.mtproto;
 
 namespace Ferrite.Core.Execution.Functions;
 
+[TLFunction(Constructors.mtproto_ReqPqMulti)]
 public class ReqPQFunc : ITLFunction
 {
     private IRandomGenerator _randomGenerator;
@@ -84,7 +70,7 @@ public class ReqPQFunc : ITLFunction
         byte[] Pq = pq.ToByteArray(isBigEndian: true);
 
         var tmp = _keyPairProvider.GetRSAFingerprints();
-        var fingerprints = new TL.slim.VectorOfLong();
+        var fingerprints = new TL.VectorOfLong();
         foreach (var f in tmp)
         {
             fingerprints.Append(f);

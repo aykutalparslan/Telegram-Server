@@ -1,14 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <WarningLevel>4</WarningLevel>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
   </PropertyGroup>
@@ -18,7 +18,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Ferrite.Data\Ferrite.Data.csproj" />
-    <ProjectReference Include="..\Ferrite.TL.slim\Ferrite.TL.slim.csproj" />
+    <ProjectReference Include="..\Ferrite.TL\Ferrite.TL.csproj" />
     <ProjectReference Include="..\Ferrite.Utils\Ferrite.Utils.csproj" />
     <ProjectReference Include="..\Ferrite.Crypto\Ferrite.Crypto.csproj" />
   </ItemGroup>
@@ -26,19 +26,17 @@
     <Compile Remove="SessionManager.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="DotNext.IO" Version="4.7.4" />
-    <PackageReference Include="DotNext.Unsafe" Version="4.7.4" />
-    <PackageReference Include="Microsoft.Toolkit.HighPerformance" Version="7.1.2" />
-    <PackageReference Include="SkiaSharp" Version="2.88.2" />
-    <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="2.88.2" />
+    <PackageReference Include="DotNext.IO" Version="6.3.0" />
+    <PackageReference Include="DotNext.Unsafe" Version="6.3.0" />
+    <PackageReference Include="CommunityToolkit.HighPerformance" Version="8.4.2" />
+    <PackageReference Include="SkiaSharp" Version="4.148.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
+    <!-- Linux is the deployment target and the runtime image the integration
+         tests mount, so the Linux native asset is required, not optional:
+         without it every photo path fails with PHOTO_FILE_INVALID. The
+         NoDependencies variant is deliberate, because the stock runtime image
+         has no libfontconfig1 and Ferrite only decodes, scales and encodes
+         images, never rendering text. -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
   </ItemGroup>
-  <ProjectExtensions>
-    <MonoDevelop>
-      <Properties>
-        <Policies>
-          <DotNetNamingPolicy ResourceNamePolicy="FileFormatDefault" DirectoryNamespaceAssociation="PrefixedHierarchical" />
-        </Policies>
-      </Properties>
-    </MonoDevelop>
-  </ProjectExtensions>
 </Project>

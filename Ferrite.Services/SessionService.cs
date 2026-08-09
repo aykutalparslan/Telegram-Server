@@ -1,32 +1,20 @@
-﻿/*
- *   Project Ferrite is an Implementation Telegram Server API
- *   Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
- *
- *   This program is free software: you can redistribute it and/or modify
- *   it under the terms of the GNU Affero General Public License as published by
- *   the Free Software Foundation, either version 3 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU Affero General Public License for more details.
- *
- *   You should have received a copy of the GNU Affero General Public License
- *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System;
 using System.Collections.Concurrent;
 using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Utils;
-using MessagePack;
+using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services;
 
 public class SessionService : ISessionService
 {
+    private readonly IAuthSessionRepository _authSessionRepository;
+    private readonly ISessionRepository _sessionRepository;
+
     public Guid NodeId { get; private set; }
     private readonly ConcurrentDictionary<long, ActiveSession> _localSessions = new();
     private readonly ConcurrentDictionary<Nonce, ActiveSession> _localAuthSessions = new();
@@ -46,22 +34,36 @@ public class SessionService : ISessionService
             return guid;
         }
     }
-    public SessionService(IUnitOfWork unitOfWork, ILogger log)
+    public SessionService(IUnitOfWork unitOfWork, IAuthSessionRepository authSessionRepository, ISessionRepository sessionRepository, ILogger log)
+        : this(unitOfWork, authSessionRepository, sessionRepository, log, null)
     {
-        NodeId = GetNodeId();
+    }
+
+    public SessionService(IUnitOfWork unitOfWork, IAuthSessionRepository authSessionRepository, ISessionRepository sessionRepository, ILogger log, Guid? nodeId)
+    {
+        _authSessionRepository = authSessionRepository;
+        _sessionRepository = sessionRepository;
+
+        NodeId = nodeId ?? GetNodeId();
         _unitOfWork = unitOfWork;
         _log = log;
     }
     public async Task<bool> AddSessionAsync(long authKeyId, long sessionId, ActiveSession session)
     {
+        if (sessionId == 0)
+        {
+            return false;
+        }
+
         var state = new RemoteSession
         {
             SessionId = sessionId,
             NodeId = NodeId,
         };
-        var remoteAdd =  _unitOfWork.SessionRepository.PutSession(state.SessionId, MessagePackSerializer.Serialize(state),
+        using TLRemoteSession remoteState = state.ToTl();
+        var remoteAdd = _sessionRepository.PutSession(remoteState,
             new TimeSpan(0,0, FerriteConfig.SessionTTL));
-        var authKeyAdd = _unitOfWork.SessionRepository.PutSessionForAuthKey(authKeyId, state.SessionId);
+        var authKeyAdd = _sessionRepository.PutSessionForAuthKey(authKeyId, state.SessionId);
         _log.Debug($"=== 1 = Put Session for Auth Key: {authKeyId} ===");
         await _unitOfWork.SaveAsync();
         if (_localSessions.ContainsKey(state.SessionId))
@@ -73,14 +75,20 @@ public class SessionService : ISessionService
 
     public bool AddSession(long authKeyId, long sessionId, ActiveSession session)
     {
+        if (sessionId == 0)
+        {
+            return false;
+        }
+
         var state = new RemoteSession
         {
             SessionId = sessionId,
             NodeId = NodeId,
         };
-        var remoteAdd = _unitOfWork.SessionRepository.PutSession(state.SessionId, MessagePackSerializer.Serialize(state),
+        using TLRemoteSession remoteState = state.ToTl();
+        var remoteAdd = _sessionRepository.PutSession(remoteState,
             new TimeSpan(0,0, FerriteConfig.SessionTTL));
-        var authKeyAdd = _unitOfWork.SessionRepository.PutSessionForAuthKey(authKeyId, state.SessionId);
+        var authKeyAdd = _sessionRepository.PutSessionForAuthKey(authKeyId, state.SessionId);
         _log.Debug($"=== 2 = Put Session for Auth Key: {authKeyId} ===");
         _unitOfWork.Save();
         if (_localSessions.ContainsKey(state.SessionId))
@@ -100,26 +108,25 @@ public class SessionService : ISessionService
     public async Task<bool> DeleteSessionAsync(long sessionId)
     {
         _localSessions.TryRemove(sessionId, out var removed);
-        _unitOfWork.SessionRepository.DeleteSession(sessionId);
+        _sessionRepository.DeleteSession(sessionId);
         await _unitOfWork.SaveAsync();
         return true;
     }
 
     private async Task<RemoteSession> GetSessionState(long sessionId)
     {
-        var rawSession = _unitOfWork.SessionRepository.GetSession(sessionId);
-        if (rawSession != null)
+        using TLRemoteSession? row = _sessionRepository.GetSession(sessionId);
+        if (row != null)
         {
-            var state = MessagePackSerializer.Deserialize<RemoteSession>(rawSession);
-            return state;
+            return RemoteSession.FromTl(row.Value);
         }
         return null;
     }
 
     public async Task<bool> RemoveSession(long authKeyId, long sessionId)
     {
-        _unitOfWork.SessionRepository.DeleteSession(sessionId);
-        _unitOfWork.SessionRepository.DeleteSessionForAuthKey(authKeyId, sessionId);
+        _sessionRepository.DeleteSession(sessionId);
+        _sessionRepository.DeleteSessionForAuthKey(authKeyId, sessionId);
         await _unitOfWork.SaveAsync();
         return _localSessions.TryRemove(sessionId, out var session);
     }
@@ -135,7 +142,8 @@ public class SessionService : ISessionService
     public async Task<bool> AddAuthSessionAsync(byte[] nonce, AuthSessionState state, ActiveSession session)
     {
         state.NodeId = NodeId;
-        var remoteAdd = _unitOfWork.AuthSessionRepository.PutAuthKeySession(nonce, MessagePackSerializer.Serialize(state));
+        using TLAuthSessionState row = state.ToTl();
+        var remoteAdd = _authSessionRepository.PutAuthKeySession(nonce, row);
         await _unitOfWork.SaveAsync();
         var key = (Nonce)nonce;
         if (_localAuthSessions.ContainsKey(key))
@@ -147,19 +155,18 @@ public class SessionService : ISessionService
 
     public async Task<bool> UpdateAuthSessionAsync(byte[] nonce, AuthSessionState state)
     {
-        bool result = _unitOfWork.AuthSessionRepository.PutAuthKeySession(nonce, MessagePackSerializer.Serialize(state));
+        using TLAuthSessionState row = state.ToTl();
+        bool result = _authSessionRepository.PutAuthKeySession(nonce, row);
         await _unitOfWork.SaveAsync();
         return result;
     }
 
     public async Task<AuthSessionState?> GetAuthSessionStateAsync(byte[] nonce)
     {
-        var rawSession = _unitOfWork.AuthSessionRepository.GetAuthKeySession(nonce);
-        if (rawSession != null)
+        using TLAuthSessionState? row = _authSessionRepository.GetAuthKeySession(nonce);
+        if (row != null)
         {
-            var state = MessagePackSerializer.Deserialize<AuthSessionState>(rawSession);
-            
-            return state;
+            return AuthSessionState.FromTl(row.Value);
         }
         return null;
     }
@@ -176,15 +183,20 @@ public class SessionService : ISessionService
 
     public bool RemoveAuthSession(byte[] nonce)
     {
-        _unitOfWork.AuthSessionRepository.RemoveAuthKeySession(nonce);
+        _authSessionRepository.RemoveAuthKeySession(nonce);
         _unitOfWork.Save();
         return _localAuthSessions.TryRemove((Nonce)nonce, out var a);
     }
 
     public async Task<bool> OnPing(long authKeyId, long sessionId)
     {
-        var ttlSet = _unitOfWork.SessionRepository.SetSessionTTL(sessionId, new TimeSpan(0, 0, FerriteConfig.SessionTTL));
-        bool sessionSaved = _unitOfWork.SessionRepository.PutSessionForAuthKey(authKeyId, sessionId);
+        if (sessionId == 0)
+        {
+            return false;
+        }
+
+        var ttlSet = _sessionRepository.SetSessionTTL(sessionId, new TimeSpan(0, 0, FerriteConfig.SessionTTL));
+        bool sessionSaved = _sessionRepository.PutSessionForAuthKey(authKeyId, sessionId);
         _log.Debug($"=== Put Session for Auth Key: {authKeyId} ===");
         await _unitOfWork.SaveAsync();
         return ttlSet && sessionSaved;
@@ -192,14 +204,19 @@ public class SessionService : ISessionService
 
     public async Task<ICollection<RemoteSession>> GetSessionsAsync(long authKeyId)
     {
-        var sessionIds = _unitOfWork.SessionRepository.GetSessionsByAuthKey(authKeyId,
+        var sessionIds = _sessionRepository.GetSessionsByAuthKey(authKeyId,
             TimeSpan.FromSeconds(FerriteConfig.SessionTTL));
         _log.Debug($"=== Got {sessionIds.Count} sessions for Auth Key: {authKeyId} ===");
         List<RemoteSession> result = new();
         foreach (var sessionId in sessionIds)
         {
+            if (sessionId == 0)
+            {
+                continue;
+            }
+
             var state = await GetSessionState(sessionId);
-            if (state != null)
+            if (state is { SessionId: not 0 })
             {
                 result.Add(state);
             }
@@ -207,4 +224,3 @@ public class SessionService : ISessionService
         return result;
     }
 }
-

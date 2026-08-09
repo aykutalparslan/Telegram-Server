@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -15,11 +15,11 @@
     <None Remove="Serilog.Sinks.File" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="DotNext" Version="4.7.1" />
-    <PackageReference Include="DotNext.IO" Version="4.7.1" />
-    <PackageReference Include="DotNext.Unsafe" Version="4.7.1" />
-    <PackageReference Include="Serilog" Version="2.12.0" />
-    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+    <PackageReference Include="DotNext" Version="6.3.0" />
+    <PackageReference Include="DotNext.IO" Version="6.3.0" />
+    <PackageReference Include="DotNext.Unsafe" Version="6.3.0" />
+    <PackageReference Include="Serilog" Version="4.3.1" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\.editorconfig" />

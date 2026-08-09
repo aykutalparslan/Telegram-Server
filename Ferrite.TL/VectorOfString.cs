@@ -1,131 +1,109 @@
-﻿/*
- *   Project Ferrite is an Implementation Telegram Server API
- *   Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
- *
- *   This program is free software: you can redistribute it and/or modify
- *   it under the terms of the GNU Affero General Public License as published by
- *   the Free Software Foundation, either version 3 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU Affero General Public License for more details.
- *
- *   You should have received a copy of the GNU Affero General Public License
- *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using System;
 using System.Buffers;
 using System.Collections;
+using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
-using DotNext.Buffers;
-using DotNext.IO;
 using Ferrite.Utils;
 
 namespace Ferrite.TL;
 
-public class VectorOfString : ITLObject, ICollection<string>
+public ref struct VectorOfString
 {
-    private SparseBufferWriter<byte> writer =
-        new SparseBufferWriter<byte>(UnmanagedMemoryPool<byte>.Shared);
-    private List<string> list;
-    private bool serialized = false;
-
+    private Span<byte> _buff;
+    private int _position;
+    private int _offset;
     public VectorOfString()
     {
-        list = new List<string>();
+        _buff = new byte[512];
+        SetConstructor(unchecked((int)0x1cb5c415));
+        SetCount(0);
+        _position = 8;
+        _offset = 8;
     }
-    public VectorOfString(int capacity)
+    public VectorOfString(Span<byte> buffer)
     {
-        list = new List<string>(capacity);
-    }
-
-    public string this[int index] { get => list[index]; }
-
-    public ReadOnlySequence<byte> TLBytes
-    {
-        get
+        if (MemoryMarshal.Read<int>(buffer) != unchecked((int)0x1cb5c415))
         {
-            if (serialized)
-            {
-                return writer.ToReadOnlySequence();
-            }
-            writer.Clear();
-            writer.WriteInt32(Constructor, true);
-            writer.WriteInt32(list.Count, true);
-            foreach (var item in list)
-            {
-                writer.WriteTLString(item);
-            }
-
-            return writer.ToReadOnlySequence();
+            throw new InvalidOperationException();
         }
+        _offset = Math.Min(ReadSize(buffer, 0), buffer.Length);
+        _buff = buffer[.._offset];
+        _position = 8;
+    }
+    public readonly int Constructor => MemoryMarshal.Read<int>(_buff);
+    private void SetConstructor(int constructor)
+    {
+        MemoryMarshal.Write(_buff[..4], ref constructor);
+    }
+    public ReadOnlySpan<byte> ToReadOnlySpan() => _buff[.._offset];
+    public readonly int Count => MemoryMarshal.Read<int>(_buff.Slice(4, 4));
+    public readonly int Length => _offset;
+    private void SetCount(int count)
+    {
+        MemoryMarshal.Write(_buff.Slice(4, 4), ref count);
     }
 
-    public void Parse(ref SequenceReader buff)
+    public static Span<byte> Read(Span<byte> data, int offset)
     {
-        int size = buff.ReadInt32(true);
-
-        for (int i = 0; i < size; i++)
+        if (MemoryMarshal.Read<int>(data[..4]) != unchecked((int)0x1cb5c415))
         {
-            list.Add(buff.ReadTLString());
+            throw new InvalidOperationException();
         }
-    }
-
-    public void WriteTo(Span<byte> buff)
-    {
-        SpanWriter<byte> spanWriter = new SpanWriter<byte>(buff);
-        foreach (var item in TLBytes)
+        int count = MemoryMarshal.Read<int>(data.Slice(offset + 4, 4));
+        int len = 8;
+        for (int i = 0; i < count; i++)
         {
-            spanWriter.Write(item.Span);
+            len += BufferUtils.GetTLBytesLength(data, offset + len);
         }
+        return data.Slice(offset, len);
     }
 
-    public int Constructor => unchecked((int)0x1cb5c415);
-
-    public int Count => list.Count;
-
-    public bool IsReadOnly => false;
-
-    public void Add(string item)
+    public static int ReadSize(Span<byte> data, int offset)
     {
-        serialized = false;
-        list.Add(item);
+        if (MemoryMarshal.Read<int>(data[offset..]) != unchecked((int)0x1cb5c415))
+        {
+            throw new InvalidOperationException();
+        }
+        int count = MemoryMarshal.Read<int>(data.Slice(offset + 4, 4));
+        int len = 8;
+        for (int i = 0; i < count; i++)
+        {
+            len += BufferUtils.GetTLBytesLength(data, offset + len);
+        }
+        return len;
     }
 
-    public void Clear()
+    public void AppendTLBytes(ReadOnlySpan<byte> value)
     {
-        serialized = false;
-        list.Clear();
+        int len = BufferUtils.CalculateTLBytesLength(value.Length);
+        if (value.Length + len + _offset > _buff.Length)
+        {
+            var tmp = new byte[_buff.Length * 2];
+            _buff.CopyTo(tmp);
+            _buff = tmp;
+        }
+        int lenBytes = BufferUtils.WriteLenBytes(_buff, value, _offset);
+        value.CopyTo(_buff[(lenBytes + _offset)..]);
+        MemoryMarshal.Cast<byte, int>(_buff)[1]++;
+        _offset += len;
     }
 
-    public bool Contains(string item)
+    public Span<byte> ReadTLBytes()
     {
-        return list.Contains(item);
+        if (_position == _offset)
+        {
+            throw new EndOfStreamException();
+        }
+        int bytesLength = BufferUtils.GetTLBytesLength(_buff, _position);
+        var result = BufferUtils.GetTLBytes(_buff, _position);
+        _position += bytesLength;
+        return result;
     }
-
-    public void CopyTo(string[] array, int arrayIndex)
+    public void Reset()
     {
-        list.CopyTo(array, arrayIndex);
-    }
-
-    public IEnumerator<string> GetEnumerator()
-    {
-        return list.GetEnumerator();
-    }
-
-    public bool Remove(string item)
-    {
-        serialized = false;
-        return list.Remove(item);
-    }
-
-    IEnumerator IEnumerable.GetEnumerator()
-    {
-        return list.AsEnumerable<string>().GetEnumerator();
+        _position = 8;
     }
 }
-

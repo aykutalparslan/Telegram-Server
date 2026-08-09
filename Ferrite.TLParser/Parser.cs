@@ -1,20 +1,5 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Collections.Generic;
 
@@ -32,21 +17,43 @@ public class Parser
 
     public CombinatorDeclarationSyntax? ParseCombinator()
     {
-        var statement = NextStatement();
-        if (statement.Count == 0)
-        {
-            return null;
-        }
-
-        while (statement[0].Type == TokenType.EOL)
+        IReadOnlyList<Token> statement;
+        while (true)
         {
             statement = NextStatement();
-        }
+            if (statement.Count == 0)
+            {
+                return null;
+            }
 
-        if (statement[0].Type == TokenType.Functions)
-        {
-            _combinatorType = CombinatorType.Function;
-            statement = NextStatement();
+            if (statement[0].Type is TokenType.EOF)
+            {
+                return null;
+            }
+
+            if (statement[0].Type is TokenType.EOL)
+            {
+                continue;
+            }
+
+            if (statement[0].Type == TokenType.Functions)
+            {
+                _combinatorType = CombinatorType.Function;
+                continue;
+            }
+
+            if (statement[0].Type == TokenType.Types)
+            {
+                _combinatorType = CombinatorType.Constructor;
+                continue;
+            }
+
+            if (IsSkippableTdLibTestFunction(statement))
+            {
+                continue;
+            }
+
+            break;
         }
 
         int offset = 0;
@@ -241,6 +248,27 @@ public class Parser
         }
 
         return null;
+    }
+
+    private bool IsSkippableTdLibTestFunction(IReadOnlyList<Token> statement)
+    {
+        if (_combinatorType != CombinatorType.Function ||
+            statement.Count < 4 ||
+            statement[0].Type != TokenType.NamespaceIdentifier ||
+            statement[0].Value != "test")
+        {
+            return false;
+        }
+
+        foreach (var token in statement)
+        {
+            if (token.Type == TokenType.Hash)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static OptionalArgumentSyntax? ParseOptionalArgument(IReadOnlyList<Token> statement, int offset, out int consumed)

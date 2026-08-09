@@ -1,20 +1,5 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Buffers;
 using System.IO.Pipelines;
@@ -38,9 +23,15 @@ public class EncoderPipe : IDisposable
         _encodeTask = DoEncode();
         Input = _pipe.Reader;
     }
-    public async ValueTask<long> WriteLength(int length)
+    public async ValueTask<FlushResult> WriteLength(int length)
     {
-        return await _encoderPipe.Writer.WriteAsync(_encoder.GenerateHead(length));
+        var header = _encoder.GenerateHead(length);
+        foreach (var segment in header)
+        {
+            _encoderPipe.Writer.Write(segment.Span);
+        }
+
+        return await _encoderPipe.Writer.FlushAsync();
     }
     public async ValueTask<FlushResult> WriteAsync(SequenceReader reader)
     {
@@ -58,9 +49,14 @@ public class EncoderPipe : IDisposable
     {
         return await _encoderPipe.Writer.WriteAsync(data);
     }
-    public async ValueTask<long> WriteAsync(ReadOnlySequence<byte> data)
+    public async ValueTask<FlushResult> WriteAsync(ReadOnlySequence<byte> data)
     {
-        return await _encoderPipe.Writer.WriteAsync(data);
+        foreach (var segment in data)
+        {
+            _encoderPipe.Writer.Write(segment.Span);
+        }
+
+        return await _encoderPipe.Writer.FlushAsync();
     }
     private async Task DoEncode()
     {

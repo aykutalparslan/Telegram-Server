@@ -1,35 +1,29 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 namespace Ferrite.Data;
 
+using Ferrite.TL.baseLayer.dto;
+
 public class S3FileOwner : IFileOwner
 {
-    private readonly UploadedFileInfoDTO _fileInfo;
+    private readonly long _fileId;
+    private readonly int _parts;
+    private readonly int _partSize;
+    private readonly bool _isBigFile;
     private readonly IObjectStore _objectStore;
-    private readonly int _offset;
+    private readonly long _offset;
     private readonly int _limit;
 
-    public S3FileOwner(UploadedFileInfoDTO fileInfo, IObjectStore objectStore, 
-        int offset, int limit, long reqMsgId, byte[] streamHeader)
+    public S3FileOwner(TLUploadedFileInfo fileInfo, IObjectStore objectStore,
+        long offset, int limit, long reqMsgId, byte[] streamHeader)
     {
+        var info = fileInfo.AsUploadedFileInfo();
+        _fileId = info.Id;
+        _parts = info.Parts;
+        _partSize = info.PartSize;
+        _isBigFile = info.IsBigFile;
         TLObjectHeader = streamHeader;
-        _fileInfo = fileInfo;
         _objectStore = objectStore;
         _offset = offset;
         _limit = limit;
@@ -40,28 +34,29 @@ public class S3FileOwner : IFileOwner
 
     public async ValueTask<Stream> GetFileStream()
     {
-        int offset = _offset;
-        Queue<Stream> streams = new Queue<Stream>();
-        for (int i = 0; i < _fileInfo.Parts; i++)
+        if (_parts <= 0)
         {
-            if (offset >= _fileInfo.PartSize)
-            {
-                offset -= _fileInfo.PartSize;
-                continue;
-            }
-            if (_fileInfo.IsBigFile)
-            {
-                var part = await _objectStore.GetBigFilePart(_fileInfo.Id, i);
-                streams.Enqueue(part);
-            }
-            else
-            {
-                var part = await _objectStore.GetFilePart(_fileInfo.Id, i);
-                streams.Enqueue(part);
-            }
+            return Stream.Null;
         }
 
-        return new ConcatenatedStream(streams, offset, _limit);
+        // Only the final part can be shorter than PartSize. Probe it once for
+        // the exact logical length, then let the lazy stream fetch one part at
+        // a time. Eagerly opening every S3 response exhausts the HTTP pool for
+        // multi-megabyte files, especially because MTProto reads once for the
+        // message key and once for transmission.
+        await using Stream lastPart = await GetPart(_parts - 1);
+        long totalLength = checked((long)(_parts - 1) * _partSize + lastPart.Length);
+        long available = Math.Max(0, totalLength - _offset);
+        long length = Math.Min(available, Math.Max(0, _limit));
+        return new ObjectStorePartStream(_objectStore, _fileId, _parts, _partSize,
+            _isBigFile, _offset, length);
+    }
+
+    private ValueTask<Stream> GetPart(int part)
+    {
+        return _isBigFile
+            ? _objectStore.GetBigFilePart(_fileId, part)
+            : _objectStore.GetFilePart(_fileId, part);
     }
 
     public long ReqMsgId { get; }

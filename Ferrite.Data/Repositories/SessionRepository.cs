@@ -1,22 +1,10 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 namespace Ferrite.Data.Repositories;
+
+using Ferrite.TL;
+using Ferrite.TL.baseLayer.dto;
 
 public class SessionRepository : ISessionRepository
 {
@@ -25,23 +13,29 @@ public class SessionRepository : ISessionRepository
     public SessionRepository(IVolatileKVStore store, IVolatileKVStore storeByAuthKey)
     {
         _store = store;
-        _store.SetSchema(new TableDefinition("ferrite", "sessions",
+        _store.SetSchema(new TableDefinition("ferrite", "sessions_tl1",
             new KeyDefinition("pk",
                 new DataColumn { Name = "session_id", Type = DataType.Long })));
         _storeByAuthKey = storeByAuthKey;
-        _storeByAuthKey.SetSchema(new TableDefinition("ferrite", "sessions_by_auth_key",
+        _storeByAuthKey.SetSchema(new TableDefinition("ferrite", "sessions_by_auth_key_tl1",
             new KeyDefinition("pk",
                 new DataColumn { Name = "auth_key_id", Type = DataType.Long })));
     }
-    public bool PutSession(long sessionId, byte[] sessionData, TimeSpan expire)
+    public bool PutSession(TLRemoteSession session, TimeSpan expire)
     {
-        _store.Put(sessionData, expire, sessionId);
+        var row = session.AsRemoteSession();
+        _store.Put(session.AsSpan().ToArray(), expire, row.SessionId);
         return true;
     }
 
-    public byte[] GetSession(long sessionId)
+    public TLRemoteSession? GetSession(long sessionId)
     {
-        return _store.Get(sessionId);
+        byte[]? bytes = _store.Get(sessionId);
+        if (bytes is not { Length: > 0 }) return null;
+        var value = new TLBytes(bytes, 0, bytes.Length);
+        return value.Constructor == Constructors.baseLayer_RemoteSession
+            ? (TLRemoteSession)value
+            : throw new InvalidDataException("Remote session codec/version mismatch.");
     }
 
     public bool SetSessionTTL(long sessionId, TimeSpan expire)
@@ -58,19 +52,31 @@ public class SessionRepository : ISessionRepository
 
     public bool PutSessionForAuthKey(long authKeyId, long sessionId)
     {
-        return _storeByAuthKey.ListAdd(DateTimeOffset.Now.ToUnixTimeMilliseconds(), 
-            BitConverter.GetBytes(sessionId), null, authKeyId);
+        using var reference = SessionReference.Builder().SessionId(sessionId).Build();
+        return _storeByAuthKey.ListAdd(DateTimeOffset.Now.ToUnixTimeMilliseconds(),
+            reference.ToReadOnlySpan().ToArray(), null, authKeyId);
     }
 
     public bool DeleteSessionForAuthKey(long authKeyId, long sessionId)
     {
-        return _storeByAuthKey.ListDelete(BitConverter.GetBytes(sessionId), authKeyId);
+        using var reference = SessionReference.Builder().SessionId(sessionId).Build();
+        return _storeByAuthKey.ListDelete(reference.ToReadOnlySpan().ToArray(), authKeyId);
     }
 
     public ICollection<long> GetSessionsByAuthKey(long authKeyId, TimeSpan expire)
     {
         var time = DateTimeOffset.Now - expire;
         _storeByAuthKey.ListDeleteByScore(time.ToUnixTimeMilliseconds());
-        return _storeByAuthKey.ListGet(authKeyId).Select(_ => BitConverter.ToInt64(_)).ToList();
+        var result = new List<long>();
+        foreach (byte[] bytes in _storeByAuthKey.ListGet(authKeyId))
+        {
+            var value = new TLBytes(bytes, 0, bytes.Length);
+            if (value.Constructor != Constructors.baseLayer_SessionReference)
+            {
+                throw new InvalidDataException("Session reference codec/version mismatch.");
+            }
+            result.Add(((TLSessionReference)value).AsSessionReference().SessionId);
+        }
+        return result;
     }
 }

@@ -1,0 +1,11 @@
+.git
+.github
+.idea
+**/bin
+**/obj
+**/node_modules
+docs
+deploy
+group-call-worker
+data
+*.log

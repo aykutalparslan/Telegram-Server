@@ -1,29 +1,19 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.TL.slim;
-using Ferrite.TL.slim.baseLayer;
+using Ferrite.TL;
+using Ferrite.TL.baseLayer;
+using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Data.Repositories;
 
 public class UserRepository : IUserRepository
 {
+    // Cassandra rejects an empty clustering-key component. Telegram usernames
+    // cannot contain NUL, so this internal key represents the absent optional
+    // username without changing the stored TL user or any API-visible value.
+    private const string NoUsernameKey = "\0";
     private readonly IKVStore _store;
     private readonly IKVStore _storeTtl;
     private readonly IKVStore _storeAbout;
@@ -41,11 +31,11 @@ public class UserRepository : IUserRepository
             new KeyDefinition("by_username",
                 new DataColumn { Name = "username", Type = DataType.String })));
         _storeTtl = storeTtl;
-        _storeTtl.SetSchema(new TableDefinition("ferrite", "account_ttls",
+        _storeTtl.SetSchema(new TableDefinition("ferrite", "account_ttls_tl1",
             new KeyDefinition("pk",
                 new DataColumn { Name = "user_id", Type = DataType.Long })));
         _storeAbout = storeAbout;
-        _storeAbout.SetSchema(new TableDefinition("ferrite", "users_about",
+        _storeAbout.SetSchema(new TableDefinition("ferrite", "users_about_tl1",
             new KeyDefinition("pk",
                 new DataColumn { Name = "user_id", Type = DataType.Long })));
     }
@@ -55,7 +45,7 @@ public class UserRepository : IUserRepository
         var u = user.AsUser();
         return _store.Put(user.AsSpan().ToArray(),
             u.Id, Encoding.UTF8.GetString(u.Phone),
-            u.Username.Length > 0 ? Encoding.UTF8.GetString(u.Username) : "");
+            UsernameKey(u.Username));
     }
 
     public bool UpdateUsername(long userId, string username)
@@ -64,13 +54,15 @@ public class UserRepository : IUserRepository
         if (userBytes != null)
         {
             var user = new User(userBytes);
-            string oldUsername = user.Username.Length > 0 ? Encoding.UTF8.GetString(user.Username) : "";
+            string oldUsername = user.Username.Length == 0
+                ? ""
+                : Encoding.UTF8.GetString(user.Username);
             if (username == oldUsername) return false;
             string userPhone = Encoding.UTF8.GetString(user.Phone);
-            var userNew = user.Clone().Username(Encoding.UTF8.GetBytes(username)).Build();
+            using var userNew = user.Clone().Username(Encoding.UTF8.GetBytes(username)).Build();
+            _store.Delete(user.Id, userPhone, UsernameKey(oldUsername));
             _store.Put(userNew.TLBytes!.Value.AsSpan().ToArray(),
-                user.Id, userPhone, username);
-            _store.Delete(user.Id, userPhone, oldUsername);
+                user.Id, userPhone, UsernameKey(username));
             return true;
         }
 
@@ -85,11 +77,11 @@ public class UserRepository : IUserRepository
             var user = new User(userBytes);
             string oldPhone = user.Phone.Length > 0 ? Encoding.UTF8.GetString(user.Phone) : "";
             if (oldPhone == phone) return false;
-            var userNew = user.Clone().Phone(Encoding.UTF8.GetBytes(phone)).Build();
-            string username = user.Username.Length > 0 ? Encoding.UTF8.GetString(user.Username) : "";
-            _store.Put(userNew.TLBytes!.Value.AsSpan().ToArray(), 
-                user.Id, phone, username);
+            using var userNew = user.Clone().Phone(Encoding.UTF8.GetBytes(phone)).Build();
+            string username = UsernameKey(user.Username);
             _store.Delete(user.Id, oldPhone, username);
+            _store.Put(userNew.TLBytes!.Value.AsSpan().ToArray(),
+                user.Id, phone, username);
             return true;
         }
 
@@ -132,7 +124,9 @@ public class UserRepository : IUserRepository
 
     public TLUser? GetUserByUsername(string username)
     {
-        var userBytes = _store.GetBySecondaryIndex("by_username", username);
+        if (username.Length == 0) return null;
+        var userBytes = _store.GetBySecondaryIndex("by_username",
+            UsernameKey(username));
         if (userBytes != null)
         {
             return new TLUser(userBytes, 0, userBytes.Length);
@@ -149,26 +143,41 @@ public class UserRepository : IUserRepository
     public bool UpdateAccountTtl(long userId, int accountDaysTtl)
     {
         var expire = DateTimeOffset.Now.AddDays(accountDaysTtl).ToUnixTimeSeconds();
-        return _storeTtl.Put(BitConverter.GetBytes(expire), userId);
+        using var row = AccountTtlState.Builder().ExpiresAt(expire).Build();
+        return _storeTtl.Put(row.ToReadOnlySpan().ToArray(), userId);
     }
 
     public int GetAccountTtl(long userId)
     {
         var val = _storeTtl.Get(userId);
         if (val == null) return 365;
-        var expire = BitConverter.ToInt64(val);
+        var value = new TLBytes(val, 0, val.Length);
+        if (value.Constructor != Constructors.baseLayer_AccountTtlState)
+            throw new InvalidDataException("Account-TTL codec/version mismatch.");
+        var expire = ((TLAccountTtlState)value).AsAccountTtlState().ExpiresAt;
         var expireDays = DateTimeOffset.FromUnixTimeSeconds(expire) - DateTimeOffset.Now;
         return expireDays.Days;
     }
 
     public bool PutAbout(long userId, string about)
     {
-        return _storeAbout.Put(Encoding.UTF8.GetBytes(about), userId);
+        using var row = UserAboutState.Builder().About(Encoding.UTF8.GetBytes(about)).Build();
+        return _storeAbout.Put(row.ToReadOnlySpan().ToArray(), userId);
     }
 
     public string? GetAbout(long userId)
     {
         var about = _storeAbout.Get(userId);
-        return about == null ? null : Encoding.UTF8.GetString(about);
+        if (about == null) return null;
+        var value = new TLBytes(about, 0, about.Length);
+        if (value.Constructor != Constructors.baseLayer_UserAboutState)
+            throw new InvalidDataException("User-about codec/version mismatch.");
+        return Encoding.UTF8.GetString(((TLUserAboutState)value).AsUserAboutState().About);
     }
+
+    private static string UsernameKey(ReadOnlySpan<byte> username) =>
+        username.Length == 0 ? NoUsernameKey : Encoding.UTF8.GetString(username);
+
+    private static string UsernameKey(string username) =>
+        username.Length == 0 ? NoUsernameKey : username;
 }

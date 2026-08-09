@@ -1,37 +1,21 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using Cassandra;
 
 namespace Ferrite.Data.Repositories;
 
-public class CassandraContext : ICassandraContext
+public sealed class CassandraContext : ICassandraContext, IDisposable
 {
     private readonly Cluster _cluster;
     private readonly ISession _session;
     private readonly string _keySpace;
-    private readonly Queue<Statement> _executionQueue = new Queue<Statement>();
-    //private readonly SemaphoreSlim _executionSemaphore = new SemaphoreSlim(1, 1);
 
-    public CassandraContext(string keyspace, params string[] hosts)
+    public CassandraContext(string keyspace, int port, params string[] hosts)
     {
         _cluster = Cluster.Builder()
             .AddContactPoints(hosts)
+            .WithPort(port)
             .Build();
 
         _keySpace = keyspace;
@@ -44,9 +28,8 @@ public class CassandraContext : ICassandraContext
     
     public void Enqueue(Statement statement)
     {
-        //_executionSemaphore.Wait();
-        _executionQueue.Enqueue(statement);
-        //_executionSemaphore.Release();
+        throw new InvalidOperationException(
+            "Cassandra writes require a request-scoped IWriteBatchAccessor");
     }
     public RowSet Execute(Statement statement)
     {
@@ -56,54 +39,9 @@ public class CassandraContext : ICassandraContext
     {
         return await _session.ExecuteAsync(statement);
     }
-    public RowSet? ExecuteQueue()
+    public void Dispose()
     {
-        //_executionSemaphore.Wait();
-        if (_executionQueue.Count == 1)
-        {
-            var statement = _executionQueue.Dequeue();
-            var result = _session.Execute(statement);
-            //_executionSemaphore.Release();
-            return result;
-        }
-        else if (_executionQueue.Count > 1)
-        {
-            var batch = new BatchStatement();
-            while (_executionQueue.Count > 0)
-            {
-                var statement = _executionQueue.Dequeue();
-                batch = batch.Add(statement);
-            }
-            var result = _session.Execute(batch.SetKeyspace(_keySpace));
-            //_executionSemaphore.Release();
-            return result;
-        }
-
-        return null;
-    }
-    public async Task<RowSet?> ExecuteQueueAsync()
-    {
-        //await _executionSemaphore.WaitAsync();
-        if (_executionQueue.Count == 1)
-        {
-            var statement = _executionQueue.Dequeue();
-            var result = await _session.ExecuteAsync(statement);
-            //_executionSemaphore.Release();
-            return result;
-        }
-        else if (_executionQueue.Count > 1)
-        {
-            var batch = new BatchStatement();
-            while (_executionQueue.Count > 0)
-            {
-                var statement = _executionQueue.Dequeue();
-                batch = batch.Add(statement);
-            }
-            var result = await _session.ExecuteAsync(batch.SetKeyspace(_keySpace));
-            //_executionSemaphore.Release();
-            return result;
-        }
-
-        return null;
+        _session.Dispose();
+        _cluster.Dispose();
     }
 }

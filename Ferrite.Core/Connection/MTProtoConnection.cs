@@ -1,20 +1,5 @@
-﻿/*
- *   Project Ferrite is an Implementation Telegram Server API
- *   Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
- *
- *   This program is free software: you can redistribute it and/or modify
- *   it under the terms of the GNU Affero General Public License as published by
- *   the Free Software Foundation, either version 3 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU Affero General Public License for more details.
- *
- *   You should have received a copy of the GNU Affero General Public License
- *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Buffers;
 using System.IO.Pipelines;
@@ -23,36 +8,32 @@ using System.Threading.Channels;
 using DotNext.Buffers;
 using DotNext.IO;
 using DotNext.IO.Pipelines;
-using Ferrite.Core.Execution;
 using Ferrite.Core.RequestChain;
 using Ferrite.Data;
 using Ferrite.Services;
+using Ferrite.Core.Execution;
 using Ferrite.TL;
-using Ferrite.TL.currentLayer;
-using Ferrite.TL.currentLayer.upload;
-using Ferrite.TL.mtproto;
-using Ferrite.TL.slim;
-using Ferrite.TL.slim.baseLayer;
+using Ferrite.TL.baseLayer;
+using Ferrite.TL.baseLayer.upload;
 using Ferrite.Transport;
 using Ferrite.Utils;
-using MessagePack;
 using Channel = System.Threading.Channels.Channel;
-using Updates = Ferrite.TL.currentLayer.Updates;
 
 namespace Ferrite.Core.Connection;
 
-public sealed class MTProtoConnection : IMTProtoConnection
+public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
 {
+    internal event Action<MTProtoConnection>? Stopped;
+
     public bool IsEncrypted => _session.AuthKeyId != 0;
+    public IMTProtoSession Session => _session;
     private readonly ILogger _log;
     private readonly ISessionService _sessionManager;
     private readonly IMTProtoSession _session;
     private readonly ITLHandler _requestChain;
-    private readonly IExecutionEngine _engine;
     private readonly IProtoHandler _protoHandler;
     private readonly ITransportConnection _socketConnection;
     private readonly ProtoTransport _protoTransport;
-    private readonly SerializationFeature _serialization;
     private readonly Channel<MTProtoMessage> _outgoing = Channel.CreateUnbounded<MTProtoMessage>();
     private readonly Channel<IFileOwner> _outgoingStreams = Channel.CreateUnbounded<IFileOwner>();
     private readonly SemaphoreSlim _sendSemaphore = new SemaphoreSlim(1, 1);
@@ -63,13 +44,15 @@ public sealed class MTProtoConnection : IMTProtoConnection
     private Timer? _disconnectTimer;
     private readonly object _disconnectTimerState = new object();
     private readonly object _abortLock = new object();
-    private bool _connectionAborted = false;
+    private Task? _stopTask;
+    private volatile bool _stopping;
+    private const int BadMessageIdTooLow = 16;
+    private const int BadServerSaltErrorCode = 48;
 
     public MTProtoConnection(ITransportConnection connection,
-        ILogger logger, ISessionService sessionManager, 
-        IProtoHandler protoHandler, IExecutionEngine engine, IMTProtoSession session,
-        ProtoTransport protoTransport, ITLHandler requestChain,
-        SerializationFeature serialization)
+        ILogger logger, ISessionService sessionManager,
+        IProtoHandler protoHandler, IMTProtoSession session,
+        ProtoTransport protoTransport, ITLHandler requestChain)
     {
         _socketConnection = connection;
         _log = logger;
@@ -78,11 +61,9 @@ public sealed class MTProtoConnection : IMTProtoConnection
         _session.Connection = this;
         _session.EndPoint = _socketConnection.RemoteEndPoint as IPEndPoint;
         _protoHandler = protoHandler;
-        _engine = engine;
         _protoHandler.Session = _session;
         _protoTransport = protoTransport;
         _requestChain = requestChain;
-        _serialization = serialization;
     }
     public void Start()
     {
@@ -91,16 +72,18 @@ public sealed class MTProtoConnection : IMTProtoConnection
         _sendStreamTask = DoSendStreams();
         DelayDisconnect();
     }
-    public async ValueTask SendAsync(IFileOwner? message)
+    public ValueTask SendAsync(IFileOwner? message)
     {
         if (message != null)
         {
-            await _outgoingStreams.Writer.WriteAsync(message);
+            _outgoingStreams.Writer.TryWrite(message);
         }
+        return ValueTask.CompletedTask;
     }
-    public async ValueTask SendAsync(Services.MTProtoMessage message)
+    public ValueTask SendAsync(Services.MTProtoMessage message)
     {
-        await _outgoing.Writer.WriteAsync(message);
+        _outgoing.Writer.TryWrite(message);
+        return ValueTask.CompletedTask;
     }
     private async Task DoReceive()
     {
@@ -141,6 +124,10 @@ public sealed class MTProtoConnection : IMTProtoConnection
             }
             catch (Exception ex)
             {
+                if (_stopping)
+                {
+                    break;
+                }
                 _log.Error(ex, ex.Message);
             }
 
@@ -187,6 +174,10 @@ public sealed class MTProtoConnection : IMTProtoConnection
             }
             catch (Exception ex)
             {
+                if (_stopping)
+                {
+                    break;
+                }
                 _log.Error(ex, ex.Message);
             }
             finally
@@ -219,6 +210,10 @@ public sealed class MTProtoConnection : IMTProtoConnection
             }
             catch (Exception ex)
             {
+                if (_stopping)
+                {
+                    break;
+                }
                 _log.Error(ex, ex.Message);
             }
             finally
@@ -255,7 +250,7 @@ public sealed class MTProtoConnection : IMTProtoConnection
         SequencePosition position = buffer.Start;
         if (_protoTransport.TransportType == MTProtoTransport.Unknown)
         {
-            var rd = IAsyncBinaryReader.Create(buffer);
+            var rd = new SequenceReader(buffer);
             int firstInt = rd.ReadInt32(true);
             if (firstInt == WebSocketHandler.Get)
             {
@@ -298,7 +293,8 @@ public sealed class MTProtoConnection : IMTProtoConnection
 
     private async ValueTask ProcessIncomingData(ReadOnlySequence<byte> frame, bool isStream, bool hasMore, bool requiresQuickAck)
     {
-        long authKeyId = new SequenceReader(frame).ReadInt64(true);
+        var reader = new SequenceReader(frame);
+        long authKeyId = reader.ReadInt64(true);
         if (authKeyId != 0)
         {
             if (!_session.TryFetchAuthKey(authKeyId) &&
@@ -321,24 +317,25 @@ public sealed class MTProtoConnection : IMTProtoConnection
     private async ValueTask ProcessStreamAsync(ReadOnlySequence<byte> frame, bool hasMore)
     {
         var message = await _protoHandler.ProcessIncomingStreamAsync(frame, hasMore);
-        if (message != StreamingProtoMessage.Default)
+        if (message == StreamingProtoMessage.Default)
         {
-            await CreateNewSession(message.Headers);
-            var context = GenerateExecutionContext(message.Headers);
-            int messageDataLength = await message.MessageData.Input.ReadInt32Async(true);
-            int constructor = await message.MessageData.Input.ReadInt32Async(true);
-            if (constructor == TL.currentLayer.TLConstructor.Upload_SaveFilePart)
-            {
-                var msg = _serialization.Resolve<SaveFilePart>();
-                await msg.SetPipe(message.MessageData);
-                var processResult = _requestChain.Process(this, msg, context);
-            }
-            else if (constructor == TL.currentLayer.TLConstructor.Upload_SaveBigFilePart)
-            {
-                var msg = _serialization.Resolve<SaveBigFilePart>();
-                await msg.SetPipe(message.MessageData);
-                var processResult = _requestChain.Process(this, msg, context);
-            }
+            return;
+        }
+
+        await CreateNewSession(message.Headers);
+        var context = GenerateExecutionContext(message.Headers);
+        _ = await message.MessageData.Input.ReadInt32Async(true);
+        int constructor = await message.MessageData.Input.ReadInt32Async(true);
+        // Generated readers stop before bytes; the upload task consumes the pipe.
+        if (constructor == Constructors.baseLayer_SaveFilePart)
+        {
+            var request = await SaveFilePart.ReadAsync(message.MessageData.Input);
+            await _requestChain.Process(this, request, context);
+        }
+        else if (constructor == Constructors.baseLayer_SaveBigFilePart)
+        {
+            var request = await SaveBigFilePart.ReadAsync(message.MessageData.Input);
+            await _requestChain.Process(this, request, context);
         }
     }
     private async ValueTask ProcessFrameAsync(ReadOnlySequence<byte> bytes, bool requiresQuickAck)
@@ -347,7 +344,7 @@ public sealed class MTProtoConnection : IMTProtoConnection
         {
             return;
         }
-        if (_session.PermAuthKeyId != 0)
+        if (_session.PermAuthKeyId != 0 && _session.SessionId != 0)
         {
             _session.SaveCurrentSession(_session.PermAuthKeyId);
         }
@@ -360,21 +357,29 @@ public sealed class MTProtoConnection : IMTProtoConnection
         else if(_session.AuthKey != null)
         {
             var message = _protoHandler.DecryptMessage(bytes.Slice(8));
+            var validServerSalt = _session.IsValidServerSalt(
+                message.Headers.Salt, out var currentServerSalt);
+            if (!validServerSalt)
+            {
+                await SendBadServerSalt(message.Headers, currentServerSalt);
+                message.Dispose();
+                return;
+            }
+
+            bool isContainer = message.MessageData.Constructor ==
+                               Constructors.mtproto_MsgContainer;
+            if (!_session.TryValidateMessageId(message.Headers.MessageId,
+                    out var errorCode, isContainer))
+            {
+                await SendBadMsgNotification(message.Headers, errorCode);
+                message.Dispose();
+                return;
+            }
+
             await CreateNewSession(message.Headers);
             var context = GenerateExecutionContext(message.Headers,
                 requiresQuickAck ? _session.GenerateQuickAck(message.MessageData.AsSpan()) : null);
-            if (message.MessageData.Constructor == 0x73f1f8dc || 
-                _engine.IsImplemented(message.MessageData.Constructor))
-            {
-                await _requestChain.Process(this, message.MessageData, context);
-            }
-            else
-            {
-                var rd = new SequenceReader(new ReadOnlySequence<byte>(message.MessageData.AsMemory()));
-                var msg = _serialization.Read(rd.ReadInt32(true), ref rd);
-                message.Dispose();
-                await _requestChain.Process(this, msg, context);
-            }
+            await _requestChain.Process(this, message.MessageData, context);
         }
     }
 
@@ -414,29 +419,85 @@ public sealed class MTProtoConnection : IMTProtoConnection
         var sessionCreated = _session.GenerateSessionCreated(firstMessageId, serverSalt);
         await SendAsync(sessionCreated);
     }
+    private async ValueTask SendBadMsgNotification(ProtoHeaders headers, int errorCode)
+    {
+        byte[] payload;
+        using (var notification = Ferrite.TL.mtproto.BadMsgNotification.Builder()
+                   .BadMsgId(headers.MessageId)
+                   .BadMsgSeqno(headers.SequenceNo)
+                   .ErrorCode(errorCode == 0 ? BadMessageIdTooLow : errorCode)
+                   .Build())
+        {
+            payload = notification.TLBytes!.Value.AsSpan().ToArray();
+        }
+
+        await SendAsync(new Services.MTProtoMessage
+        {
+            Data = payload,
+            IsContentRelated = false,
+            IsResponse = true,
+            MessageType = MTProtoMessageType.Encrypted,
+            SessionId = headers.SessionId,
+            MessageId = headers.MessageId
+        });
+    }
+    private async ValueTask SendBadServerSalt(ProtoHeaders headers, long currentServerSalt)
+    {
+        byte[] payload;
+        using (var notification = Ferrite.TL.mtproto.BadServerSalt.Builder()
+                   .BadMsgId(headers.MessageId)
+                   .BadMsgSeqno(headers.SequenceNo)
+                   .ErrorCode(BadServerSaltErrorCode)
+                   .NewServerSalt(currentServerSalt)
+                   .Build())
+        {
+            payload = notification.TLBytes!.Value.AsSpan().ToArray();
+        }
+
+        await SendAsync(new Services.MTProtoMessage
+        {
+            Data = payload,
+            IsContentRelated = false,
+            IsResponse = true,
+            MessageType = MTProtoMessageType.Encrypted,
+            SessionId = headers.SessionId,
+            MessageId = headers.MessageId
+        });
+    }
     private async ValueTask SendTransportError(int errorCode)
     {
         var transportError = _protoTransport.GenerateTransportError(errorCode);
         WriteFrame(transportError);
         await FlushSocketAsync();
     }
-    public async ValueTask Ping(long pingId, int delayDisconnectInSeconds = 75)
+    public async ValueTask Ping(long pingId, long requestMessageId, int delayDisconnectInSeconds = 0)
     {
-        DelayDisconnect(delayDisconnectInSeconds * 1000);
-        await _sessionManager.OnPing(_session.AuthKeyId != 0 ? 
-                _session.PermAuthKeyId : _session.AuthKeyId,
-            _session.SessionId);
-        var pong = _serialization.Resolve<Pong>();
-        pong.PingId = pingId;
-        pong.MsgId = _session.NextMessageId(true);
+        if (delayDisconnectInSeconds > 0)
+        {
+            DelayDisconnect(delayDisconnectInSeconds * 1000);
+        }
+
+        long authKeyId = _session.PermAuthKeyId != 0
+            ? _session.PermAuthKeyId
+            : _session.AuthKeyId;
+        await _sessionManager.OnPing(authKeyId, _session.SessionId);
+        byte[] payload;
+        {
+            using var pong = Ferrite.TL.mtproto.Pong.Builder()
+                .MsgId(requestMessageId)
+                .PingId(pingId)
+                .Build();
+            payload = pong.TLBytes!.Value.AsSpan().ToArray();
+        }
+
         Services.MTProtoMessage message = new Services.MTProtoMessage()
         {
-            Data = pong.TLBytes.ToArray(),
+            Data = payload,
             IsContentRelated = false,
             IsResponse = true,
             MessageType = MTProtoMessageType.Pong,
             SessionId = _session.SessionId,
-            MessageId = pong.MsgId
+            MessageId = requestMessageId
         };
         await SendAsync(message);
     }
@@ -504,28 +565,72 @@ public sealed class MTProtoConnection : IMTProtoConnection
     }
     public void Abort(Exception abortReason)
     {
+        _ = StopAsync(abortReason);
+    }
+
+    public ValueTask StopAsync(Exception abortReason)
+    {
         lock (_abortLock)
         {
-            if (_connectionAborted)
-            {
-                return;
-            }
+            _stopTask ??= StopCoreAsync(abortReason);
+            return new ValueTask(_stopTask);
+        }
+    }
 
-            _connectionAborted = true;
-            try
+    private async Task StopCoreAsync(Exception abortReason)
+    {
+        _stopping = true;
+        Exception? stopError = null;
+        try
+        {
+            await _sessionManager.RemoveSession(_session.AuthKeyId,
+                _session.SessionId);
+        }
+        catch (Exception ex)
+        {
+            stopError = ex;
+        }
+
+        _outgoing.Writer.TryComplete();
+        _outgoingStreams.Writer.TryComplete();
+        _disconnectTimer?.Dispose();
+        try
+        {
+            _socketConnection.Abort(abortReason);
+        }
+        catch (Exception ex)
+        {
+            stopError ??= ex;
+        }
+        try
+        {
+            await _socketConnection.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            stopError ??= ex;
+        }
+        try
+        {
+            Task[] workers = new[] { _receiveTask, _sendTask, _sendStreamTask }
+                .Where(task => task is not null).Cast<Task>().ToArray();
+            if (workers.Length > 0)
             {
-                _sessionManager.RemoveSession(_session.AuthKeyId, _session.SessionId);
-                _outgoing.Writer.Complete();
-                _socketConnection.Abort(abortReason);
-                _socketConnection.DisposeAsync();
-                _disconnectTimer?.Dispose();
+                await Task.WhenAll(workers);
             }
-            catch (Exception ex)
+        }
+        catch (Exception ex)
+        {
+            stopError ??= ex;
+        }
+        finally
+        {
+            if (stopError is not null)
             {
-                _log.Verbose(ex, $"Connection closed for authKeyId{_session.AuthKeyId}");
+                _log.Verbose(stopError,
+                    $"Connection closed for authKeyId{_session.AuthKeyId}");
             }
+            Stopped?.Invoke(this);
         }
     }
 }
-
-

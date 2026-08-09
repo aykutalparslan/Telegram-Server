@@ -1,20 +1,5 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Buffers;
 using System.Net;
@@ -22,7 +7,6 @@ using System.Security.Cryptography;
 using Ferrite.Crypto;
 using Ferrite.Data;
 using Ferrite.Services;
-using Ferrite.TL;
 using Ferrite.TL.mtproto;
 using Ferrite.Utils;
 
@@ -30,12 +14,12 @@ namespace Ferrite.Core.Connection;
 
 public class MTProtoSession : IMTProtoSession
 {
+    public const int SentMessageRegistryCapacity = 1024;
     private readonly IMTProtoService _mtproto;
     private readonly ILogger _log;
     private readonly IMTProtoTime _time;
     private readonly ISessionService _sessionService;
     private readonly IRandomGenerator _random;
-    private readonly ITLObjectFactory _factory;
     public MTProtoConnection? Connection { get; set; }
     public IPEndPoint? EndPoint { get; set; }
     private long _authKeyId;
@@ -43,18 +27,23 @@ public class MTProtoSession : IMTProtoSession
     private byte[]? _authKey;
     private long _sessionId;
     private long _uniqueSessionId;
-    private ServerSaltDTO _serverSalt = new ServerSaltDTO();
+    private long _serverSalt;
+    private int _serverSaltValidUntil;
+    private bool _serverSaltInitialized;
     private int _seq = 0;
     private long _lastMessageId;
     private readonly CircularQueue<long> _lastMessageIds = new CircularQueue<long>(10);
+    private readonly CircularQueue<long> _receivedMessageIds = new CircularQueue<long>(10);
+    private readonly object _sentMessagesLock = new();
+    private readonly Dictionary<long, MTProtoSentMessage> _sentMessages = new();
+    private readonly Queue<long> _sentMessageOrder = new();
     private Dictionary<string, object> _sessionData = new();
 
-    public MTProtoSession(IMTProtoService mtproto, ILogger log, ITLObjectFactory factory,
+    public MTProtoSession(IMTProtoService mtproto, ILogger log,
         IMTProtoTime time, ISessionService sessionService, IRandomGenerator random)
     {
         _mtproto = mtproto;
         _log = log;
-        _factory = factory;
         _time = time;
         _sessionService = sessionService;
         _random = random;
@@ -65,7 +54,7 @@ public class MTProtoSession : IMTProtoSession
     public virtual byte[]? AuthKey => _authKey;
     public long SessionId => _sessionId;
     public long UniqueSessionId => _uniqueSessionId;
-    public ServerSaltDTO ServerSalt => _serverSalt;
+    public long ServerSalt => _serverSalt;
     public Dictionary<string, object> SessionData => _sessionData;
 
     public bool TryFetchAuthKey(long authKeyId)
@@ -127,6 +116,63 @@ public class MTProtoSession : IMTProtoSession
     {
         return isContentRelated ? (2 * _seq++) + 1 : 2 * _seq;
     }
+
+    public void RecordSentMessage(long messageId, int sequenceNo, int length, bool contentRelated)
+    {
+        RecordSentMessage(messageId, sequenceNo, length, contentRelated, responseToMessageId: 0);
+    }
+
+    public void RecordSentMessage(long messageId, int sequenceNo, int length, bool contentRelated,
+        long responseToMessageId)
+    {
+        lock (_sentMessagesLock)
+        {
+            if (!_sentMessages.ContainsKey(messageId))
+            {
+                while (_sentMessages.Count >= SentMessageRegistryCapacity &&
+                       _sentMessageOrder.TryDequeue(out var evicted))
+                {
+                    _sentMessages.Remove(evicted);
+                }
+
+                _sentMessageOrder.Enqueue(messageId);
+            }
+
+            _sentMessages[messageId] = new MTProtoSentMessage(
+                messageId,
+                MTProtoMessageStatus.ForSentMessage(contentRelated),
+                sequenceNo,
+                length,
+                contentRelated,
+                responseToMessageId);
+        }
+    }
+
+    public bool TryGetSentMessage(long messageId, out MTProtoSentMessage message)
+    {
+        lock (_sentMessagesLock)
+        {
+            return _sentMessages.TryGetValue(messageId, out message);
+        }
+    }
+
+    public bool MarkSentMessageAcknowledged(long messageId)
+    {
+        lock (_sentMessagesLock)
+        {
+            if (!_sentMessages.TryGetValue(messageId, out var message))
+            {
+                return false;
+            }
+
+            _sentMessages[messageId] = message with
+            {
+                Status = MTProtoMessageStatus.Acknowledged(message.Status)
+            };
+            return true;
+        }
+    }
+
     /// <summary>
     /// Gets the next Message Identifier (msg_id) for this session.
     /// </summary>
@@ -174,18 +220,11 @@ public class MTProtoSession : IMTProtoSession
     /// <returns>Current Server Salt</returns>
     public long SaveCurrentSession(long authKeyId)
     {
-        if (_serverSalt.ValidSince + 1800 < DateTimeOffset.Now.ToUnixTimeSeconds())
+        if (_authKeyId != 0 &&
+            (!_serverSaltInitialized ||
+             _serverSaltValidUntil <= _time.GetUnixTimeInSeconds()))
         {
-            var salts = _mtproto.GetServerSalts(_permAuthKeyId, 1);
-            if (salts != null)
-            {
-                foreach (var s in salts)
-                {
-                    if (s.ValidSince + 1800 <= _time.GetUnixTimeInSeconds()) continue;
-                    _serverSalt = s;
-                    break;
-                }
-            }
+            RefreshServerSalt();
         }
         
         if (authKeyId != 0)
@@ -194,7 +233,7 @@ public class MTProtoSession : IMTProtoSession
                 _sessionService.AddSession(authKeyId, _sessionId,
                     new ActiveSession(Connection));
         }
-        return _serverSalt.Salt;
+        return _serverSalt;
     }
     /// <summary>
     /// Checks if the given message Id is valid and adds it to the last N messages list
@@ -203,26 +242,119 @@ public class MTProtoSession : IMTProtoSession
     /// <returns></returns>
     public bool IsValidMessageId(long messageId)
     {
+        return TryValidateMessageId(messageId, out _);
+    }
+
+    public bool TryValidateMessageId(long messageId, out int errorCode,
+        bool isContainer = false)
+    {
         if (messageId >= _time.ThirtySecondsLater || //msg_id values that belong over 30 seconds in the future
             messageId <= _time.FiveMinutesAgo || //or over 300 seconds in the past are to be ignored
-            messageId % 2 != 0 || //must have even parity
-            (_lastMessageIds.Count != 0 && 
-             (_lastMessageIds.Contains(messageId) || //must not be equal to any
-              messageId <= _lastMessageIds.Min())) //must not be lower than all
-            ) return false; 
-        _lastMessageIds.Enqueue(messageId);
+            messageId % 4 != 0 || //client message ids must be divisible by 4
+            _receivedMessageIds.Contains(messageId) || //must not be equal to any
+            (!isContainer && _lastMessageIds.Count != 0 &&
+             messageId <= _lastMessageIds.Min()) //must not be lower than all non-container messages
+           )
+        {
+            errorCode = GetInvalidMessageIdErrorCode(messageId);
+            return false;
+        }
+
+        _receivedMessageIds.Enqueue(messageId);
+        // A container's msg_id is newer than every message it contains. Do not
+        // use it as the lower bound: contained messages may later be resent
+        // individually or regrouped in a different container.
+        if (!isContainer)
+        {
+            _lastMessageIds.Enqueue(messageId);
+        }
+        errorCode = 0;
         return true;
+    }
+
+    public bool IsValidServerSalt(long serverSalt, out long currentServerSalt)
+    {
+        if (!_serverSaltInitialized)
+        {
+            RefreshServerSalt();
+        }
+
+        currentServerSalt = _serverSalt;
+        return serverSalt == currentServerSalt;
+    }
+
+    private void RefreshServerSalt()
+    {
+        var salts = _mtproto.GetServerSalts(_authKeyId, 1);
+        var now = checked((int)_time.GetUnixTimeInSeconds());
+        long? selectedSalt = null;
+        int selectedValidUntil = 0;
+
+        foreach (TLFutureSalt salt in salts)
+        {
+            using (salt)
+            {
+                var value = salt.AsFutureSalt();
+                if (selectedSalt == null ||
+                    value.ValidSince <= now && value.ValidUntil > now)
+                {
+                    selectedSalt = value.Salt;
+                    selectedValidUntil = value.ValidUntil;
+                }
+            }
+        }
+
+        if (selectedSalt == null)
+        {
+            throw new InvalidOperationException(
+                $"No server salt is available for auth key {_authKeyId}.");
+        }
+
+        _serverSalt = selectedSalt.Value;
+        _serverSaltValidUntil = selectedValidUntil;
+        _serverSaltInitialized = true;
+    }
+
+    private int GetInvalidMessageIdErrorCode(long messageId)
+    {
+        if (messageId <= _time.FiveMinutesAgo)
+        {
+            return 20;
+        }
+
+        if (messageId >= _time.ThirtySecondsLater)
+        {
+            return 17;
+        }
+
+        if (messageId % 4 != 0)
+        {
+            return 18;
+        }
+
+        if (_receivedMessageIds.Contains(messageId))
+        {
+            return 19;
+        }
+
+        return 16;
     }
     
     public MTProtoMessage GenerateSessionCreated(long firstMessageId, long serverSalt)
     {
-        var newSessionCreated = _factory.Resolve<NewSessionCreated>();
-        newSessionCreated.FirstMsgId = firstMessageId;
-        newSessionCreated.ServerSalt = serverSalt;
-        newSessionCreated.UniqueId = UniqueSessionId;
+        byte[] payload;
+        using (var newSessionCreated = Ferrite.TL.mtproto.NewSessionCreated.Builder()
+                   .FirstMsgId(firstMessageId)
+                   .UniqueId(UniqueSessionId)
+                   .ServerSalt(serverSalt)
+                   .Build())
+        {
+            payload = newSessionCreated.TLBytes!.Value.AsSpan().ToArray();
+        }
+
         MTProtoMessage newSessionMessage = new()
         {
-            Data = newSessionCreated.TLBytes.ToArray(),
+            Data = payload,
             IsContentRelated = false,
             IsResponse = false,
             SessionId = SessionId,

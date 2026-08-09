@@ -1,50 +1,23 @@
-﻿//
-//  Project Ferrite is an Implementation Telegram Server API
-//  Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-//
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU Affero General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU Affero General Public License for more details.
-//
-//  You should have received a copy of the GNU Affero General Public License
-//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-using System;
-using System.Buffers;
-using Autofac;
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
+
 using DotNext.Buffers;
-using Ferrite.Core.Connection;
 using Ferrite.Data;
 using Ferrite.Services;
+using Ferrite.Core.Execution;
 using Ferrite.TL;
-using Ferrite.TL.slim;
-using Ferrite.TL.slim.mtproto;
-using Ferrite.Utils;
-using MessagePack;
-using MsgContainer = Ferrite.TL.mtproto.MsgContainer;
-using MsgsAck = Ferrite.TL.mtproto.MsgsAck;
-using VectorOfLong = Ferrite.TL.VectorOfLong;
+using Ferrite.TL.mtproto;
 
 namespace Ferrite.Core.RequestChain;
 
 public class MsgContainerProcessor : ILinkedHandler
 {
-    private readonly ILifetimeScope _scope;
     private readonly ISessionService _sessionManager;
     private readonly IMessagePipe _pipe;
-    private readonly ILogger _log;
-    public MsgContainerProcessor(ILifetimeScope scope, ISessionService sessionManager, IMessagePipe pipe, ILogger log)
+    public MsgContainerProcessor(ISessionService sessionManager, IMessagePipe pipe)
     {
-        _scope = scope;
         _sessionManager = sessionManager;
         _pipe = pipe;
-        _log = log;
     }
     
     public ILinkedHandler SetNext(ILinkedHandler value)
@@ -55,52 +28,21 @@ public class MsgContainerProcessor : ILinkedHandler
 
     public ILinkedHandler? Next { get; set; }
 
-    public async ValueTask Process(object? sender, ITLObject input, TLExecutionContext ctx)
-    {
-        if (input.Constructor == TLConstructor.MsgContainer &&
-            input is MsgContainer container)
-        {
-            _log.Information(String.Format($"MsgContainer received with Id: {ctx.MessageId}"));
-            var ack = _scope.Resolve<MsgsAck>();
-            ack.MsgIds = new VectorOfLong(container.Messages.Count+1);
-            ack.MsgIds.Add(ctx.MessageId);
-            foreach (var msg in container.Messages)
-            {
-                ack.MsgIds.Add(msg.MsgId);
-                if (Next != null) await Next.Process(sender, msg, ctx);
-            }
-            Services.MTProtoMessage message = new Services.MTProtoMessage();
-            message.SessionId = ctx.SessionId;
-            message.IsResponse = true;
-            message.IsContentRelated = true;
-            message.Data = ack.TLBytes.ToArray();
-            if(sender is MTProtoConnection connection)
-            {
-                await connection.SendAsync(message);
-            }
-            else if (await _sessionManager.GetSessionStateAsync(ctx.SessionId)
-                    is { } session)
-            {
-                var bytes = MessagePackSerializer.Serialize(message);
-                _ = _pipe.WriteMessageAsync(session.NodeId.ToString(), bytes);
-            }
-        }
-        else
-        {
-            if (Next != null) await Next.Process(sender, input, ctx);
-        }
-    }
-
     public async ValueTask Process(object? sender, TLBytes input, TLExecutionContext ctx)
     {
-        if (input.Constructor == 0x73f1f8dc)//msg_container
+        if (input.Constructor == Constructors.mtproto_MsgContainer)
         {
             var messages = GetContainedMessages(input);
+            var ackMsgIds = new List<long>(messages.Length + 1) { ctx.MessageId };
             foreach (var message in messages)
             {
                 var (msgId, body) = GetMsgIdAndBody(message);
+                message.Dispose();
+                ackMsgIds.Add(msgId);
                 if (Next != null) await Next.Process(sender, body, ctx with{MessageId = msgId});
+                else body.Dispose();
             }
+            await SendMsgsAck(sender, ctx, ackMsgIds);
             input.Dispose();
         }
         else if (Next != null) await Next.Process(sender, input, ctx);
@@ -118,7 +60,7 @@ public class MsgContainerProcessor : ILinkedHandler
 
     private static TLBytes[] GetContainedMessages(TLBytes input)
     {
-        TL.slim.mtproto.MsgContainer container = new(input.AsSpan());
+        TL.mtproto.MsgContainer container = new(input.AsSpan());
         var messages = new TLBytes[container.Messages.Count];
         var messageVector = container.Messages;
         for (int i = 0; i < messages.Length; i++)
@@ -131,5 +73,43 @@ public class MsgContainerProcessor : ILinkedHandler
 
         return messages;
     }
-}
 
+    private async ValueTask SendMsgsAck(object? sender, TLExecutionContext ctx, IReadOnlyList<long> msgIds)
+    {
+        Services.MTProtoMessage message = new Services.MTProtoMessage
+        {
+            SessionId = ctx.SessionId,
+            IsResponse = true,
+            IsContentRelated = true,
+            Data = BuildMsgsAckPayload(msgIds)
+        };
+
+        if(sender is IMTProtoConnection connection)
+        {
+            await connection.SendAsync(message);
+        }
+        else if (await _sessionManager.GetSessionStateAsync(ctx.SessionId)
+                 is { } session)
+        {
+            var bytes = MTProtoMessageEnvelope.Serialize(message);
+            _ = _pipe.WriteMessageAsync(MessagePipeChannels.ForNode(session.NodeId), bytes);
+        }
+    }
+
+    private static byte[] BuildMsgsAckPayload(IReadOnlyList<long> msgIds)
+    {
+        var msgIdVector = new TL.VectorOfLong();
+        foreach (var msgId in msgIds)
+        {
+            msgIdVector.Append(msgId);
+        }
+
+        using var ack = TL.mtproto.MsgsAck.Builder().MsgIds(msgIdVector).Build();
+        return ack.TLBytes!.Value.AsSpan().ToArray();
+    }
+
+    public async ValueTask Process(object? sender, ITLStreamingObject input, TLExecutionContext ctx)
+    {
+        if (Next != null) await Next.Process(sender, input, ctx);
+    }
+}

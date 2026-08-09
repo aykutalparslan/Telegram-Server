@@ -1,129 +1,92 @@
-﻿/*
- *   Project Ferrite is an Implementation Telegram Server API
- *   Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
- *
- *   This program is free software: you can redistribute it and/or modify
- *   it under the terms of the GNU Affero General Public License as published by
- *   the Free Software Foundation, either version 3 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU Affero General Public License for more details.
- *
- *   You should have received a copy of the GNU Affero General Public License
- *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using System;
 using System.Buffers;
-using System.Collections;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using DotNext.Buffers;
-using DotNext.IO;
 
 namespace Ferrite.TL;
 
-public class VectorOfInt : ITLObject, ICollection<int>
+public ref struct VectorOfInt
 {
-    private SparseBufferWriter<byte> writer = new SparseBufferWriter<byte>(UnmanagedMemoryPool<byte>.Shared);
-    private List<int> list;
-    private bool serialized = false;
-
+    private Span<int> _buff;
+    private int _offset;
     public VectorOfInt()
     {
-        list = new List<int>();
+        _buff = new int[32];
+        SetConstructor(unchecked((int)0x1cb5c415));
+        SetCount(0);
+        _offset = 2;
     }
-    public VectorOfInt(int capacity)
+    public VectorOfInt(Span<byte> buffer)
     {
-        list = new List<int>(capacity);
-    }
-
-    public int this[int index] { get => list[index]; }
-
-    public ReadOnlySequence<byte> TLBytes
-    {
-        get
+        if (MemoryMarshal.Read<int>(buffer[..4]) != unchecked((int)0x1cb5c415))
         {
-            if (serialized)
-            {
-                return writer.ToReadOnlySequence();
-            }
-            writer.Clear();
-            writer.WriteInt32(Constructor, true);
-            writer.WriteInt32(list.Count, true);
-            foreach (var item in list)
-            {
-                writer.WriteInt32(item, true);
-            }
-
-            return writer.ToReadOnlySequence();
+            throw new InvalidOperationException();
         }
+        _buff = MemoryMarshal.Cast<byte,int>(buffer);
+        _offset = 2;
+    }
+    public readonly int Constructor => _buff[0];
+    private void SetConstructor(int constructor)
+    {
+        _buff[0] = constructor;
+    }
+    public ReadOnlySpan<byte> ToReadOnlySpan() => MemoryMarshal.Cast<int, byte>(_buff)[..Length];
+    public readonly int Count => _buff[1];
+    public readonly int Length => Count * 4 + 8;
+    private void SetCount(int count)
+    {
+        _buff[1] = count;
     }
 
-    public void Parse(ref SequenceReader buff)
+    public static Span<byte> Read(Span<byte> data, int offset)
     {
-        int size = buff.ReadInt32(true);
-
-        for (int i = 0; i < size; i++)
+        if (MemoryMarshal.Read<int>(data.Slice(offset,4)) != unchecked((int)0x1cb5c415))
         {
-            list.Add(buff.ReadInt32(true));
+            throw new InvalidOperationException();
         }
-    }
-
-    public void WriteTo(Span<byte> buff)
-    {
-        SpanWriter<byte> spanWriter = new SpanWriter<byte>(buff);
-        foreach (var item in TLBytes)
+        int count = MemoryMarshal.Read<int>(data.Slice(offset + 4, 4));
+        int len = 8 + count * 4;
+        if (offset + len > data.Length)
         {
-            spanWriter.Write(item.Span);
+            throw new InvalidOperationException();
         }
+        return data.Slice(offset, len);
     }
 
-    public int Constructor => unchecked((int)0x1cb5c415);
-
-    public int Count => list.Count;
-
-    public bool IsReadOnly => false;
-
-    public void Add(int item)
+    public static int ReadSize(Span<byte> data, int offset)
     {
-        serialized = false;
-        list.Add(item);
+        if (MemoryMarshal.Read<int>(data.Slice(offset,4)) != unchecked((int)0x1cb5c415))
+        {
+            throw new InvalidOperationException();
+        }
+        int count = MemoryMarshal.Read<int>(data.Slice(offset + 4, 4));
+        return 8 + count * 4;
     }
 
-    public void Clear()
+    public void Append(int value)
     {
-        serialized = false;
-        list.Clear();
+        if (_buff.Length == _offset)
+        {
+            var tmp = new int[_buff.Length * 2];
+            _buff.CopyTo(tmp);
+            _buff = tmp;
+        }
+        _buff[1]++;
+        _buff[_offset++] = value;
     }
+    public ref readonly int this[int index] => ref _buff[2 + index];
 
-    public bool Contains(int item)
+    public int[] ToArray()
     {
-        return list.Contains(item);
-    }
+        int count = Count;
+        var arr = new int[count];
+        for (int i = 0; i < count; i++)
+        {
+            arr[i] = this[i];
+        }
 
-    public void CopyTo(int[] array, int arrayIndex)
-    {
-        list.CopyTo(array, arrayIndex);
-    }
-
-    public IEnumerator<int> GetEnumerator()
-    {
-        return list.GetEnumerator();
-    }
-
-    public bool Remove(int item)
-    {
-        serialized = false;
-        return list.Remove(item);
-    }
-
-    IEnumerator IEnumerable.GetEnumerator()
-    {
-        return list.AsEnumerable<int>().GetEnumerator();
+        return arr;
     }
 }
-
-

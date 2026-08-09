@@ -1,46 +1,17 @@
-﻿//
-//  Project Ferrite is an Implementation Telegram Server API
-//  Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-//
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU Affero General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU Affero General Public License for more details.
-//
-//  You should have received a copy of the GNU Affero General Public License
-//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
+
 using System;
 using System.Buffers;
-using Autofac;
 using Ferrite.Core.Connection;
-using Ferrite.Data;
 using Ferrite.Services;
+using Ferrite.Core.Execution;
 using Ferrite.TL;
-using Ferrite.TL.mtproto;
-using Ferrite.TL.slim;
-using MessagePack;
-using Message = Ferrite.TL.mtproto.Message;
 
 namespace Ferrite.Core.RequestChain;
 
 public class ServiceMessagesProcessor : ILinkedHandler
 {
-    private readonly ILifetimeScope _scope;
-    private readonly ISessionService _sessionManager;
-    private readonly IMessagePipe _pipe;
-    public ServiceMessagesProcessor(ILifetimeScope scope, ISessionService sessionManager, IMessagePipe pipe)
-    {
-        _scope = scope;
-        _sessionManager = sessionManager;
-        _pipe = pipe;
-    }
-    
     public ILinkedHandler SetNext(ILinkedHandler value)
     {
         Next = value;
@@ -49,9 +20,9 @@ public class ServiceMessagesProcessor : ILinkedHandler
 
     public ILinkedHandler? Next { get; set; }
 
-    public async ValueTask Process(object? sender, ITLObject input, TLExecutionContext ctx)
+    public async ValueTask Process(object? sender, TLBytes input, TLExecutionContext ctx)
     {
-        if(sender is MTProtoConnection connection)
+        if (sender is IMTProtoConnection connection)
         {
             if (ctx.QuickAck != null)
             {
@@ -64,46 +35,268 @@ public class ServiceMessagesProcessor : ILinkedHandler
                 };
                 await connection.SendAsync(message);
             }
-            if (input.Constructor == TLConstructor.Ping &&
-            input is Ping ping)
-            {
-                Console.WriteLine("Ping received.");
-                await connection.Ping(ping.PingId);
-            }
-            else if (input.Constructor == TLConstructor.PingDelayDisconnect &&
-               input is PingDelayDisconnect pingDelay)
-            {
-                Console.WriteLine($"Ping received with delay of {pingDelay.DisconnectDelay} seconds.");
-                await connection.Ping(pingDelay.PingId, pingDelay.DisconnectDelay);
-            }
-            else if (input.Constructor == TLConstructor.Message && input is Message message &&
-              message.Body.Constructor == TLConstructor.Ping && message.Body is Ping ping2)
-            {
-                Console.WriteLine("Ping received.");
-                await connection.Ping(ping2.PingId);
-            }
-            else if (input.Constructor == TLConstructor.Message && input is Message message2 &&
-               message2.Body.Constructor == TLConstructor.PingDelayDisconnect &&
-               message2.Body is PingDelayDisconnect pingDelay2)
-            {
-                Console.WriteLine($"Ping received with delay of {pingDelay2.DisconnectDelay} seconds.");
-                await connection.Ping(pingDelay2.PingId, pingDelay2.DisconnectDelay);
-            }
-            else
-            {
-                if (Next != null) await Next.Process(sender, input, ctx);
-            }
-        }
-        else
-        {
-            if (Next != null) await Next.Process(sender, input, ctx);
-        }
-    }
 
-    public async ValueTask Process(object? sender, TLBytes input, TLExecutionContext ctx)
-    {
+            if (TryReadPing(input, out var pingId, out var disconnectDelay))
+            {
+                await connection.Ping(pingId, ctx.MessageId, disconnectDelay);
+                input.Dispose();
+                return;
+            }
+        }
+
+        if (input.Constructor == Constructors.mtproto_MsgsAck)
+        {
+            if (sender is IMTProtoSessionOwner sessionOwner)
+            {
+                var ack = new TL.mtproto.MsgsAck(input.AsSpan());
+                var msgIds = ack.MsgIds;
+                for (var i = 0; i < msgIds.Count; i++)
+                {
+                    sessionOwner.Session.MarkSentMessageAcknowledged(msgIds[i]);
+                }
+            }
+
+            input.Dispose();
+            return;
+        }
+
+        if (input.Constructor == Constructors.mtproto_RpcDropAnswer)
+        {
+            if (sender is IMTProtoConnection dropConnection &&
+                sender is IMTProtoSessionOwner dropOwner)
+            {
+                var dropAnswer = new TL.mtproto.RpcDropAnswer(input.AsSpan());
+                await SendRpcDropAnswer(dropConnection, dropOwner.Session,
+                    dropAnswer.ReqMsgId, ctx.MessageId, ctx.SessionId);
+            }
+
+            input.Dispose();
+            return;
+        }
+
+        if (input.Constructor == Constructors.mtproto_MsgsStateReq)
+        {
+            if (sender is IMTProtoConnection stateConnection &&
+                sender is IMTProtoSessionOwner stateOwner)
+            {
+                var stateReq = new TL.mtproto.MsgsStateReq(input.AsSpan());
+                byte[] info = BuildStateInfoBytes(stateOwner.Session, stateReq.MsgIds);
+                await SendMsgsStateInfo(stateConnection, ctx.MessageId, info, ctx.SessionId);
+            }
+
+            input.Dispose();
+            return;
+        }
+
+        if (input.Constructor == Constructors.mtproto_MsgResendReq)
+        {
+            // Ferrite's sent-message registry keeps only METADATA (no payload bytes),
+            // so it cannot re-transmit the requested messages. Detailed-info
+            // notifications would prompt clients such as TDLib to request the
+            // answer msg_id again, which can loop without payload retention.
+            // Answer with msgs_state_info exactly as if this were a msgs_state_req.
+            if (sender is IMTProtoConnection resendConnection &&
+                sender is IMTProtoSessionOwner resendOwner)
+            {
+                var resendReq = new TL.mtproto.MsgResendReq(input.AsSpan());
+                byte[] info = BuildStateInfoBytes(resendOwner.Session, resendReq.MsgIds);
+                await SendMsgsStateInfo(resendConnection, ctx.MessageId, info, ctx.SessionId);
+            }
+
+            input.Dispose();
+            return;
+        }
+
+        if (input.Constructor == Constructors.mtproto_MsgsAllInfo)
+        {
+            // Voluntary status report about the messages Ferrite has sent: mark the
+            // ones the client says it received/acknowledged in the sent registry.
+            if (sender is IMTProtoSessionOwner allInfoOwner)
+            {
+                var allInfo = new TL.mtproto.MsgsAllInfo(input.AsSpan());
+                AcknowledgeReceivedMessages(allInfoOwner.Session, allInfo.MsgIds, allInfo.Info);
+            }
+
+            input.Dispose();
+            return;
+        }
+
+        if (input.Constructor == Constructors.mtproto_MsgsStateInfo)
+        {
+            // Informational response to a msgs_state_req. Ferrite never issues
+            // msgs_state_req, so there is nothing to reconcile -- consume it.
+            input.Dispose();
+            return;
+        }
+
+        if (input.Constructor == Constructors.mtproto_HttpWait)
+        {
+            // http_wait (max_delay/wait_after/max_wait) governs how long the server
+            // may hold queued updates before flushing them to the client on the HTTP
+            // long-poll transport. Ferrite serves clients over TCP, where responses
+            // are written as soon as they are produced and there is no held queue to
+            // flush, so the request is intentionally a no-op. It is consumed here --
+            // never forwarded to the authorization gate / request processor -- because
+            // it is an MTProto transport service message, not an API call.
+            input.Dispose();
+            return;
+        }
+
         if (Next != null) await Next.Process(sender, input, ctx);
         else input.Dispose();
     }
-}
 
+    // msgs_state_info / msgs_all_info status byte values (one per msg_id). These
+    // are the MTProto wire codes and are distinct from the registry's internal
+    // MTProtoMessageStatus flags.
+    private const byte MessageStatusNothingKnown = 1;
+    private const byte MessageStatusReceivedAndProcessed = 4;
+    private const byte MessageStatusAlreadyAcknowledged = 8;
+    private const byte MessageStatusNotRequiringAck = 16;
+    private const byte MessageStatusBaseMask = 0x07;
+
+    private static byte[] BuildStateInfoBytes(IMTProtoSession session, TL.VectorOfLong msgIds)
+    {
+        int count = msgIds.Count;
+        var info = new byte[count];
+        for (int i = 0; i < count; i++)
+        {
+            info[i] = ComputeStateInfoByte(session, msgIds[i]);
+        }
+
+        return info;
+    }
+
+    private static byte ComputeStateInfoByte(IMTProtoSession session, long msgId)
+    {
+        if (!session.TryGetSentMessage(msgId, out var sent))
+        {
+            // Nothing is known about this id: msgs_state_req asks about the
+            // requester's own outgoing (server-incoming) messages, which Ferrite
+            // does not track, and a forgotten outgoing id resolves here too.
+            return MessageStatusNothingKnown;
+        }
+
+        // A message Ferrite sent and still remembers: from the server's side it has
+        // been fully processed, which is also an implicit receipt acknowledgment.
+        int status = MessageStatusReceivedAndProcessed;
+        if (!sent.ContentRelated)
+        {
+            status |= MessageStatusNotRequiringAck;
+        }
+
+        if ((sent.Status & MTProtoMessageStatus.Stored) != 0)
+        {
+            status |= MessageStatusAlreadyAcknowledged;
+        }
+
+        return (byte)status;
+    }
+
+    private static async ValueTask SendMsgsStateInfo(IMTProtoConnection connection,
+        long reqMsgId, byte[] info, long sessionId)
+    {
+        byte[] payload;
+        using (var stateInfo = TL.mtproto.MsgsStateInfo.Builder()
+                   .ReqMsgId(reqMsgId)
+                   .Info(info)
+                   .Build())
+        {
+            payload = stateInfo.TLBytes!.Value.AsSpan().ToArray();
+        }
+
+        await SendServiceMessage(connection, payload, reqMsgId, sessionId);
+    }
+
+    // Sends a top-level MTProto service message (NOT rpc_result-wrapped) on the
+    // current connection; the normal send path envelopes it with a fresh server
+    // msg_id. Used for the synchronous service responses Ferrite emits in-band.
+    private static async ValueTask SendServiceMessage(IMTProtoConnection connection,
+        byte[] payload, long responseToMessageId, long sessionId)
+    {
+        var message = new Services.MTProtoMessage
+        {
+            Data = payload,
+            IsContentRelated = false,
+            IsResponse = true,
+            MessageType = MTProtoMessageType.Encrypted,
+            SessionId = sessionId,
+            MessageId = responseToMessageId
+        };
+        await connection.SendAsync(message);
+    }
+
+    private static void AcknowledgeReceivedMessages(IMTProtoSession session,
+        TL.VectorOfLong msgIds, ReadOnlySpan<byte> info)
+    {
+        int count = Math.Min(msgIds.Count, info.Length);
+        for (int i = 0; i < count; i++)
+        {
+            byte status = info[i];
+            bool received = (status & MessageStatusBaseMask) == MessageStatusReceivedAndProcessed;
+            bool acknowledged = (status & MessageStatusAlreadyAcknowledged) != 0;
+            if (received || acknowledged)
+            {
+                session.MarkSentMessageAcknowledged(msgIds[i]);
+            }
+        }
+    }
+
+    private static async ValueTask SendRpcDropAnswer(IMTProtoConnection connection,
+        IMTProtoSession session, long reqMsgId, long responseToMessageId, long sessionId)
+    {
+        byte[] payload;
+        if (session.TryGetSentMessage(reqMsgId, out var sent))
+        {
+            // The answer is still tracked for this session: acknowledge receipt of
+            // the original query and transmit the dropped answer's coordinates so
+            // the client can reconcile its outgoing/incoming queues.
+            using var dropped = TL.mtproto.RpcAnswerDropped.Builder()
+                .MsgId(sent.MessageId)
+                .SeqNo(sent.SequenceNo)
+                .Bytes(sent.Length)
+                .Build();
+            payload = dropped.TLBytes!.Value.AsSpan().ToArray();
+        }
+        else
+        {
+            // Ferrite answers RPC queries synchronously and keeps no
+            // req_msg_id -> answer map once the response is sent, so a drop request
+            // for an id we no longer track means the server remembers nothing about
+            // it. rpc_answer_dropped_running (cancelled mid-processing) is therefore
+            // never reachable on this server.
+            using var unknown = TL.mtproto.RpcAnswerUnknown.Builder().Build();
+            payload = unknown.TLBytes!.Value.AsSpan().ToArray();
+        }
+
+        await SendServiceMessage(connection, payload, responseToMessageId, sessionId);
+    }
+
+    private static bool TryReadPing(TLBytes input, out long pingId, out int disconnectDelay)
+    {
+        if (input.Constructor == Constructors.mtproto_Ping)
+        {
+            var ping = new TL.mtproto.Ping(input.AsSpan());
+            pingId = ping.PingId;
+            disconnectDelay = 0;
+            return true;
+        }
+
+        if (input.Constructor == Constructors.mtproto_PingDelayDisconnect)
+        {
+            var pingDelay = new TL.mtproto.PingDelayDisconnect(input.AsSpan());
+            pingId = pingDelay.PingId;
+            disconnectDelay = pingDelay.DisconnectDelay;
+            return true;
+        }
+
+        pingId = 0;
+        disconnectDelay = 0;
+        return false;
+    }
+
+    public async ValueTask Process(object? sender, ITLStreamingObject input, TLExecutionContext ctx)
+    {
+        if (Next != null) await Next.Process(sender, input, ctx);
+    }
+}

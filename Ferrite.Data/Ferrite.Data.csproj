@@ -1,18 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <WarningLevel>4</WarningLevel>
     <LangVersion>preview</LangVersion>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
     <LangVersion>preview</LangVersion>
   </PropertyGroup>
   <ItemGroup>
@@ -21,8 +21,6 @@
     <None Remove="Microsoft.Extensions.Caching.StackExchangeRedis" />
     <None Remove="DotNext.Net.Cluster" />
     <None Remove="CassandraCSharpDriver" />
-    <None Remove="MessagePack" />
-    <None Remove="MessagePackAnalyzer" />
     <None Remove="Account\" />
     <None Remove="Auth\" />
     <None Remove="Help\" />
@@ -324,28 +322,23 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="AWSSDK.S3" Version="3.7.9.52" />
-    <PackageReference Include="Elasticsearch.Net" Version="7.17.4" />
-    <PackageReference Include="Lucene.Net" Version="4.8.0-beta00016" />
-    <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00016" />
-    <PackageReference Include="Lucene.Net.Queries" Version="4.8.0-beta00016" />
-    <PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00016" />
-    <PackageReference Include="Microsoft.FASTER.Core" Version="2.0.17" />
-    <PackageReference Include="NEST" Version="7.17.4" />
-    <PackageReference Include="NonBlocking" Version="2.1.0" />
-    <PackageReference Include="RocksDB" Version="7.5.3.32564" />
-    <PackageReference Include="StackExchange.Redis" Version="2.6.66" />
-    <PackageReference Include="CassandraCSharpDriver" Version="3.18.0" />
-    <PackageReference Include="MessagePack" Version="2.4.35" />
-    <PackageReference Include="MessagePackAnalyzer" Version="2.4.35">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="Confluent.Kafka" Version="1.9.3" />
+    <PackageReference Include="AWSSDK.S3" Version="4.0.25.3" />
+    <PackageReference Include="Elasticsearch.Net" Version="7.17.5" />
+    <PackageReference Include="Lucene.Net" Version="4.8.0-beta00018" />
+    <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00018" />
+    <PackageReference Include="Lucene.Net.Queries" Version="4.8.0-beta00018" />
+    <PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00018" />
+    <PackageReference Include="Microsoft.FASTER.Core" Version="2.6.5" />
+    <PackageReference Include="NEST" Version="7.17.5" />
+    <PackageReference Include="NonBlocking" Version="2.1.2" />
+    <PackageReference Include="RocksDB" Version="10.10.1.1747" />
+    <PackageReference Include="StackExchange.Redis" Version="3.0.7" />
+    <PackageReference Include="CassandraCSharpDriver" Version="3.22.0" />
+    <PackageReference Include="Confluent.Kafka" Version="2.14.2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Ferrite.Crypto\Ferrite.Crypto.csproj" />
-    <ProjectReference Include="..\Ferrite.TL.slim\Ferrite.TL.slim.csproj" />
+    <ProjectReference Include="..\Ferrite.TL\Ferrite.TL.csproj" />
     <ProjectReference Include="..\Ferrite.Utils\Ferrite.Utils.csproj" />
   </ItemGroup>
 </Project>

@@ -1,20 +1,5 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using DotNext;
 using SkiaSharp;
@@ -23,6 +8,8 @@ namespace Ferrite.Services;
 
 public class SkiaPhotoProcessor : IPhotoProcessor
 {
+    private static readonly SKSamplingOptions ThumbnailSampling = new(SKCubicResampler.Mitchell);
+
     public byte[]? GenerateThumbnail(ReadOnlySpan<byte> src, int w, ImageFilter type)
     {
         try
@@ -39,26 +26,22 @@ public class SkiaPhotoProcessor : IPhotoProcessor
                 using var cropped = new SKBitmap(size, size);
                 bitmap.ExtractSubset(cropped, rect);
                 using var scaled = new SKBitmap(w, w);
-                cropped.ScalePixels(scaled, SKFilterQuality.High);
+                cropped.ScalePixels(scaled, ThumbnailSampling);
                 using var data = scaled.Encode(SKEncodedImageFormat.Jpeg, 65);
                 return data.ToArray();
             }
             else
             {
-                var size = Math.Max(bitmap.Width, bitmap.Height);
-                var box = new SKBitmap(size, size);
-                using var canvas = new SKCanvas(box);
-                canvas.Clear(SKColors.Black);
-                var x = (size - bitmap.Width) / 2;
-                var y = (size - bitmap.Height) / 2;
-                canvas.DrawBitmap(bitmap, x, y);
-                using var scaled = new SKBitmap(w, w);
-                box.ScalePixels(scaled, SKFilterQuality.High);
+                double scale = w / (double)Math.Max(bitmap.Width, bitmap.Height);
+                int targetWidth = Math.Max(1, (int)Math.Round(bitmap.Width * scale));
+                int targetHeight = Math.Max(1, (int)Math.Round(bitmap.Height * scale));
+                using var scaled = new SKBitmap(targetWidth, targetHeight);
+                bitmap.ScalePixels(scaled, ThumbnailSampling);
                 using var data = scaled.Encode(SKEncodedImageFormat.Jpeg, 65);
                 return data.ToArray();
             }
         }
-        catch (Exception e)
+        catch (Exception)
         {
             return null;
         }
@@ -71,7 +54,7 @@ public class SkiaPhotoProcessor : IPhotoProcessor
             using var bitmap = SKBitmap.Decode(src);
             return (bitmap.Width, bitmap.Height);
         }
-        catch (Exception e)
+        catch (Exception)
         {
             return (0, 0);
         }

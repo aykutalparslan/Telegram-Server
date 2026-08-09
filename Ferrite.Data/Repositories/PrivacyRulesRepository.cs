@@ -1,24 +1,8 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using System.Runtime.InteropServices;
-using Ferrite.TL.slim;
-using Ferrite.TL.slim.baseLayer;
+using Ferrite.TL;
+using Ferrite.TL.baseLayer;
 
 namespace Ferrite.Data.Repositories;
 
@@ -36,28 +20,37 @@ public class PrivacyRulesRepository : IPrivacyRulesRepository
     }
     public bool PutPrivacyRules(long userId, InputPrivacyKey key, Vector rules)
     {
+        // account.setPrivacy replaces the full rule set for a key; drop any
+        // previously stored rule rows so stale rule types do not survive.
+        _store.Delete(userId, (int)key);
         int count = rules.Count;
         for(int i = 0 ; i < count; i++)
         {
             var rule = rules.ReadTLObject();
-            int constructor = MemoryMarshal.Read<int>(rule);
-            
-            _store.Put(rule.ToArray(), userId, (int)key, (int)GetPrivacyValueType(constructor));
+            var ruleBytes = rule.ToArray();
+
+            _store.Put(ruleBytes, userId, (int)key,
+                (int)GetPrivacyValueType(((PrivacyRuleView)rule).Constructor));
         }
 
         return true;
     }
-    
+
     private PrivacyRuleType GetPrivacyValueType(int constructor) => constructor switch
     {
         Constructors.baseLayer_PrivacyValueAllowContacts => PrivacyRuleType.AllowContacts,
+        Constructors.baseLayer_PrivacyValueAllowAll => PrivacyRuleType.AllowAll,
         Constructors.baseLayer_PrivacyValueAllowUsers => PrivacyRuleType.AllowUsers,
         Constructors.baseLayer_PrivacyValueDisallowContacts => PrivacyRuleType.DisallowContacts,
         Constructors.baseLayer_PrivacyValueDisallowAll => PrivacyRuleType.DisallowAll,
         Constructors.baseLayer_PrivacyValueDisallowUsers => PrivacyRuleType.DisallowUsers,
         Constructors.baseLayer_PrivacyValueAllowChatParticipants => PrivacyRuleType.AllowChatParticipants,
         Constructors.baseLayer_PrivacyValueDisallowChatParticipants => PrivacyRuleType.DisallowChatParticipants,
-        _ => PrivacyRuleType.AllowAll
+        Constructors.baseLayer_PrivacyValueAllowCloseFriends => PrivacyRuleType.AllowCloseFriends,
+        Constructors.baseLayer_PrivacyValueAllowPremium => PrivacyRuleType.AllowPremium,
+        Constructors.baseLayer_PrivacyValueAllowBots => PrivacyRuleType.AllowBots,
+        Constructors.baseLayer_PrivacyValueDisallowBots => PrivacyRuleType.DisallowBots,
+        _ => throw new ArgumentException($"Unknown privacy rule constructor: {constructor}")
     };
 
     public ValueTask<ICollection<TLPrivacyRule>> GetPrivacyRulesAsync(long userId, InputPrivacyKey key)
@@ -70,6 +63,11 @@ public class PrivacyRulesRepository : IPrivacyRulesRepository
         }
 
         return new ValueTask<ICollection<TLPrivacyRule>>(rules);
+    }
+
+    public bool DeletePrivacyRules(long userId, InputPrivacyKey key)
+    {
+        return _store.Delete(userId, (int)key);
     }
 
     public bool DeletePrivacyRules(long userId)

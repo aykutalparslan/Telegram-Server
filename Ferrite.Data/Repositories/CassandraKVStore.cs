@@ -1,20 +1,5 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
 using Cassandra;
@@ -24,7 +9,9 @@ namespace Ferrite.Data.Repositories;
 
 public class CassandraKVStore : IKVStore
 {
+    private static long _lastTimestampMicros;
     private readonly ICassandraContext _context;
+    private readonly Action<Statement> _enqueue;
     private TableDefinition _table;
     private const string IntStr = "int";
     private const string BoolStr = "boolean";
@@ -61,6 +48,14 @@ public class CassandraKVStore : IKVStore
     public CassandraKVStore(ICassandraContext context)
     {
         _context = context;
+        _enqueue = context.Enqueue;
+    }
+
+    public CassandraKVStore(ICassandraContext context,
+        IWriteBatchAccessor writeBatches)
+    {
+        _context = context;
+        _enqueue = writeBatches.Enqueue;
     }
 
     public void SetSchema(TableDefinition table)
@@ -158,7 +153,8 @@ public class CassandraKVStore : IKVStore
         {
             throw new Exception("Parameter count mismatch.");
         }
-        StringBuilder sb = new StringBuilder($"UPDATE {_table.Keyspace}.{_table.Name} SET {_table.Name}_data = ? ");
+        StringBuilder sb = new StringBuilder($"UPDATE {_table.Keyspace}.{_table.Name} " +
+                                             $"USING TIMESTAMP ? SET {_table.Name}_data = ? ");
         sb.Append($"WHERE ");
         bool first = true;
         for (int i = 0; i < keys.Length; i++)
@@ -177,11 +173,11 @@ public class CassandraKVStore : IKVStore
             sb.Append($"{col.Name} = ?");
         }
 
-        List<object> p = new List<object>();
+        List<object> p = new List<object> { NextTimestampMicros() };
         p.Add(data);
         p.AddRange(keys);
         var statement = new SimpleStatement(sb.ToString(), p.ToArray());
-        _context.Enqueue(statement);
+        _enqueue(statement);
         
         foreach (var sc in _table.SecondaryIndices)
         {
@@ -191,7 +187,8 @@ public class CassandraKVStore : IKVStore
             {
                 secondaryParams.Add(keys[_table.PrimaryKey.GetOrdinal(c.Name)]);
             }
-            sb = new StringBuilder($"UPDATE {_table.Keyspace}.{_table.Name}_{sc.Name} SET ");
+            sb = new StringBuilder($"UPDATE {_table.Keyspace}.{_table.Name}_{sc.Name} " +
+                                   "USING TIMESTAMP ? SET ");
             foreach (var c in _table.PrimaryKey.Columns)
             {
                 if (!first)
@@ -213,11 +210,11 @@ public class CassandraKVStore : IKVStore
                 first = false;
                 sb.Append($"{col.Name} = ?");
             }
-            List<object> p2 = new List<object>();
+            List<object> p2 = new List<object> { NextTimestampMicros() };
             p2.AddRange(keys);
             p2.AddRange(secondaryParams);
             var indexStatement = new SimpleStatement(sb.ToString(), p2.ToArray());
-            _context.Enqueue(indexStatement);
+            _enqueue(indexStatement);
         }
 
         return true;
@@ -225,31 +222,121 @@ public class CassandraKVStore : IKVStore
 
     public bool Delete(params object[] keys)
     {
-        StringBuilder sb = new StringBuilder($"DELETE FROM {_table.Keyspace}.{_table.Name} WHERE ");
-        bool first = true;
-        for (int i = 0; i < keys.Length; i++)
-        {
-            var col = _table.PrimaryKey.Columns[i];
-            if (keys[i].GetType() != GetManagedType(col.Type))
-            {
-                throw new Exception($"Expected type was {GetManagedType(col.Type)} and " +
-                                    $"the parameter was of type {keys[i].GetType()}");
-            }
-            if (!first)
-            {
-                sb.Append($" AND ");
-            }
-            first = false;
-            sb.Append($"{col.Name} = ?");
-        }
-        var statement = new SimpleStatement(sb.ToString(), keys.ToArray());
-        _context.Enqueue(statement);
+        EnqueueDelete(keys);
         return true;
     }
 
     public ValueTask<bool> DeleteAsync(params object[] keys)
     {
-        StringBuilder sb = new StringBuilder($"DELETE FROM {_table.Keyspace}.{_table.Name} WHERE ");
+        EnqueueDelete(keys);
+        return new ValueTask<bool>(true);
+    }
+
+    // Deletes the matching main row(s) and every secondary-index row that
+    // references them, mirroring the RocksDB store semantics. Index rows must
+    // be resolved before the main rows are removed.
+    private void EnqueueDelete(object[] keys)
+    {
+        StringBuilder sb = new StringBuilder($"DELETE FROM {_table.Keyspace}.{_table.Name} " +
+                                             "USING TIMESTAMP ? WHERE ");
+        bool first = true;
+        for (int i = 0; i < keys.Length; i++)
+        {
+            var col = _table.PrimaryKey.Columns[i];
+            if (keys[i].GetType() != GetManagedType(col.Type))
+            {
+                throw new Exception($"Expected type was {GetManagedType(col.Type)} and " +
+                                    $"the parameter was of type {keys[i].GetType()}");
+            }
+            if (!first)
+            {
+                sb.Append($" AND ");
+            }
+            first = false;
+            sb.Append($"{col.Name} = ?");
+        }
+        var parameters = new List<object> { NextTimestampMicros() };
+        parameters.AddRange(keys);
+        var statement = new SimpleStatement(sb.ToString(), parameters.ToArray());
+        EnqueueSecondaryIndexDeletes(keys);
+        _enqueue(statement);
+    }
+
+    private void EnqueueSecondaryIndexDeletes(object[] keys)
+    {
+        if (_table.SecondaryIndices.Count == 0)
+        {
+            return;
+        }
+        if (keys.Length == _table.PrimaryKey.Columns.Count)
+        {
+            foreach (var sc in _table.SecondaryIndices)
+            {
+                List<object> secondaryParams = new();
+                foreach (var c in sc.Columns)
+                {
+                    secondaryParams.Add(keys[_table.PrimaryKey.GetOrdinal(c.Name)]);
+                }
+                EnqueueIndexRowDelete(sc, secondaryParams);
+            }
+        }
+        else
+        {
+            foreach (var row in SelectRows(keys))
+            {
+                foreach (var sc in _table.SecondaryIndices)
+                {
+                    List<object> secondaryParams = new();
+                    foreach (var c in sc.Columns)
+                    {
+                        secondaryParams.Add(row.GetValue(GetManagedType(c.Type), c.Name));
+                    }
+                    EnqueueIndexRowDelete(sc, secondaryParams);
+                }
+            }
+        }
+    }
+
+    private void EnqueueIndexRowDelete(KeyDefinition sc, List<object> secondaryParams)
+    {
+        StringBuilder sb = new StringBuilder($"DELETE FROM {_table.Keyspace}.{_table.Name}_{sc.Name} " +
+                                             "USING TIMESTAMP ? WHERE ");
+        bool first = true;
+        for (int i = 0; i < secondaryParams.Count; i++)
+        {
+            var col = sc.Columns[i];
+            if (!first)
+            {
+                sb.Append($" AND ");
+            }
+            first = false;
+            sb.Append($"{col.Name} = ?");
+        }
+        var parameters = new List<object> { NextTimestampMicros() };
+        parameters.AddRange(secondaryParams);
+        var statement = new SimpleStatement(sb.ToString(), parameters.ToArray());
+        _enqueue(statement);
+    }
+
+    private static long NextTimestampMicros()
+    {
+        long observed;
+        long next;
+        do
+        {
+            observed = Volatile.Read(ref _lastTimestampMicros);
+            long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000;
+            next = Math.Max(now, observed + 1);
+        }
+        while (Interlocked.CompareExchange(ref _lastTimestampMicros, next,
+                   observed) != observed);
+
+        return next;
+    }
+
+    private IEnumerable<Row> SelectRows(object[] keys)
+    {
+        StringBuilder sb = new StringBuilder($"SELECT * FROM {_table.Keyspace}.{_table.Name} WHERE ");
         bool first = true;
         for (int i = 0; i < keys.Length; i++)
         {
@@ -267,126 +354,89 @@ public class CassandraKVStore : IKVStore
             sb.Append($"{col.Name} = ?");
         }
         var statement = new SimpleStatement(sb.ToString(), keys.ToArray());
-        _context.Enqueue(statement);
-        return new ValueTask<bool>(true);
+        var results = _context.Execute(statement);
+        if (results == null)
+        {
+            return Enumerable.Empty<Row>();
+        }
+        return results;
     }
 
     public bool DeleteBySecondaryIndex(string indexName, params object[] keys)
     {
         var sc = _table.SecondaryIndices.FirstOrDefault(x=>x.Name == indexName);
-        if (sc != null)
+        if (sc == null)
         {
-            StringBuilder sb = new StringBuilder($"SELECT * FROM {_table.Keyspace}.{_table.Name}_{sc.Name} WHERE ");
-            bool first = true;
-            for (int i = 0; i < keys.Length; i++)
-            {
-                var col = sc.Columns[i];
-                if (keys[i].GetType() != GetManagedType(col.Type))
-                {
-                    throw new Exception($"Expected type was {GetManagedType(col.Type)} and " +
-                                        $"the parameter was of type {keys[i].GetType()}");
-                }
-                if (!first)
-                {
-                    sb.Append($" AND ");
-                }
-                first = false;
-                sb.Append($"{col.Name} = ?");
-            }
-            var statement = new SimpleStatement(sb.ToString(), keys.ToArray());
-            var results = _context.Execute(statement);
-            if (results == null)
-            {
-                return false;
-            }
-            var row = results.FirstOrDefault();
-            if (row != null)
-            {
-                List<object> primaryParameters = new();
-                foreach (var c in _table.PrimaryKey.Columns)
-                {
-                    primaryParameters.Add(row.GetValue(GetManagedType(c.Type), c.Name));
-                }
-                sb = new StringBuilder($"SELECT * FROM {_table.Keyspace}.{_table.Name} WHERE ");
-                for (int i = 0; i < primaryParameters.Count; i++)
-                {
-                    var col = _table.PrimaryKey.Columns[i];
-                    if (primaryParameters[i].GetType() != GetManagedType(col.Type))
-                    {
-                        throw new Exception($"Expected type was {GetManagedType(col.Type)} and " +
-                                            $"the parameter was of type {primaryParameters[i].GetType()}");
-                    }
-                    if (!first)
-                    {
-                        sb.Append($" AND ");
-                    }
-                    first = false;
-                    sb.Append($"{col.Name} = ?");
-                }
-                var statementInner = new SimpleStatement(sb.ToString(), primaryParameters.ToArray());
-                _context.Enqueue(statementInner);
-            }
+            return false;
         }
-        return false;
+        var statement = new SimpleStatement(BuildIndexSelect(sc, keys), keys.ToArray());
+        var results = _context.Execute(statement);
+        if (results == null)
+        {
+            return false;
+        }
+        var row = results.FirstOrDefault();
+        if (row == null)
+        {
+            return false;
+        }
+        EnqueueDelete(PrimaryKeyFromIndexRow(row));
+        return true;
     }
 
     public async ValueTask<bool> DeleteBySecondaryIndexAsync(string indexName, params object[] keys)
     {
         var sc = _table.SecondaryIndices.FirstOrDefault(x=>x.Name == indexName);
-        if (sc != null)
+        if (sc == null)
         {
-            StringBuilder sb = new StringBuilder($"SELECT * FROM {_table.Keyspace}.{_table.Name}_{sc.Name} WHERE ");
-            bool first = true;
-            for (int i = 0; i < keys.Length; i++)
-            {
-                var col = sc.Columns[i];
-                if (keys[i].GetType() != GetManagedType(col.Type))
-                {
-                    throw new Exception($"Expected type was {GetManagedType(col.Type)} and " +
-                                        $"the parameter was of type {keys[i].GetType()}");
-                }
-                if (!first)
-                {
-                    sb.Append($" AND ");
-                }
-                first = false;
-                sb.Append($"{col.Name} = ?");
-            }
-            var statement = new SimpleStatement(sb.ToString(), keys.ToArray());
-            var results = await _context.ExecuteAsync(statement);
-            if (results == null)
-            {
-                return false;
-            }
-            var row = results.FirstOrDefault();
-            if (row != null)
-            {
-                List<object> primaryParameters = new();
-                foreach (var c in _table.PrimaryKey.Columns)
-                {
-                    primaryParameters.Add(row.GetValue(GetManagedType(c.Type), c.Name));
-                }
-                sb = new StringBuilder($"SELECT * FROM {_table.Keyspace}.{_table.Name} WHERE ");
-                for (int i = 0; i < primaryParameters.Count; i++)
-                {
-                    var col = _table.PrimaryKey.Columns[i];
-                    if (primaryParameters[i].GetType() != GetManagedType(col.Type))
-                    {
-                        throw new Exception($"Expected type was {GetManagedType(col.Type)} and " +
-                                            $"the parameter was of type {primaryParameters[i].GetType()}");
-                    }
-                    if (!first)
-                    {
-                        sb.Append($" AND ");
-                    }
-                    first = false;
-                    sb.Append($"{col.Name} = ?");
-                }
-                var statementInner = new SimpleStatement(sb.ToString(), primaryParameters.ToArray());
-                _context.Enqueue(statementInner);
-            }
+            return false;
         }
-        return false;
+        var statement = new SimpleStatement(BuildIndexSelect(sc, keys), keys.ToArray());
+        var results = await _context.ExecuteAsync(statement);
+        if (results == null)
+        {
+            return false;
+        }
+        var row = results.FirstOrDefault();
+        if (row == null)
+        {
+            return false;
+        }
+        EnqueueDelete(PrimaryKeyFromIndexRow(row));
+        return true;
+    }
+
+    private string BuildIndexSelect(KeyDefinition sc, object[] keys)
+    {
+        StringBuilder sb = new StringBuilder($"SELECT * FROM {_table.Keyspace}.{_table.Name}_{sc.Name} WHERE ");
+        bool first = true;
+        for (int i = 0; i < keys.Length; i++)
+        {
+            var col = sc.Columns[i];
+            if (keys[i].GetType() != GetManagedType(col.Type))
+            {
+                throw new Exception($"Expected type was {GetManagedType(col.Type)} and " +
+                                    $"the parameter was of type {keys[i].GetType()}");
+            }
+            if (!first)
+            {
+                sb.Append($" AND ");
+            }
+            first = false;
+            sb.Append($"{col.Name} = ?");
+        }
+        return sb.ToString();
+    }
+
+    // Index tables store the referenced primary key in pk_-prefixed columns.
+    private object[] PrimaryKeyFromIndexRow(Row row)
+    {
+        List<object> primaryParameters = new();
+        foreach (var c in _table.PrimaryKey.Columns)
+        {
+            primaryParameters.Add(row.GetValue(GetManagedType(c.Type), $"pk_{c.Name}"));
+        }
+        return primaryParameters.ToArray();
     }
 
     public byte[]? Get(params object[] keys)
@@ -534,7 +584,7 @@ public class CassandraKVStore : IKVStore
         List<object> primaryParameters = new();
         foreach (var c in _table.PrimaryKey.Columns)
         {
-            primaryParameters.Add(row.GetValue(GetManagedType(c.Type), c.Name));
+            primaryParameters.Add(row.GetValue(GetManagedType(c.Type), $"pk_{c.Name}"));
         }
 
         sb = new StringBuilder($"SELECT * FROM {_table.Keyspace}.{_table.Name} WHERE ");
@@ -557,7 +607,12 @@ public class CassandraKVStore : IKVStore
 
     public IEnumerable<byte[]> Iterate(params object[] keys)
     {
-        StringBuilder sb = new StringBuilder($"SELECT * FROM {_table.Keyspace}.{_table.Name} WHERE ");
+        StringBuilder sb = new StringBuilder(
+            $"SELECT * FROM {_table.Keyspace}.{_table.Name}");
+        if (keys.Length > 0)
+        {
+            sb.Append(" WHERE ");
+        }
         bool first = true;
         for (int i = 0; i < keys.Length; i++)
         {
@@ -587,7 +642,12 @@ public class CassandraKVStore : IKVStore
     }
     public async IAsyncEnumerable<byte[]> IterateAsync(params object[] keys)
     {
-        StringBuilder sb = new StringBuilder($"SELECT * FROM {_table.Keyspace}.{_table.Name} WHERE ");
+        StringBuilder sb = new StringBuilder(
+            $"SELECT * FROM {_table.Keyspace}.{_table.Name}");
+        if (keys.Length > 0)
+        {
+            sb.Append(" WHERE ");
+        }
         bool first = true;
         for (int i = 0; i < keys.Length; i++)
         {

@@ -1,0 +1,25 @@
+# Development coturn for Ferrite 1:1 calls.
+#
+# Usage:
+#   TURN_REST_SECRET=<random secret> docker compose up
+#
+# The same secret must be configured as Ferrite's CallTurnOptions
+# SharedSecret. Never commit a real secret to git.
+services:
+  coturn:
+    image: coturn/coturn:4.6
+    restart: unless-stopped
+    # Explicit port publishing works on Linux and macOS Docker Desktop alike
+    # (host networking does not reach the macOS loopback). Real deployments
+    # behind NAT must set external-ip in turnserver.dev.conf so relayed
+    # candidates carry the public address.
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "49160-49200:49160-49200/udp"
+    command:
+      - -c
+      - /etc/coturn/turnserver.conf
+      - --static-auth-secret=${TURN_REST_SECRET:?set TURN_REST_SECRET}
+    volumes:
+      - ./turnserver.dev.conf:/etc/coturn/turnserver.conf:ro

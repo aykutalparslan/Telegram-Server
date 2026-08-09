@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ferrite.Services\Ferrite.Services.csproj" />
+    <ProjectReference Include="..\Ferrite.Utils\Ferrite.Utils.csproj" />
+  </ItemGroup>
+
+
+</Project>

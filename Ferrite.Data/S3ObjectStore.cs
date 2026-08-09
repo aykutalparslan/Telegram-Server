@@ -1,33 +1,18 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using Amazon;
 using Amazon.S3;
 using Amazon.S3.Model;
+using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Data;
 
-public class S3ObjectStore : IObjectStore
+public sealed class S3ObjectStore : IObjectStore, IDisposable
 {
     private readonly AmazonS3Client _s3Client;
     private const string SmallFileBucketName = "ferrite-small-files";
     private const string BigFileBucketName = "ferrite-big-files";
-    private bool _bucketsInitialized = false;
     private readonly Task _createBuckets;
     public S3ObjectStore(string serviceUrl, string accessKey, string secretKey)
     {
@@ -49,47 +34,47 @@ public class S3ObjectStore : IObjectStore
     private async Task CreateBuckets()
     {
         var buckets = await _s3Client.ListBucketsAsync();
-        if (!buckets.Buckets.Select(_ => _.BucketName == SmallFileBucketName).Any())
+        if (!(buckets.Buckets ?? []).Any(bucket =>
+                bucket.BucketName == SmallFileBucketName))
         {
             PutBucketRequest request = new PutBucketRequest();
             request.BucketName = SmallFileBucketName;
             var res = await _s3Client.PutBucketAsync(request);
         }
-        if (!buckets.Buckets.Select(_ => _.BucketName == BigFileBucketName).Any())
+        if (!(buckets.Buckets ?? []).Any(bucket =>
+                bucket.BucketName == BigFileBucketName))
         {
             PutBucketRequest request = new PutBucketRequest();
             request.BucketName = BigFileBucketName;
             var res = await _s3Client.PutBucketAsync(request);
         }
-
-        _bucketsInitialized = true;
     }
 
     public async ValueTask<bool> SaveFilePart(long fileId, int filePart, Stream data)
     {
-        if (!_bucketsInitialized)
+        await _createBuckets;
+        PutObjectRequest putObjectRequest = new PutObjectRequest
         {
-            await _createBuckets;
-        }
-        PutObjectRequest putObjectRequest = new PutObjectRequest();
-        putObjectRequest.InputStream = data;
-        putObjectRequest.Key = fileId.ToString("X")+"-"+filePart.ToString("X");
-        putObjectRequest.BucketName = SmallFileBucketName;
-        var putObjectResponse = await _s3Client.PutObjectAsync(putObjectRequest);
+            InputStream = data,
+            AutoCloseStream = false,
+            Key = fileId.ToString("X") + "-" + filePart.ToString("X"),
+            BucketName = SmallFileBucketName
+        };
+        await _s3Client.PutObjectAsync(putObjectRequest);
         return true;
     }
 
     public async ValueTask<bool> SaveBigFilePart(long fileId, int filePart, int fileTotalParts, Stream data)
     {
-        if (!_bucketsInitialized)
+        await _createBuckets;
+        PutObjectRequest putObjectRequest = new PutObjectRequest
         {
-            await _createBuckets;
-        }
-        PutObjectRequest putObjectRequest = new PutObjectRequest();
-        putObjectRequest.InputStream = data;
-        putObjectRequest.Key = fileId.ToString("X")+"-"+filePart.ToString("X");
-        putObjectRequest.BucketName = BigFileBucketName;
-        var putObjectResponse = await _s3Client.PutObjectAsync(putObjectRequest);
+            InputStream = data,
+            AutoCloseStream = false,
+            Key = fileId.ToString("X") + "-" + filePart.ToString("X"),
+            BucketName = BigFileBucketName
+        };
+        await _s3Client.PutObjectAsync(putObjectRequest);
         return true;
     }
 
@@ -113,9 +98,11 @@ public class S3ObjectStore : IObjectStore
         return getObjectResponse.ResponseStream;
     }
 
-    public IFileOwner GetFileOwner(UploadedFileInfoDTO fileInfo, int offset, int limit, 
+    public IFileOwner GetFileOwner(TLUploadedFileInfo fileInfo, long offset, int limit,
         long reqMsgId, byte[] headerBytes)
     {
         return new S3FileOwner(fileInfo, this, offset, limit, reqMsgId, headerBytes);
     }
+
+    public void Dispose() => _s3Client.Dispose();
 }

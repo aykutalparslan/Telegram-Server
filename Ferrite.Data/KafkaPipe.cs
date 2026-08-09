@@ -1,20 +1,6 @@
-﻿//
-//  Project Ferrite is an Implementation of the Telegram Server API
-//  Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-//
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU Affero General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU Affero General Public License for more details.
-//
-//  You should have received a copy of the GNU Affero General Public License
-//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
+
 using System;
 using System.Net;
 using System.Threading.Channels;
@@ -23,16 +9,16 @@ using Confluent.Kafka.Admin;
 
 namespace Ferrite.Data;
 
-public class KafkaPipe : IMessagePipe
+public sealed class KafkaPipe : IMessagePipe, IAsyncDisposable
 {
-    private readonly IProducer<Null,byte[]> _producer;
-    private readonly IConsumer<Ignore,byte[]> _consumer;
+    private readonly IProducer<Null, byte[]> _producer;
     private readonly IAdminClient _adminClient;
-    private string _channel;
-    private bool _unsubscribed = true;
-    private Task? consumeTask;
-    private readonly CancellationTokenSource _consumeCts = new CancellationTokenSource();
+    private IConsumer<Ignore, byte[]>? _consumer;
+    private string? _channel;
+    private Task? _consumeTask;
+    private readonly CancellationTokenSource _consumeCts = new();
     private readonly Channel<byte[]> _consumed = Channel.CreateUnbounded<byte[]>();
+
     public KafkaPipe(string config)
     {
         var producerConfig = new ProducerConfig
@@ -41,15 +27,11 @@ public class KafkaPipe : IMessagePipe
             ClientId = Dns.GetHostName()
         };
         _producer = new ProducerBuilder<Null, byte[]>(producerConfig).Build();
-        var consumerConfig = new ConsumerConfig
-        {
-            BootstrapServers = config,
-            GroupId = "ferrite",
-            AutoOffsetReset = AutoOffsetReset.Earliest
-        };
-        _consumer = new ConsumerBuilder<Ignore, byte[]>(consumerConfig).Build();
         _adminClient = new AdminClientBuilder(new AdminClientConfig { BootstrapServers = config }).Build();
+        Configuration = config;
     }
+
+    private string Configuration { get; }
 
     public async ValueTask<byte[]> ReadMessageAsync(CancellationToken cancellationToken = default)
     {
@@ -58,49 +40,117 @@ public class KafkaPipe : IMessagePipe
 
     public async ValueTask<bool> SubscribeAsync(string channel)
     {
-        if(_consumer == null)
+        if (_channel != null)
         {
-            throw new ObjectDisposedException("IConsumer");
+            throw new InvalidOperationException("The pipe is already subscribed.");
         }
         await CreateChannelAsync(channel);
-        _channel = channel;
-        _unsubscribed = false;
-        consumeTask = Task.Run(() =>
+        var ready = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var consumerConfig = new ConsumerConfig
         {
-            using (_consumer)
+            BootstrapServers = Configuration,
+            // The topic is already unique per Ferrite node. A stable group per
+            // topic resumes that node's offset after restart without replaying
+            // its entire durable history. Different node topics/groups still
+            // receive their own copy of every targeted update.
+            GroupId = $"ferrite-node-{channel}",
+            AutoOffsetReset = AutoOffsetReset.Latest,
+        };
+        _consumer = new ConsumerBuilder<Ignore, byte[]>(consumerConfig)
+            .SetPartitionsAssignedHandler((consumer, partitions) =>
             {
-                _consumer.Subscribe(_channel);
-                while (!_unsubscribed)
-                {
-                    var consumeResult = _consumer.Consume(_consumeCts.Token);
-                    _consumed.Writer.TryWrite(consumeResult.Message.Value);
-                }
-                _consumer.Close();
-            }
-        });
+                List<TopicPartitionOffset> committed = consumer.Committed(
+                    partitions, TimeSpan.FromSeconds(10));
+                return committed.Select(offset => offset.Offset == Offset.Unset
+                    ? new TopicPartitionOffset(offset.TopicPartition, Offset.End)
+                    : offset);
+            })
+            .Build();
+        _channel = channel;
+        _consumeTask = Task.Factory.StartNew(() => Consume(channel, ready),
+            CancellationToken.None, TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
+        await ready.Task.WaitAsync(TimeSpan.FromSeconds(30));
         return true;
+    }
+
+    private void Consume(string channel, TaskCompletionSource ready)
+    {
+        IConsumer<Ignore, byte[]> consumer = _consumer ??
+            throw new InvalidOperationException("Kafka consumer was not initialized");
+        try
+        {
+            consumer.Subscribe(channel);
+            while (!_consumeCts.IsCancellationRequested)
+            {
+                try
+                {
+                    ConsumeResult<Ignore, byte[]>? consumeResult = consumer.Consume(
+                        TimeSpan.FromMilliseconds(100));
+                    if (consumer.Assignment.Count > 0)
+                    {
+                        ready.TrySetResult();
+                    }
+                    if (consumeResult != null)
+                    {
+                        _consumed.Writer.TryWrite(consumeResult.Message.Value);
+                    }
+                }
+                catch (ConsumeException ex) when (ex.Error.Code is
+                           ErrorCode.UnknownTopicOrPart or
+                           ErrorCode.LeaderNotAvailable)
+                {
+                    Thread.Sleep(100);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (_consumeCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            ready.TrySetException(ex);
+            _consumed.Writer.TryComplete(ex);
+        }
+        finally
+        {
+            consumer.Close();
+            ready.TrySetCanceled();
+            _consumed.Writer.TryComplete();
+        }
     }
 
     private async ValueTask<bool> CreateChannelAsync(string channel)
     {
         try
         {
-            await _adminClient.CreateTopicsAsync(new TopicSpecification[] {
-                    new TopicSpecification { Name = channel, ReplicationFactor = 1, NumPartitions = 1 } });
+            await _adminClient.CreateTopicsAsync([
+                new TopicSpecification
+                {
+                    Name = channel,
+                    ReplicationFactor = 1,
+                    NumPartitions = 1,
+                }
+            ]);
         }
-        catch (CreateTopicsException e)
+        catch (CreateTopicsException e) when (e.Results.All(result =>
+                   result.Error.Code == ErrorCode.TopicAlreadyExists))
         {
-            Console.WriteLine($"An error occured creating channel {e.Results[0].Topic}: {e.Results[0].Error.Reason}");
         }
         return true;
     }
 
     public async ValueTask<bool> UnSubscribeAsync()
     {
-        if (!_unsubscribed)
+        if (_channel != null)
         {
-            _unsubscribed = true;
             _consumeCts.Cancel();
+            if (_consumeTask != null)
+            {
+                await _consumeTask;
+            }
+            _channel = null;
         }
         return true;
     }
@@ -110,5 +160,14 @@ public class KafkaPipe : IMessagePipe
         await _producer.ProduceAsync(channel, new Message<Null, byte[]> { Value = message });
         return true;
     }
-}
 
+    public async ValueTask DisposeAsync()
+    {
+        await UnSubscribeAsync();
+        _producer.Flush(TimeSpan.FromSeconds(5));
+        _producer.Dispose();
+        _consumer?.Dispose();
+        _adminClient.Dispose();
+        _consumeCts.Dispose();
+    }
+}

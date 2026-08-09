@@ -1,57 +1,67 @@
-﻿//
-//  Project Ferrite is an Implementation Telegram Server API
-//  Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-//
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU Affero General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU Affero General Public License for more details.
-//
-//  You should have received a copy of the GNU Affero General Public License
-//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
 using Ferrite.Crypto;
 using Ferrite.Data;
 using Ferrite.Data.Repositories;
-using Ferrite.Services.Gateway;
-using Ferrite.TL.slim;
-using Ferrite.TL.slim.baseLayer;
-using Ferrite.TL.slim.baseLayer.auth;
-using Ferrite.TL.slim.baseLayer.dto;
-using Ferrite.TL.slim.mtproto;
+using Ferrite.TL;
+using Ferrite.TL.baseLayer;
+using Ferrite.TL.baseLayer.auth;
+using Ferrite.TL.baseLayer.dto;
+using Ferrite.TL.mtproto;
 using Ferrite.Utils;
-using xxHash;
-using TLAuthorization = Ferrite.TL.slim.baseLayer.auth.TLAuthorization;
+using TLAuthorization = Ferrite.TL.baseLayer.auth.TLAuthorization;
 
 namespace Ferrite.Services;
 
 public class AuthService : IAuthService
 {
-    private readonly IRandomGenerator _random;
-    private readonly ISearchEngine _search;
-    private readonly IAtomicCounter _userIdCnt;
-    private readonly IUnitOfWork _unitOfWork;
-    private readonly IVerificationGateway _verificationGateway;
-    private readonly ILogger _log;
-    private const int PhoneCodeTimeout = 60;//seconds
+    private readonly IAccountPasswordRepository _accountPasswordRepository;
+
+    private readonly IAppInfoRepository _appInfoRepository;
+    private readonly IAuthKeyRepository _authKeyRepository;
+    private readonly IAuthorizationRepository _authorizationRepository;
+    private readonly IBoundAuthKeyRepository _boundAuthKeyRepository;
+    private readonly ILoginAttemptRepository _loginAttemptRepository;
+    private readonly IUserRepository _userRepository;
+
+    protected readonly IRandomGenerator _random;
+    protected readonly ISearchEngine _search;
+    protected readonly IAtomicCounter _userIdCnt;
+    protected readonly IUnitOfWork _unitOfWork;
+    protected readonly IVerificationCodeService _verificationCodes;
+    protected readonly IAuthorizationCompletion _authorizationCompletion;
+    protected readonly ILoginTokenService _loginTokens;
+    protected readonly TimeProvider _timeProvider;
+    protected readonly ILogger _log;
+    private static readonly TimeSpan LoginAttemptTtl = TimeSpan.FromMinutes(5);
 
     public AuthService(IRandomGenerator random, ISearchEngine search,
-        IUnitOfWork unitOfWork, ICounterFactory counterFactory,
-        IVerificationGateway verificationGateway,
+        IUnitOfWork unitOfWork, IAccountPasswordRepository accountPasswordRepository, IAppInfoRepository appInfoRepository, IAuthKeyRepository authKeyRepository, IAuthorizationRepository authorizationRepository, IBoundAuthKeyRepository boundAuthKeyRepository, ILoginAttemptRepository loginAttemptRepository, IUserRepository userRepository, ICounterFactory counterFactory,
+        IVerificationCodeService verificationCodes,
+        IAuthorizationCompletion authorizationCompletion,
+        ILoginTokenService loginTokens,
+        TimeProvider timeProvider,
         ILogger log)
     {
+        _accountPasswordRepository = accountPasswordRepository;
+
+        _appInfoRepository = appInfoRepository;
+        _authKeyRepository = authKeyRepository;
+        _authorizationRepository = authorizationRepository;
+        _boundAuthKeyRepository = boundAuthKeyRepository;
+        _loginAttemptRepository = loginAttemptRepository;
+        _userRepository = userRepository;
+
         _random = random;
         _search = search;
         _userIdCnt = counterFactory.GetCounter("counter_user_id");
         _unitOfWork = unitOfWork;
-        _verificationGateway = verificationGateway;
+        _verificationCodes = verificationCodes;
+        _authorizationCompletion = authorizationCompletion;
+        _loginTokens = loginTokens;
+        _timeProvider = timeProvider;
         _log = log;
     }
 
@@ -64,25 +74,25 @@ public class AuthService : IAuthService
                 "ENCRYPTED_MESSAGE_INVALID"u8);
         }
 
-        if (await _unitOfWork.BoundAuthKeyRepository.GetBoundAuthKeyAsync(bindParameters.Value.TempAuthKeyId) != null)
+        if (await _boundAuthKeyRepository.GetBoundAuthKeyAsync(bindParameters.Value.TempAuthKeyId) != null)
         {
             return (TLBool)RpcErrorGenerator.GenerateError(400, 
                 "TEMP_AUTH_KEY_ALREADY_BOUND"u8);
         }
         
-        _unitOfWork.BoundAuthKeyRepository.PutBoundAuthKey(bindParameters.Value.TempAuthKeyId, 
+        _boundAuthKeyRepository.PutBoundAuthKey(bindParameters.Value.TempAuthKeyId,
             bindParameters.Value.PermAuthKeyId, 
             new TimeSpan(0, 0, bindParameters.Value.ExpiresAt));
         var result = await _unitOfWork.SaveAsync();
         return result ? new BoolTrue() : new BoolFalse();
     }
 
-    private readonly record struct BindTempAuthKeyParameters(long TempAuthKeyId, long PermAuthKeyId, int ExpiresAt);
+    protected readonly record struct BindTempAuthKeyParameters(long TempAuthKeyId, long PermAuthKeyId, int ExpiresAt);
 
-    private BindTempAuthKeyParameters? GetBindTempAuthKeyParameters(long sessionId, TLBytes q)
+    protected BindTempAuthKeyParameters? GetBindTempAuthKeyParameters(long sessionId, TLBytes q)
     {
         using var bindRequest = new BindTempAuthKey(q.AsSpan());
-        var authKey = _unitOfWork.AuthKeyRepository.GetAuthKey(bindRequest.PermAuthKeyId);
+        var authKey = _authKeyRepository.GetAuthKey(bindRequest.PermAuthKeyId);
         if (authKey == null) return null;
         Span<byte> encrypted = stackalloc byte[bindRequest.EncryptedMessage.Length];
         bindRequest.EncryptedMessage.CopyTo(encrypted);
@@ -94,7 +104,7 @@ public class AuthService : IAuthService
             bindRequest.ExpiresAt);
     }
     
-    private BindAuthKeyInner DecryptBindingMessage(Span<byte> authKey, Span<byte> encrypted)
+    protected BindAuthKeyInner DecryptBindingMessage(Span<byte> authKey, Span<byte> encrypted)
     {
         Span<byte> messageKey = encrypted.Slice(8, 16);
         AesIgeV1 aesIge = new AesIgeV1(authKey, messageKey);
@@ -102,103 +112,17 @@ public class AuthService : IAuthService
         return new BindAuthKeyInner(encrypted[(24 + 32)..]);
     }
 
-    public async ValueTask<TLBool> CancelCode(TLBytes q)
-    {
-        var (phoneNumber, phoneCodeHash) = GetCancelCodeParameters(q);
-        var result = _unitOfWork.PhoneCodeRepository.DeletePhoneCode(phoneNumber, phoneCodeHash);
-        result = result && await _unitOfWork.SaveAsync();
-        return result ? new BoolTrue() : new BoolFalse();
-    }
-    
-    private static CancelCodeParameters GetCancelCodeParameters(TLBytes q)
-    {
-        var cancelCode = new CancelCode(q.AsSpan());
-        var phoneNumber = Encoding.UTF8.GetString(cancelCode.PhoneNumber);
-        var phoneCodeHash = Encoding.UTF8.GetString(cancelCode.PhoneCodeHash);
-        return new CancelCodeParameters(phoneNumber, phoneCodeHash);
-    }
-
-    private readonly record struct CancelCodeParameters(string PhoneNumber, string PhoneCodeHash);
-
-    public async ValueTask<TLBool> DropTempAuthKeys(long authKeyId, ICollection<long> exceptAuthKeys)
-    {
-        var tempKeys = _unitOfWork.BoundAuthKeyRepository.GetTempAuthKeys(authKeyId);
-        foreach (var key in tempKeys)
-        {
-            if (!exceptAuthKeys.Contains(key))
-            {
-                _unitOfWork.TempAuthKeyRepository.DeleteTempAuthKey(key);
-            }
-        }
-
-        var result = await _unitOfWork.SaveAsync();
-        return result ? new BoolTrue() : new BoolFalse();
-    }
-
-    public async ValueTask<TLExportedAuthorization> ExportAuthorization(long authKeyId, int currentDc, TLBytes q)
-    {
-        var auth = await _unitOfWork.AuthorizationRepository.GetAuthorizationAsync(authKeyId);
-        if (auth == null)
-        {
-            return (TLExportedAuthorization)RpcErrorGenerator.GenerateError(400, 
-                "AUTH_KEY_UNREGISTERED"u8);
-        }
-        var data = _random.GetRandomBytes(128);
-        var dcId = new ExportAuthorization(q.AsSpan()).DcId;
-        using TLExportedAuthInfo exported = ExportedAuthInfo.Builder()
-            .Data(data)
-            .UserId(auth.Value.AsAuthInfo().UserId)
-            .Phone(auth.Value.AsAuthInfo().Phone)
-            .AuthKeyId(auth.Value.AsAuthInfo().AuthKeyId)
-            .NextDcId(dcId)
-            .PreviousDcId(currentDc)
-            .Build();
-        _unitOfWork.AuthorizationRepository.PutExportedAuthorization(exported);
-        await _unitOfWork.SaveAsync();
-        return ExportedAuthorization
-            .Builder()
-            .Id(auth.Value.AsAuthInfo().UserId)
-            .Bytes(data).Build();
-    }
-
     public async ValueTask<TLLoginToken> ExportLoginToken(long authKeyId, long sessionId, TLBytes q)
     {
-        var auth = await _unitOfWork.AuthorizationRepository.GetAuthorizationAsync(authKeyId);
-        if (auth != null && auth.Value.AsAuthInfo().LoggedIn)
-        {
-            using var user = _unitOfWork.UserRepository.GetUser(auth.Value.AsAuthInfo().UserId);
-            if (user != null)
-            {
-                using var authorization = GenerateAuthorization(user.Value);
-                return LoginTokenSuccess
-                    .Builder()
-                    .Authorization(authorization.AsSpan())
-                    .Build();
-            }
-        }
-        var token = _random.GetRandomBytes(16);
         var tokenParameters = GetExportLoginTokenParameters(q);
-        //TODO: actually implement this
-        /*LoginViaQRDTO login = new LoginViaQRDTO()
-        {
-            Token = token,
-            AuthKeyId = authKeyId,
-            SessionId = sessionId,
-            Status = false,
-            ExceptUserIds = tokenParameters.ExceptIds
-        };
-        _unitOfWork.LoginTokenRepository.PutLoginToken(login, new TimeSpan(0, 0, 30));*/
-        await _unitOfWork.SaveAsync();
-        return LoginToken
-            .Builder()
-            .Token(token)
-            .Expires(30)
-            .Build();
+        return await _loginTokens.ExportAsync(authKeyId, sessionId,
+            tokenParameters.ApiId, tokenParameters.ApiHash,
+            tokenParameters.ExceptIds.ToArray());
     }
 
-    private readonly record struct ExportLoginTokenParameters(int ApiId, string ApiHash, ICollection<long> ExceptIds);
+    protected readonly record struct ExportLoginTokenParameters(int ApiId, string ApiHash, ICollection<long> ExceptIds);
 
-    private static ExportLoginTokenParameters GetExportLoginTokenParameters(TLBytes q)
+    protected static ExportLoginTokenParameters GetExportLoginTokenParameters(TLBytes q)
     {
         var exportRequest = new ExportLoginToken(q.AsSpan());
         var apiHash = Encoding.UTF8.GetString(exportRequest.ApiHash);
@@ -210,36 +134,6 @@ public class AuthService : IAuthService
         return new ExportLoginTokenParameters(exportRequest.ApiId, apiHash, ids);
     }
     
-    public async ValueTask<TLAuthorization> ImportAuthorization(long authKeyId, TLBytes q)
-    {
-        var auth = await _unitOfWork.AuthorizationRepository.GetAuthorizationAsync(authKeyId);
-        var importParameters = GetImportAuthorizationParameters(q);
-        var exported = await _unitOfWork.AuthorizationRepository
-            .GetExportedAuthorizationAsync(importParameters.UserId, importParameters.Bytes);
-        
-        if (auth != null && exported != null &&
-            auth.Value.AsAuthInfo().Phone.SequenceEqual(exported.Value.AsExportedAuthInfo().Phone) && 
-            importParameters.Bytes.AsSpan().SequenceEqual(exported.Value.AsExportedAuthInfo().Data))
-        {
-            var user = _unitOfWork.UserRepository.GetUser(auth.Value.AsAuthInfo().UserId);
-            if(user == null)
-            {
-                return (TLAuthorization)RpcErrorGenerator.GenerateError(400, "USER_ID_INVALID"u8);
-            }
-
-            return GenerateAuthorization(user.Value);
-        }
-        return (TLAuthorization)RpcErrorGenerator.GenerateError(400, "AUTH_BYTES_INVALID"u8);
-    }
-
-    private readonly record struct ImportAuthorizationParameters(long UserId, byte[] Bytes);
-
-    private static ImportAuthorizationParameters GetImportAuthorizationParameters(TLBytes q)
-    {
-        var importAuthorization = new ImportAuthorization(q.AsSpan());
-        return new ImportAuthorizationParameters(importAuthorization.Id, importAuthorization.Bytes.ToArray());
-    }
-    
     public async ValueTask<bool> IsAuthorized(long authKeyId)
     {
         if (authKeyId == 0)
@@ -247,124 +141,15 @@ public class AuthService : IAuthService
             return false;
         }
 
-        var authKeyDetails = await _unitOfWork.AuthorizationRepository.GetAuthorizationAsync(authKeyId);
+        var authKeyDetails = await _authorizationRepository.GetAuthorizationAsync(authKeyId);
         if (authKeyDetails != null) return authKeyDetails.Value.AsAuthInfo().LoggedIn;
-        var permAuthKey = await _unitOfWork.BoundAuthKeyRepository.GetBoundAuthKeyAsync(authKeyId);
+        var permAuthKey = await _boundAuthKeyRepository.GetBoundAuthKeyAsync(authKeyId);
         if (permAuthKey != null)
         {
-            authKeyDetails = await _unitOfWork.AuthorizationRepository.GetAuthorizationAsync((long)permAuthKey);
+            authKeyDetails = await _authorizationRepository.GetAuthorizationAsync((long)permAuthKey);
         }
 
         return authKeyDetails != null && authKeyDetails.Value.AsAuthInfo().LoggedIn;
-    }
-
-    public async ValueTask<TLLoggedOut> LogOut(long authKeyId)
-    {
-        var futureAuthToken = _random.GetRandomBytes(32);
-        var info = await _unitOfWork.AuthorizationRepository.GetAuthorizationAsync(authKeyId);
-        if(info == null)
-        {
-            return LoggedOut
-                .Builder()
-                .Build();
-        }
-
-        _unitOfWork.AuthorizationRepository.DeleteAuthorization(info.Value.AsAuthInfo().AuthKeyId);
-        _log.Debug($"Log Out for authKey with Id: {authKeyId}");
-        await _unitOfWork.SaveAsync();
-        return LoggedOut
-            .Builder()
-            .FutureAuthToken(futureAuthToken)
-            .Build();
-    }
-    
-    public async ValueTask<TLSentCode> ResendCode(TLBytes q)
-    {
-        var (phoneNumber, phoneCodeHash) = GetResendCodeParameters(q);
-    
-        var phoneCode = _unitOfWork.PhoneCodeRepository.GetPhoneCode(phoneNumber, phoneCodeHash);
-        if (phoneCode != null)
-        {
-            _unitOfWork.PhoneCodeRepository.PutPhoneCode(phoneNumber, phoneCodeHash, phoneCode,
-                new TimeSpan(0, 0, PhoneCodeTimeout * 2));
-            await _unitOfWork.SaveAsync();
-            await _verificationGateway.Resend(phoneNumber, phoneCode);
-
-            return GenerateSentCode(Encoding.UTF8.GetBytes(phoneCodeHash));
-        }
-
-        return (TLSentCode)RpcErrorGenerator.GenerateError(400, "PHONE_CODE_EXPIRED"u8);
-    }
-    
-    private static ResendCodeParameters GetResendCodeParameters(TLBytes q)
-    {
-        var sendCode = new ResendCode(q.AsSpan());
-        var phoneNumber = Encoding.UTF8.GetString(sendCode.PhoneNumber);
-        var phoneCodeHash = Encoding.UTF8.GetString(sendCode.PhoneCodeHash);
-        return new ResendCodeParameters(phoneNumber, phoneCodeHash);
-    }
-    
-    private readonly record struct ResendCodeParameters(string PhoneNumber, string PhoneCodeHash);
-
-    public async ValueTask<TLBool> ResetAuthorizations(long authKeyId)
-    {
-        var currentAuth = await _unitOfWork.AuthorizationRepository.GetAuthorizationAsync(authKeyId);
-        if (currentAuth != null)
-        {
-            var authorizations = await _unitOfWork
-                .AuthorizationRepository.GetAuthorizationsAsync(
-                    Encoding.UTF8.GetString(currentAuth.Value.AsAuthInfo().Phone));
-            foreach (var auth in authorizations)
-            {
-                if(auth.AsAuthInfo().AuthKeyId != authKeyId)
-                {
-                    _unitOfWork.AuthorizationRepository.DeleteAuthorization(authKeyId);
-                }
-            }
-
-            await _unitOfWork.SaveAsync();
-            return new BoolTrue();
-        }
-
-        return new BoolFalse();
-    }
-
-    public async ValueTask<TLSentCode> SendCode(TLBytes q)
-    {
-        var (phoneNumber, apiId, apiHash) = GetSendCodeParameters(q);
-        var code = await _verificationGateway.SendSms(phoneNumber);
-        var hash = GeneratePhoneCodeHash(code);
-        
-        _unitOfWork.PhoneCodeRepository.PutPhoneCode(phoneNumber, hash, code,
-            new TimeSpan(0, 0, PhoneCodeTimeout*2));
-        await _unitOfWork.SaveAsync();
-        return GenerateSentCode(Encoding.UTF8.GetBytes(hash));
-    }
-
-    private string GeneratePhoneCodeHash(string code)
-    {
-        var codeBytes = Encoding.UTF8.GetBytes(code);
-        return codeBytes.GetXxHash64(1071).ToString("x");
-    }
-
-    private static SendCodeParameters GetSendCodeParameters(TLBytes q)
-    {
-        var sendCode = new SendCode(q.AsSpan());
-        var phoneNumber = Encoding.UTF8.GetString(sendCode.PhoneNumber);
-        var apiHash = Encoding.UTF8.GetString(sendCode.ApiHash);
-        return new SendCodeParameters(phoneNumber, sendCode.ApiId, apiHash);
-    }
-    
-    private readonly record struct SendCodeParameters(string PhoneNumber, int ApiId, string PhoneCodeHash);
-    
-    private static TLSentCode GenerateSentCode(ReadOnlySpan<byte> phoneCodeHash)
-    {
-        using var codeType = new SentCodeTypeSms(5);
-        return SentCode.Builder()
-            .Type(codeType.ToReadOnlySpan())
-            .Timeout(PhoneCodeTimeout)
-            .PhoneCodeHash(phoneCodeHash)
-            .Build();
     }
 
     public async ValueTask<TLAuthorization> SignIn(long authKeyId, TLBytes q)
@@ -372,103 +157,168 @@ public class AuthService : IAuthService
         var signInParameters = GetSignInParameters(q);
         var (phoneNumber, phoneCodeHash, phoneCode) = signInParameters;
         _log.Debug($"*** Sign In for authKey with Id: {authKeyId} ***");
-        var code = _unitOfWork.PhoneCodeRepository.GetPhoneCode(phoneNumber, phoneCodeHash);
-        if (code != phoneCode)
+        if (phoneCode == null)
+        {
+            return (TLAuthorization)RpcErrorGenerator.GenerateError(400,
+                "EMAIL_VERIFY_INVALID"u8);
+        }
+
+        VerifiedChallenge? verified = await _verificationCodes.VerifyAsync(
+            VerificationPurpose.LoginPhone, authKeyId, 0, phoneCodeHash,
+            phoneCode);
+        if (verified is not { } challenge ||
+            !StringComparer.Ordinal.Equals(challenge.Destination, phoneNumber))
         {
             return (TLAuthorization)RpcErrorGenerator.GenerateError(400, "PHONE_CODE_INVALID"u8);
         }
-        _unitOfWork.SignInRepository.PutSignIn(authKeyId, phoneNumber, phoneCodeHash);
-        await _unitOfWork.SaveAsync();
-        var userId = _unitOfWork.UserRepository.GetUserId(phoneNumber);
+
+        int apiLayer = -1;
+        TLAuthInfo? existing = await _authorizationCompletion.ResolveAsync(
+            authKeyId);
+        using (existing)
+        {
+            if (existing is { } authorization)
+            {
+                apiLayer = authorization.AsAuthInfo().ApiLayer;
+            }
+        }
+
+        int now = UnixNow();
+        int expiresAt = checked(now + (int)LoginAttemptTtl.TotalSeconds);
+        var userId = _userRepository.GetUserId(phoneNumber);
+        using TLLoginAttempt attempt = BuildLoginAttempt(authKeyId,
+            phoneNumber, phoneCodeHash, apiLayer, now, expiresAt, userId);
+        await _loginAttemptRepository.PutAttemptAsync(attempt,
+            LoginAttemptTtl);
         if(userId == null)
         {
             return AuthorizationSignUpRequired.Builder().Build();
         }
-        using var user = _unitOfWork.UserRepository.GetUser(userId.Value);
-        if(user == null)
+
+        if (!await _authorizationCompletion.CreateOrUpdatePendingAsync(
+                authKeyId, userId.Value, phoneNumber, apiLayer))
         {
-            return AuthorizationSignUpRequired.Builder().Build();
+            return (TLAuthorization)RpcErrorGenerator.GenerateError(500,
+                "INTERNAL"u8);
         }
 
-        using var userNew = SetUserAttributes(user.Value);
-        var authKeyDetails = await _unitOfWork.AuthorizationRepository.GetAuthorizationAsync(authKeyId);
-        var apiLayer = authKeyDetails != null ? authKeyDetails.Value.AsAuthInfo().ApiLayer : -1;
-        using TLAuthInfo info = AuthInfo.Builder()
-            .AuthKeyId(authKeyId)
-            .Phone(Encoding.UTF8.GetBytes(phoneNumber))
-            .UserId(userId.Value)
-            .ApiLayer(apiLayer)
-            .LoggedIn(true)
-            .Build();
-        _unitOfWork.AuthorizationRepository.PutAuthorization(info);
-        await _unitOfWork.SaveAsync();
-        return GenerateAuthorization(userNew);
-    }
-
-    private TLUser SetUserAttributes(TLUser user)
-    {
-        using (user)
+        TLAccountPasswordState? password = await _accountPasswordRepository.GetPasswordStateAsync(userId.Value);
+        using (password)
         {
-            var u = user.AsUser();
-            var userModified = u.Clone()
-                .Self(true).Build();
-            return userModified;
+            if (password is { } state &&
+                state.AsAccountPasswordState().HasPassword)
+            {
+                return (TLAuthorization)RpcErrorGenerator.GenerateError(401,
+                    "SESSION_PASSWORD_NEEDED"u8);
+            }
         }
+
+        TLAuthorization? completed = await _authorizationCompletion
+            .CompleteAsync(authKeyId);
+        return completed ?? (TLAuthorization)RpcErrorGenerator.GenerateError(
+            500, "INTERNAL"u8);
     }
 
-    private static SignInParameters GetSignInParameters(TLBytes q)
+    protected static SignInParameters GetSignInParameters(TLBytes q)
     {
         var signIn = new SignIn(q.AsSpan());
         var phoneNumber = Encoding.UTF8.GetString(signIn.PhoneNumber);
         var phoneCodeHash = Encoding.UTF8.GetString(signIn.PhoneCodeHash);
-        var phoneCode = Encoding.UTF8.GetString(signIn.PhoneCode);
+        string? phoneCode = signIn.Flags[0]
+            ? Encoding.UTF8.GetString(signIn.PhoneCode)
+            : null;
         return new SignInParameters(phoneNumber, phoneCodeHash, phoneCode);
     }
 
-    private readonly record struct SignInParameters(string PhoneNumber, string PhoneCodeHash, string PhoneCode);
+    protected readonly record struct SignInParameters(string PhoneNumber,
+        string PhoneCodeHash, string? PhoneCode);
 
     public async ValueTask<TLAuthorization> SignUp(long authKeyId, TLBytes q)
     {
         _log.Debug($"*** Sign Up for authKey with Id: {authKeyId} ***");
-        long userId = await _userIdCnt.IncrementAndGet();
         var signUpParameters = GetSignUpParameters(q);
+        TLLoginAttempt? found = await _loginAttemptRepository
+            .GetByAuthKeyAsync(authKeyId);
+        if (found is not { } pending)
+        {
+            return (TLAuthorization)RpcErrorGenerator.GenerateError(400,
+                "PHONE_CODE_INVALID"u8);
+        }
+
+        bool matches;
+        using (pending)
+        {
+            var view = pending.AsLoginAttempt();
+            matches = view.AuthKeyId == authKeyId &&
+                      view.ExpiresAt > UnixNow() &&
+                      view.Phone.SequenceEqual(Encoding.UTF8.GetBytes(
+                          signUpParameters.PhoneNumber)) &&
+                      view.PhoneCodeHash.SequenceEqual(Encoding.UTF8.GetBytes(
+                          signUpParameters.PhoneCodeHash));
+        }
+        if (!matches)
+        {
+            return (TLAuthorization)RpcErrorGenerator.GenerateError(400,
+                "PHONE_CODE_INVALID"u8);
+        }
+
+        TLLoginAttempt? consumed = await _loginAttemptRepository
+            .ConsumeByAuthKeyAsync(authKeyId);
+        if (consumed is not { } attempt)
+        {
+            return (TLAuthorization)RpcErrorGenerator.GenerateError(400,
+                "PHONE_CODE_INVALID"u8);
+        }
+
+        int apiLayer;
+        using (attempt)
+        {
+            var view = attempt.AsLoginAttempt();
+            if (view.ExpiresAt <= UnixNow())
+            {
+                return (TLAuthorization)RpcErrorGenerator.GenerateError(400,
+                    "PHONE_CODE_EXPIRED"u8);
+            }
+            if (view.AuthKeyId != authKeyId ||
+                !view.Phone.SequenceEqual(Encoding.UTF8.GetBytes(
+                    signUpParameters.PhoneNumber)) ||
+                !view.PhoneCodeHash.SequenceEqual(Encoding.UTF8.GetBytes(
+                    signUpParameters.PhoneCodeHash)))
+            {
+                return (TLAuthorization)RpcErrorGenerator.GenerateError(400,
+                    "PHONE_CODE_INVALID"u8);
+            }
+            if (view.Flags[0])
+            {
+                return (TLAuthorization)RpcErrorGenerator.GenerateError(400,
+                    "PHONE_NUMBER_OCCUPIED"u8);
+            }
+            apiLayer = view.ApiLayer;
+        }
+
+        long userId = await _userIdCnt.IncrementAndGet();
         if(userId == 0)
         {
             userId = await _userIdCnt.IncrementAndGet();
-        }
-        var phoneCode = _unitOfWork.PhoneCodeRepository.GetPhoneCode(signUpParameters.PhoneNumber, 
-            signUpParameters.PhoneCodeHash);
-        var signedInAuthKeyId = _unitOfWork.SignInRepository.GetSignIn(signUpParameters.PhoneNumber, 
-            signUpParameters.PhoneCodeHash);
-        if(phoneCode == null || signedInAuthKeyId != authKeyId)
-        {
-            return (TLAuthorization)RpcErrorGenerator.GenerateError(400, "PHONE_CODE_INVALID"u8);
-        }
-        var hash = GeneratePhoneCodeHash(phoneCode);
-        if (signUpParameters.PhoneCodeHash != hash)
-        {
-            return (TLAuthorization)RpcErrorGenerator.GenerateError(400, "PHONE_CODE_INVALID"u8);
         }
         
         using var user = SaveUser(userId, signUpParameters.PhoneNumber, 
             signUpParameters.FirstName, signUpParameters.LastName);
         await _search.IndexUser(new Data.Search.UserSearchModel(userId, "", 
             signUpParameters.FirstName, signUpParameters.LastName, signUpParameters.PhoneNumber));
-        var authKeyDetails = await _unitOfWork.AuthorizationRepository.GetAuthorizationAsync(authKeyId);
-        var apiLayer = authKeyDetails != null ? authKeyDetails.Value.AsAuthInfo().ApiLayer : -1;
-        using TLAuthInfo info = AuthInfo.Builder()
-            .AuthKeyId(authKeyId)
-            .Phone(Encoding.UTF8.GetBytes(signUpParameters.PhoneNumber))
-            .UserId(userId)
-            .ApiLayer(apiLayer)
-            .LoggedIn(true)
-            .Build();
-        _unitOfWork.AuthorizationRepository.PutAuthorization(info);
-        await _unitOfWork.SaveAsync();
-        return GenerateAuthorization(user);
+        if (!await _authorizationCompletion.CreateOrUpdatePendingAsync(
+                authKeyId, userId, signUpParameters.PhoneNumber, apiLayer))
+        {
+            return (TLAuthorization)RpcErrorGenerator.GenerateError(500,
+                "INTERNAL"u8);
+        }
+        TLAuthorization? completed = await _authorizationCompletion
+            .CompleteAsync(authKeyId);
+        return completed ?? (TLAuthorization)RpcErrorGenerator.GenerateError(
+            500, "INTERNAL"u8);
     }
     
-    private static SignUpParameters GetSignUpParameters(TLBytes q)
+    protected static SignUpParameters GetSignUpParameters(TLBytes q)
     {
         var signUp = new SignUp(q.AsSpan());
         var phoneNumber = Encoding.UTF8.GetString(signUp.PhoneNumber);
@@ -478,20 +328,32 @@ public class AuthService : IAuthService
         return new SignUpParameters(phoneNumber, phoneCodeHash, firstName, lastName);
     }
 
-    private readonly record struct SignUpParameters(string PhoneNumber, 
+    protected readonly record struct SignUpParameters(string PhoneNumber,
         string PhoneCodeHash, string FirstName, string LastName);
 
-    private TLAuthorization GenerateAuthorization(TLBytes user)
+    private static TLLoginAttempt BuildLoginAttempt(long authKeyId,
+        string phoneNumber, string phoneCodeHash, int apiLayer, int now,
+        int expiresAt, long? userId)
     {
-        using var userModified = new User(user.AsSpan())
-            .Clone()
-            .Self(true)
-            .Build();
-        return AuthAuthorization.Builder()
-            .User(userModified.ToReadOnlySpan()).Build();
+        var builder = LoginAttempt.Builder()
+            .AuthKeyId(authKeyId)
+            .Phone(Encoding.UTF8.GetBytes(phoneNumber))
+            .PhoneCodeHash(Encoding.UTF8.GetBytes(phoneCodeHash))
+            .ApiLayer(apiLayer)
+            .VerifiedAt(now)
+            .CreatedAt(now)
+            .ExpiresAt(expiresAt);
+        if (userId is { } id)
+        {
+            builder = builder.UserId(id);
+        }
+        return builder.Build();
     }
 
-    private TLUser SaveUser(long userId ,string phoneNumber, string firstName, string lastName)
+    private int UnixNow() =>
+        checked((int)_timeProvider.GetUtcNow().ToUnixTimeSeconds());
+
+    protected TLUser SaveUser(long userId ,string phoneNumber, string firstName, string lastName)
     {
         using var photo = UserProfilePhotoEmpty.Builder().Build();
         var user = User.Builder()
@@ -502,19 +364,14 @@ public class AuthService : IAuthService
             .AccessHash(_random.NextLong())
             .Photo(photo.TLBytes!.Value.AsSpan())
             .Build();
-        _unitOfWork.UserRepository.PutUser(user);
+        _userRepository.PutUser(user);
         return user;
     }
 
     public async ValueTask<bool> SaveAppInfo(TLAppInfo info)
     {
-        _unitOfWork.AppInfoRepository.PutAppInfo(info);
+        _appInfoRepository.PutAppInfo(info);
         return await _unitOfWork.SaveAsync();
     }
 
-    public async ValueTask<TLAppInfo?> GetAppInfo(long authKeyId)
-    {
-        return _unitOfWork.AppInfoRepository.GetAppInfo(authKeyId);
-    }
 }
-

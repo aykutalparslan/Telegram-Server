@@ -1,25 +1,12 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 namespace Ferrite.Data;
 
 public class FasterUpdatesContext : IUpdatesContext
 {
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<long, int>
+        PendingPublications = new();
     private readonly long? _authKeyId;
     private readonly long _userId;
     private readonly IAtomicCounter _counter;
@@ -32,7 +19,12 @@ public class FasterUpdatesContext : IUpdatesContext
     {
         _authKeyId = authKeyId;
         _userId = userId;
-        _counter = new FasterCounter(counterContext, $"seq:updates:{userId}");
+        // Updates `seq` is per-session state: each auth key (session) numbers the
+        // update containers it receives independently. Sharing one per-user
+        // counter makes a second session of the same account start with a seq
+        // gap, forcing clients into getDifference and dropping live updates.
+        _counter = new FasterCounter(counterContext,
+            authKeyId != null ? $"seq:updates:auth:{authKeyId}" : $"seq:updates:{userId}");
         _commonMessageBox = new FasterMessageBox(counterContext, unreadContext, dialogContext, userId);
         _secondaryMessageBox = authKeyId != null ? new FasterSecretMessageBox(counterContext, (long)authKeyId) : null;
     }
@@ -76,6 +68,11 @@ public class FasterUpdatesContext : IUpdatesContext
         return await _commonMessageBox.IncrementPts();
     }
 
+    public async ValueTask<int> IncrementPts(int count)
+    {
+        return await _commonMessageBox.IncrementPts(count);
+    }
+
     public async ValueTask<int> Qts()
     {
         return _secondaryMessageBox != null ? await _secondaryMessageBox.Qts() : 0;
@@ -93,11 +90,46 @@ public class FasterUpdatesContext : IUpdatesContext
 
     public async Task<int> IncrementSeq()
     {
-        int seq = (int)await _counter.IncrementAndGet();
-        if (seq == 0)
+        return (int)await _counter.IncrementAndGet();
+    }
+
+    public ValueTask BeginPtsPublication()
+    {
+        PendingPublications.AddOrUpdate(_userId, 1, static (_, count) => count + 1);
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask CompletePtsPublication()
+    {
+        while (PendingPublications.TryGetValue(_userId, out int count))
         {
-            seq = (int)await _counter.IncrementAndGet();
+            if (count <= 1)
+            {
+                if (PendingPublications.TryRemove(
+                        new KeyValuePair<long, int>(_userId, count)))
+                {
+                    break;
+                }
+            }
+            else if (PendingPublications.TryUpdate(_userId, count - 1, count))
+            {
+                break;
+            }
         }
-        return seq;
+        return ValueTask.CompletedTask;
+    }
+
+    public async ValueTask WaitForPtsPublications()
+    {
+        while (PendingPublications.TryGetValue(_userId, out int count) && count > 0)
+        {
+            await Task.Delay(1);
+        }
+    }
+
+    public ValueTask<int> PendingPtsPublications()
+    {
+        return ValueTask.FromResult(PendingPublications.TryGetValue(_userId,
+            out int count) ? count : 0);
     }
 }

@@ -1,43 +1,25 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Buffers;
-using System.Globalization;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using DotNext.Buffers;
 using Ferrite.Crypto;
+using Ferrite.Core.Execution;
 using Ferrite.TL;
-using Ferrite.TL.slim;
-using Ferrite.TL.slim.mtproto;
+using Ferrite.TL.mtproto;
 using Ferrite.Utils;
 
 namespace Ferrite.Core.Execution.Functions;
 
+[TLFunction(Constructors.mtproto_ReqDhParams)]
 public class ReqDhParamsFunc : ITLFunction
 {
     private readonly IKeyProvider _keyProvider;
     private readonly ILogger _log;
     private readonly IRandomGenerator _random;
     private readonly int[] _gs = new int[] { 3, 4, 7 };
-    //TODO: Maybe change the DH_PRIME
-    private const string DhPrime = "C71CAEB9C6B1C9048E6C522F70F13F73980D40238E3E21C14934D037563D930F48198A0AA7C14058229493D22530F4DBFA336F6E0AC925139543AED44CCE7C3720FD51F69458705AC68CD4FE6B6B13ABDC9746512969328454F18FAF8C595F642477FE96BB2A941D5BCD1D4AC8CC49880708FA9B378E3C4F3A9060BEE67CF9A4A4A695811051907E162753B56B0F6B410DBA74D8A84B2A14B3144E0EF1284754FD17ED950D5965B4B9DD46582DB1178D169C6BC465B0D6FF9CA3928FEF5B9AE4E418FC15E83EBEA0F87FA9FF5EED70050DED2849F47BF959D956850CE929851F0D8115F635B105EE2E4E15D04B2454BF6F4FADF034B10403119CD8E3B92FCC5B";
     public ReqDhParamsFunc(IKeyProvider provider, IRandomGenerator generator, ILogger logger)
     {
         _keyProvider = provider;
@@ -46,10 +28,10 @@ public class ReqDhParamsFunc : ITLFunction
     }
     public ValueTask<TLBytes?> Process(TLBytes q, TLExecutionContext ctx)
     {
-        return new ValueTask<TLBytes?>(ProcessInternal(new TL.slim.mtproto.ReqDhParams(q.AsSpan()), ctx));
+        return new ValueTask<TLBytes?>(ProcessInternal(new TL.mtproto.ReqDhParams(q.AsSpan()), ctx));
     }
 
-    private TLBytes? ProcessInternal(TL.slim.mtproto.ReqDhParams query, TLExecutionContext ctx)
+    private TLBytes? ProcessInternal(TL.mtproto.ReqDhParams query, TLExecutionContext ctx)
     {
         var rsaKey = _keyProvider.GetKey(query.PublicKeyFingerprint);
         if (rsaKey == null)
@@ -72,11 +54,12 @@ public class ReqDhParamsFunc : ITLFunction
         if (!sha256.AsSpan().SequenceEqual(data.Span.Slice(224)))
         {
             _log.Debug("SHA256 did not match.");
-            var rpcError = new TL.slim.mtproto.RpcError(-404, ""u8);
+            var rpcError = new TL.mtproto.RpcError(-404, ""u8);
             return rpcError.TLBytes;
         }
 
-        var constructor = MemoryMarshal.Read<int>(data.Span[32..]);
+        var innerData = new TLBytes(data.Slice(32), 0, data.Length - 32);
+        var constructor = innerData.Constructor;
         
         var sessionNonce = (byte[])ctx.SessionData["nonce"];
         var sessionServerNonce = (byte[])ctx.SessionData["server_nonce"];
@@ -211,7 +194,7 @@ public class ReqDhParamsFunc : ITLFunction
     }
     private IMemoryOwner<byte> GenerateEncryptedAnswer(TLExecutionContext ctx, byte[] sessionNonce, byte[] sessionServerNonce, byte[] tmpAesKey, byte[] tmpAesIV)
     {
-        BigInteger prime = BigInteger.Parse("0"+DhPrime, NumberStyles.HexNumber);
+        BigInteger prime = new BigInteger(TelegramDhParameters.Prime, true, true);
         BigInteger min = BigInteger.Pow(new BigInteger(2), 2048 - 64);
         BigInteger max = BigInteger.Subtract(prime, min);
         BigInteger a = _random.GetRandomInteger(2, BigInteger.Subtract(prime, 2));
@@ -225,7 +208,7 @@ public class ReqDhParamsFunc : ITLFunction
         
         var innerNonce = sessionNonce;
         var innerServerNonce = sessionServerNonce;
-        var innerDhPrime = prime.ToByteArray(true,true);
+        var innerDhPrime = TelegramDhParameters.Prime;
         var innerG = (int)g;
         var innerGA = g_a.ToByteArray(true, true);
         var innerServerTime = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
@@ -242,7 +225,7 @@ public class ReqDhParamsFunc : ITLFunction
             len++;
         }
 
-        var answerWithHash = UnmanagedMemoryAllocator.Allocate<byte>(len);
+        var answerWithHash = UnmanagedMemory.Allocate<byte>(len);
         var innerSpan = serverDhInnerData.ToReadOnlySpan();
         SHA1.HashData( innerSpan, answerWithHash.Span[..20]);
         innerSpan.CopyTo(answerWithHash.Span[20..]);

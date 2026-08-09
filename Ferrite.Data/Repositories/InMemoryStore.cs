@@ -1,23 +1,7 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Threading.Channels;
-using MessagePack;
 using NonBlocking;
 
 namespace Ferrite.Data.Repositories;
@@ -29,6 +13,9 @@ public class InMemoryStore : IVolatileKVStore
     // optimize this in the future
     // TODO: Benchmark and optimize this
     private readonly ConcurrentDictionary<byte[], (byte[], long)> _dictionary = new(new ArrayEqualityComparer());
+    private readonly ConcurrentDictionary<byte[], (SortedList<long, byte[]>, long)> _lists =
+        new(new ArrayEqualityComparer());
+    private readonly object _listLock = new();
     private readonly PriorityQueue<MemcomparableKey, long> _ttlQueue = new PriorityQueue<MemcomparableKey, long>();
     private readonly Channel<MemcomparableKey> _ttlChannel = Channel.CreateUnbounded<MemcomparableKey>();
     private readonly Task? _expire;
@@ -59,10 +46,15 @@ public class InMemoryStore : IVolatileKVStore
                 _ttlQueue.TryDequeue(out currentKey, out var currentPriority);
                 if (currentPriority <= now)
                 {
-                    _dictionary.TryGetValue(currentKey.ArrayValue, out current);
-                    if (current.Item2 <= now)
+                    if (_dictionary.TryGetValue(currentKey.ArrayValue, out current) &&
+                        current.Item2 <= now)
                     {
                         _dictionary.TryRemove(currentKey.ArrayValue, out current);
+                    }
+                    if (_lists.TryGetValue(currentKey.ArrayValue, out var list) &&
+                        list.Item2 <= now)
+                    {
+                        _lists.TryRemove(currentKey.ArrayValue, out _);
                     }
                 }
                 else
@@ -97,7 +89,8 @@ public class InMemoryStore : IVolatileKVStore
         {
             primaryKey.ExpiresAt = DateTimeOffset.Now.ToUnixTimeMilliseconds() + (long)ttl.Value.TotalMilliseconds;
         }
-        _dictionary.TryAdd(primaryKey.ArrayValue, (value, primaryKey.ExpiresAt));
+        _dictionary[primaryKey.ArrayValue] = (value, primaryKey.ExpiresAt);
+        _lists.TryRemove(primaryKey.ArrayValue, out _);
         if (ttl.HasValue)
         {
             _ttlChannel.Writer.WriteAsync(primaryKey);
@@ -120,179 +113,108 @@ public class InMemoryStore : IVolatileKVStore
                 _ttlChannel.Writer.WriteAsync(primaryKey);
             }
         }
+        if (_lists.TryGetValue(primaryKey.ArrayValue, out var list))
+        {
+            _lists.TryUpdate(primaryKey.ArrayValue,
+                (list.Item1, primaryKey.ExpiresAt), list);
+            if (ttl.HasValue) _ttlChannel.Writer.TryWrite(primaryKey);
+        }
     }
 
     public bool ListAdd(long score, byte[] value, TimeSpan? ttl = null, params object[] keys)
     {
-        SortedList<long, byte[]>? list;
         var primaryKey = MemcomparableKey.Create(_table.FullName, keys);
         long expiresAt = 0;
         if (ttl.HasValue)
         {
             expiresAt = DateTimeOffset.Now.ToUnixTimeMilliseconds() + (long)ttl.Value.TotalMilliseconds;
         }
-        bool rem = _dictionary.TryRemove(primaryKey.ArrayValue, out var existing);
-        (byte[] data, long expiry) = existing;
         long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-        if (rem && data != null &&
-            (expiry <= 0 || expiry > now))
+        lock (_listLock)
         {
-            try
+            if (!_lists.TryGetValue(primaryKey.ArrayValue, out var existing) ||
+                existing.Item2 > 0 && existing.Item2 <= now)
             {
-                list = MessagePackSerializer.Deserialize<SortedList<long, byte[]>>(data);
-                if (ttl.HasValue)
-                {
-                    foreach (var (s, _) in list)
-                    {
-                        expiresAt = Math.Max(s, expiresAt);
-                    }
-                }
+                existing = (new SortedList<long, byte[]>(), 0);
             }
-            catch (MessagePackSerializationException e)
-            {
-                // we will overwrite the value of the key with a new list in the case of an error
-                list = new SortedList<long, byte[]>();
-            }
-        }
-        else
-        {
-            list = new SortedList<long, byte[]>();
-        }
-        // keys must be unique in a SortedList
-        // and we will be using high resolution timestamps
-        // so this ugly hack is okay
-        // we are trying to emulate a Redis SortedSet here
-        while (list.ContainsKey(score))
-        {
-            score++;
-        }
-        list.Add(score, value);
-        try
-        {
-            var serialized = MessagePackSerializer.Serialize(list);
-            primaryKey.ExpiresAt = expiresAt;
-            _dictionary.TryAdd(primaryKey.ArrayValue, (serialized, primaryKey.ExpiresAt));
+            var list = existing.Item1;
             if (ttl.HasValue)
             {
-                _ttlChannel.Writer.WriteAsync(primaryKey);
+                foreach (long existingScore in list.Keys)
+                    expiresAt = Math.Max(existingScore, expiresAt);
             }
+            while (list.ContainsKey(score)) score++;
+            list.Add(score, value);
+            primaryKey.ExpiresAt = expiresAt;
+            _lists[primaryKey.ArrayValue] = (list, expiresAt);
+            _dictionary.TryRemove(primaryKey.ArrayValue, out _);
+            if (ttl.HasValue) _ttlChannel.Writer.TryWrite(primaryKey);
         }
-        catch (MessagePackSerializationException e)
-        {
-            return false;
-        }
-
         return true;
     }
 
     public bool ListDelete(byte[] value, params object[] keys)
     {
-        SortedList<long, byte[]>? list;
         var primaryKey = MemcomparableKey.Create(_table.FullName, keys);
-        bool rem = _dictionary.TryGetValue(primaryKey.ArrayValue, out var existing);
-        (byte[] data, long expiry) = existing;
         long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-        if (rem && data != null &&
-            (expiry <= 0 || expiry > now))
+        lock (_listLock)
         {
-            try
+            if (!_lists.TryGetValue(primaryKey.ArrayValue, out var existing)) return true;
+            if (existing.Item2 > 0 && existing.Item2 <= now)
             {
-                list = MessagePackSerializer.Deserialize<SortedList<long, byte[]>>(data);
-                List<long> toBeRemoved = new();
-                foreach (var (k, v) in list)
-                {
-                    if (v.SequenceEqual(value))
-                    {
-                        toBeRemoved.Add(k);
-                    }
-                }
-                foreach (var t in toBeRemoved)
-                {
-                    list.Remove(t);
-                }
-
-                var newData = MessagePackSerializer.Serialize(list);
-                _dictionary.TryUpdate(primaryKey.ArrayValue, (newData, expiry), existing);
+                _lists.TryRemove(primaryKey.ArrayValue, out _);
+                return true;
             }
-            catch (MessagePackSerializationException e)
+            List<long> toBeRemoved = [];
+            foreach ((long key, byte[] entry) in existing.Item1)
             {
-                // nothing to do since this is not a list
-                return false;
+                if (entry.SequenceEqual(value)) toBeRemoved.Add(key);
             }
+            foreach (long key in toBeRemoved) existing.Item1.Remove(key);
         }
-        else
-        {
-            _dictionary.TryRemove(primaryKey.ArrayValue, out var discard);
-        }
-
         return true;
     }
 
     public bool ListDeleteByScore(long score, params object[] keys)
     {
-        SortedList<long, byte[]>? list;
         var primaryKey = MemcomparableKey.Create(_table.FullName, keys);
-        bool rem = _dictionary.TryGetValue(primaryKey.ArrayValue, out var existing);
-        (byte[] data, long expiry) = existing;
         long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-        if (rem && data != null &&
-            (expiry <= 0 || expiry > now))
+        lock (_listLock)
         {
-            try
+            if (!_lists.TryGetValue(primaryKey.ArrayValue, out var existing)) return true;
+            if (existing.Item2 > 0 && existing.Item2 <= now)
             {
-                list = MessagePackSerializer.Deserialize<SortedList<long, byte[]>>(data);
-                List<long> toBeRemoved = new();
-                foreach (var k in list.Keys)
-                {
-                    if (k < score)
-                    {
-                        toBeRemoved.Add(k);
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-                foreach (var t in toBeRemoved)
-                {
-                    list.Remove(t);
-                }
-                var newData = MessagePackSerializer.Serialize(list);
-                _dictionary.TryUpdate(primaryKey.ArrayValue, (newData, expiry), existing);
+                _lists.TryRemove(primaryKey.ArrayValue, out _);
+                return true;
             }
-            catch (MessagePackSerializationException e)
+            List<long> toBeRemoved = [];
+            foreach (long key in existing.Item1.Keys)
             {
-                // nothing to do since this is not a list
-                return false;
+                if (key > score) break;
+                toBeRemoved.Add(key);
             }
+            foreach (long key in toBeRemoved) existing.Item1.Remove(key);
         }
-        else
-        {
-            _dictionary.TryRemove(primaryKey.ArrayValue, out var discard);
-        }
-
         return true;
     }
 
     public IList<byte[]> ListGet(params object[] keys)
     {
-        SortedList<long, byte[]>? list;
         var primaryKey = MemcomparableKey.Create(_table.FullName, keys);
-        bool rem = _dictionary.TryRemove(primaryKey.ArrayValue, out var existing);
-        (byte[] data, long expiry) = existing;
+        // Reads must not consume the list; only an expired entry is removed. Redis
+        // sorted-set reads are non-destructive and this store mirrors them.
+        bool found = _lists.TryGetValue(primaryKey.ArrayValue, out var existing);
         long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-        if (rem && data != null &&
-            (expiry <= 0 || expiry > now))
+        if (found && (existing.Item2 <= 0 || existing.Item2 > now))
         {
-            try
+            lock (_listLock)
             {
-                list = MessagePackSerializer.Deserialize<SortedList<long, byte[]>>(data);
-                return list.Values;
+                return existing.Item1.Values.ToList();
             }
-            catch (MessagePackSerializationException e)
-            {
-                return Array.Empty<byte[]>();
-            }
+        }
+        if (found)
+        {
+            _lists.TryRemove(primaryKey.ArrayValue, out _);
         }
         return Array.Empty<byte[]>();
     }
@@ -301,6 +223,7 @@ public class InMemoryStore : IVolatileKVStore
     {
         var primaryKey = MemcomparableKey.Create(_table.FullName, keys);
         _dictionary.TryRemove(primaryKey.ArrayValue, out var removed);
+        _lists.TryRemove(primaryKey.ArrayValue, out _);
     }
 
     public bool Exists(params object[] keys)
@@ -309,7 +232,14 @@ public class InMemoryStore : IVolatileKVStore
         
         if (!_dictionary.TryGetValue(primaryKey.ArrayValue, out var value))
         {
-            return false;
+            if (!_lists.TryGetValue(primaryKey.ArrayValue, out var list)) return false;
+            long listNow = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+            if (list.Item2 > 0 && list.Item2 <= listNow)
+            {
+                _lists.TryRemove(primaryKey.ArrayValue, out _);
+                return false;
+            }
+            return true;
         }
         long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
         if (value.Item2 > 0 && value.Item2 <= now)

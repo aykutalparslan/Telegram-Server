@@ -1,22 +1,10 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 namespace Ferrite.Data.Repositories;
+
+using Ferrite.TL;
+using Ferrite.TL.baseLayer.dto;
 
 public class BoundAuthKeyRepository : IBoundAuthKeyRepository
 {
@@ -29,25 +17,27 @@ public class BoundAuthKeyRepository : IBoundAuthKeyRepository
         _storeTemp = storeTemp;
         _storeAuth = storeAuth;
         _storeBound = storeBound;
-        _storeTemp.SetSchema(new TableDefinition("ferrite", "bound_auth_keys_temp",
+        _storeTemp.SetSchema(new TableDefinition("ferrite", "bound_auth_keys_temp_tl1",
             new KeyDefinition("pk",
                 new DataColumn { Name = "temp_auth_key_id", Type = DataType.Long })));
-        _storeAuth.SetSchema(new TableDefinition("ferrite", "bound_auth_keys_auth",
+        _storeAuth.SetSchema(new TableDefinition("ferrite", "bound_auth_keys_auth_tl1",
             new KeyDefinition("pk",
                 new DataColumn { Name = "auth_key_id", Type = DataType.Long })));
-        _storeBound.SetSchema(new TableDefinition("ferrite", "bound_auth_keys_auth",
+        _storeBound.SetSchema(new TableDefinition("ferrite", "bound_auth_keys_by_auth_tl1",
             new KeyDefinition("pk",
                 new DataColumn { Name = "auth_key_id", Type = DataType.Long })));
     }
     
     public bool PutBoundAuthKey(long tempAuthKeyId, long authKeyId, TimeSpan expiresIn)
     {
-        _storeTemp.Put(BitConverter.GetBytes(authKeyId), expiresIn, tempAuthKeyId);
+        using var auth = BoundAuthKey.Builder().AuthKeyId(authKeyId).Build();
+        using var temp = BoundTempAuthKey.Builder().TempAuthKeyId(tempAuthKeyId).Build();
+        _storeTemp.Put(auth.ToReadOnlySpan().ToArray(), expiresIn, tempAuthKeyId);
         // each auth key can be bound to a single temp auth key at any given time
-        _storeAuth.Put(BitConverter.GetBytes(tempAuthKeyId), expiresIn, authKeyId);
+        _storeAuth.Put(temp.ToReadOnlySpan().ToArray(), expiresIn, authKeyId);
         // we need to retrieve a list of keys that was bound to an auth key in the given timeframe
         _storeBound.ListAdd(DateTimeOffset.Now.ToUnixTimeMilliseconds() + (long)expiresIn.TotalMilliseconds,
-            BitConverter.GetBytes(tempAuthKeyId), expiresIn, authKeyId);
+            temp.ToReadOnlySpan().ToArray(), expiresIn, authKeyId);
         return true;
     }
 
@@ -58,13 +48,13 @@ public class BoundAuthKeyRepository : IBoundAuthKeyRepository
         {
             return null;
         }
-        var authKeyId = BitConverter.ToInt64(authBytes);
+        var authKeyId = ReadAuthKey(authBytes);
         var tempBytes = _storeAuth.Get(authKeyId);
         if (tempBytes == null)
         {
             return null;
         }
-        var boundKey = BitConverter.ToInt64(tempBytes);
+        var boundKey = ReadTempAuthKey(tempBytes);
         if (boundKey == tempAuthKeyId)
         {
             return authKeyId;
@@ -79,13 +69,13 @@ public class BoundAuthKeyRepository : IBoundAuthKeyRepository
         {
             return null;
         }
-        var authKeyId = BitConverter.ToInt64(authBytes);
+        var authKeyId = ReadAuthKey(authBytes);
         var tempBytes = await _storeAuth.GetAsync(authKeyId);
         if (tempBytes == null)
         {
             return null;
         }
-        var boundKey = BitConverter.ToInt64(tempBytes);
+        var boundKey = ReadTempAuthKey(tempBytes);
         if (boundKey == tempAuthKeyId)
         {
             return authKeyId;
@@ -100,8 +90,24 @@ public class BoundAuthKeyRepository : IBoundAuthKeyRepository
         List<long> result = new List<long>();
         foreach (var v in queryResult)
         {
-            result.Add(BitConverter.ToInt64(v));
+            result.Add(ReadTempAuthKey(v));
         }
         return result;
+    }
+
+    private static long ReadAuthKey(byte[] bytes)
+    {
+        var value = new TLBytes(bytes, 0, bytes.Length);
+        if (value.Constructor != Constructors.baseLayer_BoundAuthKey)
+            throw new InvalidDataException("Bound auth-key codec/version mismatch.");
+        return ((TLBoundAuthKey)value).AsBoundAuthKey().AuthKeyId;
+    }
+
+    private static long ReadTempAuthKey(byte[] bytes)
+    {
+        var value = new TLBytes(bytes, 0, bytes.Length);
+        if (value.Constructor != Constructors.baseLayer_BoundTempAuthKey)
+            throw new InvalidDataException("Bound temp-auth-key codec/version mismatch.");
+        return ((TLBoundTempAuthKey)value).AsBoundTempAuthKey().TempAuthKeyId;
     }
 }

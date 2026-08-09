@@ -1,26 +1,12 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 namespace Ferrite.Data;
 
 public class FasterMessageBox : IMessageBox, IAsyncDisposable
 {
     private readonly IAtomicCounter _ptsCounter;
+    private bool _ptsSeeded;
     private readonly IAtomicCounter _messageIdCounter;
     private readonly IAtomicCounter _maxIdCounter;
     private readonly long _userId;
@@ -42,6 +28,7 @@ public class FasterMessageBox : IMessageBox, IAsyncDisposable
     }
     public async ValueTask<int> Pts()
     {
+        await EnsurePtsSeeded();
         return (int)await _ptsCounter.Get();
     }
 
@@ -51,17 +38,12 @@ public class FasterMessageBox : IMessageBox, IAsyncDisposable
             $"msg:unread:{_userId}-{peerType}-{peerId}");
         _dialogs.Add($"msg:unread:{_userId}-{peerType}-{peerId}");
         unreadForPeer.Add(messageId);
-        return (int)await _ptsCounter.IncrementAndGet();
+        return await IncrementPtsCounter();
     }
 
     public async ValueTask<int> NextMessageId()
     {
-        int messageId = (int)await _messageIdCounter.IncrementAndGet();
-        if (messageId == 0)
-        {
-            messageId = (int)await _messageIdCounter.IncrementAndGet();
-        }
-        return messageId;
+        return (int)await _messageIdCounter.IncrementAndGet();
     }
 
     public async ValueTask<int> ReadMessages(int peerType, long peerId, int maxId)
@@ -108,12 +90,13 @@ public class FasterMessageBox : IMessageBox, IAsyncDisposable
 
     public async ValueTask<int> IncrementPts()
     {
-        int pts = (int)await _ptsCounter.IncrementAndGet();
-        if (pts == 0)
-        {
-            pts = (int)await _ptsCounter.IncrementAndGet();
-        }
-        return pts;
+        return await IncrementPtsCounter();
+    }
+
+    public async ValueTask<int> IncrementPts(int count)
+    {
+        await EnsurePtsSeeded();
+        return (int)await _ptsCounter.IncrementByAndGet(count);
     }
 
     public async ValueTask DisposeAsync()
@@ -121,5 +104,21 @@ public class FasterMessageBox : IMessageBox, IAsyncDisposable
         await _unreadContext.DisposeAsync();
         await _dialogs.DisposeAsync();
         await _counterContext.DisposeAsync();
+    }
+
+    private async ValueTask<int> IncrementPtsCounter()
+    {
+        await EnsurePtsSeeded();
+        return (int)await _ptsCounter.IncrementAndGet();
+    }
+
+    // pts must start at 1: clients treat pts=0 as an uninitialized state. Seeding
+    // the counter (rather than flooring reads) keeps the stored value and the
+    // reported value identical, so the first update is pts=2 = previousPts(1) + 1.
+    private async ValueTask EnsurePtsSeeded()
+    {
+        if (_ptsSeeded) return;
+        await _ptsCounter.IncrementTo(1);
+        _ptsSeeded = true;
     }
 }

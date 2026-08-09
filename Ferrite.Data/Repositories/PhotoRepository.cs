@@ -1,25 +1,10 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.TL.slim;
-using Ferrite.TL.slim.baseLayer;
-using Ferrite.TL.slim.baseLayer.dto;
+using Ferrite.TL;
+using Ferrite.TL.baseLayer;
+using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Data.Repositories;
 
@@ -27,7 +12,8 @@ public class PhotoRepository : IPhotoRepository
 {
     private readonly IKVStore _store;
     private readonly IKVStore _storeThumb;
-    public PhotoRepository(IKVStore store, IKVStore storeThumb)
+    private readonly IKVStore _storePhotos;
+    public PhotoRepository(IKVStore store, IKVStore storeThumb, IKVStore storePhotos)
     {
         _store = store;
         _store.SetSchema(new TableDefinition("ferrite", "profile_photos",
@@ -40,6 +26,10 @@ public class PhotoRepository : IPhotoRepository
                 new DataColumn { Name = "file_id", Type = DataType.Long },
                 new DataColumn { Name = "thumb_file_id", Type = DataType.Long },
                 new DataColumn { Name = "thumb_type", Type = DataType.String })));
+        _storePhotos = storePhotos;
+        _storePhotos.SetSchema(new TableDefinition("ferrite", "photos",
+            new KeyDefinition("pk",
+                new DataColumn { Name = "photo_id", Type = DataType.Long })));
     }
     public bool PutProfilePhoto(long userId, long fileId, long accessHash, byte[] referenceBytes, DateTimeOffset date)
     {
@@ -48,7 +38,7 @@ public class PhotoRepository : IPhotoRepository
             .AccessHash(accessHash)
             .FileReference(referenceBytes)
             .Date((int)date.ToUnixTimeSeconds())
-            .DcId(2)
+            .DcId(MediaDefaults.DcId)
             .Sizes(new Vector()).Build().TLBytes!.Value;
         
         return _store.Put(photoBytes.AsSpan().ToArray(), userId, fileId);
@@ -61,23 +51,42 @@ public class PhotoRepository : IPhotoRepository
 
     public IReadOnlyList<TLBytes> GetProfilePhotos(long userId)
     {
-        List<TLBytes> photos = new();
+        List<(int Order, TLBytes Photo)> photos = new();
         var iter = _store.Iterate(userId);
         foreach (var photoBytes in iter)
         {
-            var photoSizes = GetPhotoSizes(((Photo)photoBytes.AsSpan()).Id);
-            var photo = ((Photo)photoBytes.AsSpan()).Clone().Sizes(photoSizes).Build();
-            photos.Add(photo.TLBytes!.Value);
+            var association = (Photo)photoBytes.AsSpan();
+            byte[]? canonical = _storePhotos.Get(association.Id);
+            if (canonical != null)
+            {
+                photos.Add((association.Date, new TLBytes(canonical, 0, canonical.Length)));
+                continue;
+            }
+
+            // Compatibility for profile associations created before the canonical
+            // photos store existed.
+            var photoSizes = GetPhotoSizes(association.Id);
+            var photo = association.Clone().Sizes(photoSizes).Build();
+            photos.Add((association.Date, photo.TLBytes!.Value));
         }
 
-        return photos;
+        return photos
+            .OrderByDescending(photo => photo.Order)
+            .Select(photo => photo.Photo)
+            .ToList();
     }
 
     public TLBytes? GetProfilePhoto(long userId, long fileId)
     {
         var photoBytes = _store.Get(userId, fileId);
         if (photoBytes == null) return null;
-        var photoSizes = GetPhotoSizes(((Photo)photoBytes.AsSpan()).Id);
+        byte[]? canonical = _storePhotos.Get(fileId);
+        if (canonical != null)
+        {
+            return new TLBytes(canonical, 0, canonical.Length);
+        }
+
+        var photoSizes = GetPhotoSizes(fileId);
         var photo = ((Photo)photoBytes.AsSpan()).Clone().Sizes(photoSizes).Build();
         return photo.TLBytes!.Value;
     }
@@ -93,6 +102,24 @@ public class PhotoRepository : IPhotoRepository
         }
 
         return photoSizes;
+    }
+
+    public bool PutPhoto(TLBytes photo)
+    {
+        long photoId = ((Photo)photo.AsSpan()).Id;
+        return _storePhotos.Put(photo.AsSpan().ToArray(), photoId);
+    }
+
+    public TLBytes? GetPhoto(long photoId)
+    {
+        var photoBytes = _storePhotos.Get(photoId);
+        if (photoBytes == null) return null;
+        return new TLBytes(photoBytes, 0, photoBytes.Length);
+    }
+
+    public bool DeletePhoto(long photoId)
+    {
+        return _storePhotos.Delete(photoId);
     }
 
     public bool PutThumbnail(TLBytes thumbnail)
@@ -112,6 +139,16 @@ public class PhotoRepository : IPhotoRepository
             thumbs.Add(new TLBytes(thumbBytes, 0, thumbBytes.Length));
         }
 
-        return thumbs;
+        // Ladder order: thumbnail types are not alphabetical (s=100 < m=320),
+        // so sort by the stored pixel width instead.
+        return thumbs
+            .OrderBy(thumb => new PhotoSize(
+                ((Thumbnail)thumb.AsSpan()).PhotoSize.ToArray().AsSpan()).W)
+            .ToList();
+    }
+
+    public bool DeleteThumbnails(long photoId)
+    {
+        return _storeThumb.Delete(photoId);
     }
 }

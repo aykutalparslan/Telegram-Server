@@ -1,39 +1,36 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
 
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <WarningLevel>4</WarningLevel>
-    <LangVersion>preview</LangVersion>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <LangVersion>default</LangVersion>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-  </PropertyGroup>
-  <ItemGroup>
-    <None Remove="DotNext.IO" />
-    <None Remove="DotNext.Unsafe" />
-    <None Remove="mtproto\" />
-    <None Remove="Autofac" />
-    <None Remove="MessagePack" />
-    <None Remove="MessagePackAnalyzer" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="DotNext.IO" Version="4.7.4" />
-    <PackageReference Include="DotNext.Unsafe" Version="4.7.4" />
-    <PackageReference Include="Autofac" Version="6.4.0" />
-    <PackageReference Include="Microsoft.Toolkit.HighPerformance" Version="7.1.2" />
-    <PackageReference Include="System.Memory" Version="4.5.5" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Ferrite.Crypto\Ferrite.Crypto.csproj" />
-    <ProjectReference Include="..\Ferrite.Services\Ferrite.Services.csproj" />
-    <ProjectReference Include="..\Ferrite.Utils\Ferrite.Utils.csproj" />
-    <ProjectReference Include="..\Ferrite.Data\Ferrite.Data.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+      <AdditionalFiles Include="mtproto.tl">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <None Remove="layer148.tl" />
+      <None Remove="layer150.tl" />
+      <None Remove="dto.tl" />
+      <None Remove="baseLayer.tl" />
+      <AdditionalFiles Include="baseLayer.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <None Remove="e2eChain.tl" />
+      <AdditionalFiles Include="e2eChain.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Ferrite.TLParser\Ferrite.TLParser.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\Ferrite.Utils\Ferrite.Utils.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <None Remove="mtproto.tl" />
+        <None Remove="layer146.tl" />
+    </ItemGroup>
+    <ItemGroup>
+      <PackageReference Include="DotNext.IO" Version="6.3.0" />
+    </ItemGroup>
 </Project>

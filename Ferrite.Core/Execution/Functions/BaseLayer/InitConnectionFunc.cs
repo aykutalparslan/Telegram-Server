@@ -1,31 +1,16 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using DotNext.Buffers;
 using Ferrite.Crypto;
 using Ferrite.Services;
+using Ferrite.Core.Execution;
 using Ferrite.TL;
-using Ferrite.TL.slim;
-using Ferrite.TL.slim.baseLayer.dto;
+using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Core.Execution.Functions.BaseLayer;
 
+[TLFunction(Constructors.baseLayer_InitConnection)]
 public class InitConnectionFunc : ITLFunction
 {
     public IExecutionEngine? ExecutionEngine { get; set; }
@@ -40,26 +25,19 @@ public class InitConnectionFunc : ITLFunction
 
     public async ValueTask<TLBytes?> Process(TLBytes q, TLExecutionContext ctx)
     {
-        var info = CreateAppInfo(q, ctx);
+        using var info = CreateAppInfo(q, ctx, _random);
         await _auth.SaveAppInfo(info);
-        if (ExecutionEngine != null) return await ExecutionEngine.Invoke(GetQuery(q), ctx);
+        using var query = RequestUnwrapper.InitConnectionQuery(q);
+        if (ExecutionEngine != null) return await ExecutionEngine.Invoke(query, ctx);
         return null;
     }
 
-    private static TLBytes GetQuery(TLBytes q)
+    internal static TLAppInfo CreateAppInfo(TLBytes q, TLExecutionContext ctx,
+        IRandomGenerator random)
     {
-        TL.slim.baseLayer.InitConnection request = new(q.AsSpan());
-        var queryMemory = UnmanagedMemoryPool<byte>.Shared.Rent(request.Query.Length);
-        request.Query.CopyTo(queryMemory.Memory.Span);
-        TLBytes query = new(queryMemory, 0, request.Query.Length);
-        return query;
-    }
-
-    private TLAppInfo CreateAppInfo(TLBytes q, TLExecutionContext ctx)
-    {
-        var request = (TL.slim.baseLayer.InitConnection)q;
+        var request = (TL.baseLayer.InitConnection)q;
         return AppInfo.Builder()
-            .Hash(_random.NextLong())
+            .Hash(random.NextLong())
             .ApiId(request.ApiId)
             .AppVersion(request.AppVersion)
             .AuthKeyId(ctx.CurrentAuthKeyId)

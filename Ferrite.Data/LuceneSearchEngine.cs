@@ -1,20 +1,5 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using Ferrite.Data.Search;
 using Lucene.Net.Analysis.En;
@@ -27,11 +12,13 @@ using Lucene.Net.Util;
 
 namespace Ferrite.Data;
 
-public class LuceneSearchEngine : ISearchEngine
+public class LuceneSearchEngine : ISearchEngine, IDisposable
 {
+    private const int DefaultCandidateLimit = 500;
     private readonly string _path;
     private readonly LuceneContext _users;
     private readonly LuceneContext _messages;
+    private readonly LuceneContext _chats;
 
     public LuceneSearchEngine(string path)
     {
@@ -42,6 +29,7 @@ public class LuceneSearchEngine : ISearchEngine
         }
         _users = new(Path.Combine(path,"lucene-users"));
         _messages = new(Path.Combine(path,"lucene-messages"));
+        _chats = new(Path.Combine(path,"lucene-chats"));
     }
 
     public ValueTask<bool> IndexUser(UserSearchModel user)
@@ -84,6 +72,40 @@ public class LuceneSearchEngine : ISearchEngine
         return ValueTask.FromResult(results);
     }
 
+    public ValueTask<bool> IndexChat(ChatSearchModel chat)
+    {
+        var doc = new Document();
+        if (chat.Username != null) LuceneContext.AddField(chat.Username, doc, "username");
+        LuceneContext.AddField(chat.Title, doc, "title");
+        _chats.Index(chat.Id.ToString(), doc);
+        return ValueTask.FromResult(true);
+    }
+
+    public ValueTask<bool> DeleteChat(long chatId)
+    {
+        _chats.Delete(chatId.ToString());
+        return ValueTask.FromResult(true);
+    }
+
+    public ValueTask<List<ChatSearchModel>> SearchChats(string q, int limit)
+    {
+        var query = new BooleanQuery();
+        query.Add(new BooleanClause(new PrefixQuery(new Term("username", q)), Occur.SHOULD));
+        query.Add(new BooleanClause(new PrefixQuery(new Term("title", q)), Occur.SHOULD));
+        var docs = _chats.Search(query, int.Min(limit, 50));
+        List<ChatSearchModel> results = new();
+        foreach (var d in docs)
+        {
+            ChatSearchModel m = new ChatSearchModel(
+                long.Parse(d.GetField("_id").GetStringValue()),
+                d.GetField("username") != null ? d.GetField("username").GetStringValue() : null,
+                d.GetField("title") != null ? d.GetField("title").GetStringValue() : "");
+            results.Add(m);
+        }
+
+        return ValueTask.FromResult(results);
+    }
+
     public ValueTask<bool> IndexMessage(MessageSearchModel message)
     {
         var doc = new Document();
@@ -109,15 +131,58 @@ public class LuceneSearchEngine : ISearchEngine
 
     public ValueTask<List<MessageSearchModel>> SearchMessages(string q)
     {
-        List<MessageSearchModel> results = new();
         var query = new MultiPhraseQuery();
         string[] terms = q.Split(" ");
         foreach (var t in terms)
         {
             query.Add(new Term("message", t));
         }
-        
-        var docs = _messages.Search(query, 50);
+
+        return ValueTask.FromResult(Read(_messages.Search(query, 50)));
+    }
+
+    public ValueTask<List<MessageSearchModel>> SearchMessageCandidates(
+        MessageCandidateQuery query)
+    {
+        var boolean = new BooleanQuery();
+        if (query.UserId is { } userId)
+        {
+            boolean.Add(NumericRangeQuery.NewInt64Range("userid", userId, userId,
+                true, true), Occur.MUST);
+        }
+        if (query.PeerType is { } peerType)
+        {
+            boolean.Add(NumericRangeQuery.NewInt32Range("peertype", peerType,
+                peerType, true, true), Occur.MUST);
+        }
+        if (query.PeerId is { } peerId)
+        {
+            boolean.Add(NumericRangeQuery.NewInt64Range("peerid", peerId, peerId,
+                true, true), Occur.MUST);
+        }
+        if (!string.IsNullOrWhiteSpace(query.Text))
+        {
+            var phrase = new MultiPhraseQuery();
+            foreach (string term in query.Text.Split(' ',
+                         StringSplitOptions.RemoveEmptyEntries))
+            {
+                phrase.Add(new Term("message", term));
+            }
+            boolean.Add(phrase, Occur.MUST);
+        }
+
+        int limit = query.Limit > 0 ? query.Limit : DefaultCandidateLimit;
+        // A boolean query with no clause matches nothing, so an entirely
+        // unrestricted candidate lookup has to say so explicitly.
+        Lucene.Net.Search.Query lucene = boolean.Clauses.Count > 0
+            ? boolean
+            : new MatchAllDocsQuery();
+        return ValueTask.FromResult(Read(_messages.Search(lucene, limit)));
+    }
+
+    private static List<MessageSearchModel> Read(IEnumerable<Document> docs)
+    {
+        List<MessageSearchModel> results = new();
         foreach (var d in docs)
         {
             MessageSearchModel m = new MessageSearchModel(
@@ -133,6 +198,13 @@ public class LuceneSearchEngine : ISearchEngine
                 (int)d.GetField("date").GetInt32Value());
             results.Add(m);
         }
-        return ValueTask.FromResult(results);
+        return results;
+    }
+
+    public void Dispose()
+    {
+        _users.Dispose();
+        _messages.Dispose();
+        _chats.Dispose();
     }
 }

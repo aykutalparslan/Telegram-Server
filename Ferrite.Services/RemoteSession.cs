@@ -1,34 +1,36 @@
-﻿/*
- *   Project Ferrite is an Implementation Telegram Server API
- *   Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
- *
- *   This program is free software: you can redistribute it and/or modify
- *   it under the terms of the GNU Affero General Public License as published by
- *   the Free Software Foundation, either version 3 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU Affero General Public License for more details.
- *
- *   You should have received a copy of the GNU Affero General Public License
- *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using System;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using Ferrite.Data;
-using MessagePack;
+using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services;
 
-[MessagePackObject]
 public class RemoteSession
 {
-    [Key(0)]
     public long SessionId { get; set; }
-    [Key(1)]
     public Guid NodeId { get; set; }
+
+    public TLRemoteSession ToTl()
+    {
+        Ferrite.TL.baseLayer.dto.RemoteSession row =
+            Ferrite.TL.baseLayer.dto.RemoteSession.Builder()
+                .SessionId(SessionId)
+                .NodeId(NodeId.ToByteArray())
+                .Build();
+        return row;
+    }
+
+    public static RemoteSession FromTl(TLRemoteSession row)
+    {
+        Ferrite.TL.baseLayer.dto.RemoteSession view = row.AsRemoteSession();
+        if (view.NodeId.Length != 16)
+        {
+            throw new InvalidDataException("Remote session node id must be 16 bytes.");
+        }
+        return new RemoteSession
+        {
+            SessionId = view.SessionId,
+            NodeId = new Guid(view.NodeId),
+        };
+    }
 }

@@ -1,20 +1,5 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using StackExchange.Redis;
 
@@ -24,6 +9,7 @@ public class RedisMessageBox : IMessageBox
 {
     private readonly ConnectionMultiplexer _redis;
     private readonly IAtomicCounter _ptsCounter;
+    private bool _ptsSeeded;
     private readonly IAtomicCounter _messageIdCounter;
     private readonly long _userId;
     public RedisMessageBox(ConnectionMultiplexer redis, long userId)
@@ -36,6 +22,7 @@ public class RedisMessageBox : IMessageBox
 
     public async ValueTask<int> Pts()
     {
+        await EnsurePtsSeeded();
         return (int)await _ptsCounter.Get();
     }
 
@@ -46,17 +33,12 @@ public class RedisMessageBox : IMessageBox
         RedisKey dialogsKey = $"msg:dialogs:{_userId}";
         db.SortedSetAdd(dialogsKey, $"msg:unread:{_userId}-{peerType}-{peerId}", 0);
         db.SortedSetAdd(key, messageId, messageId);
-        return (int)await _ptsCounter.IncrementAndGet();
+        return await IncrementPtsCounter();
     }
 
     public async ValueTask<int> NextMessageId()
     {
-        int messageId = (int)await _messageIdCounter.IncrementAndGet();
-        if (messageId == 0)
-        {
-            messageId = (int)await _messageIdCounter.IncrementAndGet();
-        }
-        return messageId;
+        return (int)await _messageIdCounter.IncrementAndGet();
     }
 
     public async ValueTask<int> ReadMessages(int peerType, long peerId, int maxId)
@@ -70,14 +52,19 @@ public class RedisMessageBox : IMessageBox
         bool success = false;
         while (!success)
         {
-            var oldValue = (int)await db.StringGetAsync(keyRead);
+            RedisValue current = await db.StringGetAsync(keyRead);
+            int oldValue = current.HasValue ? (int)current : 0;
             if (oldValue > maxId)
             {
                 break;
             }
             var tran = db.CreateTransaction();
-            tran.AddCondition(Condition.StringEqual(keyRead, oldValue));
-            await tran.StringSetAsync(keyRead, maxId);
+            tran.AddCondition(current.HasValue
+                ? Condition.StringEqual(keyRead, current)
+                : Condition.KeyNotExists(keyRead));
+            // Transaction commands complete only after ExecuteAsync; awaiting the
+            // queued command here deadlocks the first read forever.
+            _ = tran.StringSetAsync(keyRead, maxId);
             success = await tran.ExecuteAsync();
         }
         
@@ -119,11 +106,28 @@ public class RedisMessageBox : IMessageBox
 
     public async ValueTask<int> IncrementPts()
     {
-        int pts = (int)await _ptsCounter.IncrementAndGet();
-        if (pts == 0)
-        {
-            pts = (int)await _ptsCounter.IncrementAndGet();
-        }
-        return pts;
+        return await IncrementPtsCounter();
+    }
+
+    public async ValueTask<int> IncrementPts(int count)
+    {
+        await EnsurePtsSeeded();
+        return (int)await _ptsCounter.IncrementByAndGet(count);
+    }
+
+    private async ValueTask<int> IncrementPtsCounter()
+    {
+        await EnsurePtsSeeded();
+        return (int)await _ptsCounter.IncrementAndGet();
+    }
+
+    // pts must start at 1: clients treat pts=0 as an uninitialized state. Seeding
+    // the counter (rather than flooring reads) keeps the stored value and the
+    // reported value identical, so the first update is pts=2 = previousPts(1) + 1.
+    private async ValueTask EnsurePtsSeeded()
+    {
+        if (_ptsSeeded) return;
+        await _ptsCounter.IncrementTo(1);
+        _ptsSeeded = true;
     }
 }

@@ -1,26 +1,12 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using FASTER.core;
+using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Data;
 
-public class LocalObjectStore : IObjectStore
+public sealed class LocalObjectStore : IObjectStore, IAsyncDisposable
 {
     private readonly string _parentDir;
     private readonly string _smallFilesDir;
@@ -89,7 +75,7 @@ public class LocalObjectStore : IObjectStore
         return ValueTask.FromResult(GetFileStream(fileId, filePart));
     }
 
-    public IFileOwner GetFileOwner(UploadedFileInfoDTO fileInfo, int offset, 
+    public IFileOwner GetFileOwner(TLUploadedFileInfo fileInfo, long offset,
         int limit, long reqMsgId, byte[] headerBytes)
     {
         return new LocalFileOwner(fileInfo, this, offset, limit, reqMsgId, headerBytes);
@@ -101,5 +87,11 @@ public class LocalObjectStore : IObjectStore
         _session.Read(key, out var metadata);
         var path = GetFilePath(metadata);
         return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _session.Dispose();
+        await _metadataStore.DisposeAsync();
     }
 }

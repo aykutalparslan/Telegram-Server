@@ -1,129 +1,167 @@
-﻿/*
- *   Project Ferrite is an Implementation Telegram Server API
- *   Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
- *
- *   This program is free software: you can redistribute it and/or modify
- *   it under the terms of the GNU Affero General Public License as published by
- *   the Free Software Foundation, either version 3 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU Affero General Public License for more details.
- *
- *   You should have received a copy of the GNU Affero General Public License
- *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using System;
-using System.Buffers;
-using System.Collections;
 using System.Runtime.InteropServices;
-using DotNext.Buffers;
-using DotNext.IO;
 
 namespace Ferrite.TL;
 
-public class VectorBare<T> : ITLObject, ICollection<T>
-    where T : notnull, ITLObject
+public ref struct VectorBare
 {
-    private SparseBufferWriter<byte> writer =
-        new SparseBufferWriter<byte>(UnmanagedMemoryPool<byte>.Shared);
-    private ITLObjectFactory factory;
-    private List<T> list;
-    private bool serialized = false;
-
-    public VectorBare(ITLObjectFactory objectFactory)
+    private Span<byte> _buff;
+    private int _position;
+    private int _offset;
+    public VectorBare()
     {
-        factory = objectFactory;
-        list = new List<T>();
+        _buff = new byte[512];
+        SetCount(0);
+        _position = 4;
+        _offset = 4;
+    }
+    public VectorBare(Span<byte> buffer)
+    {
+        // A bare vector measures itself only when every element is BOXED, because
+        // measuring means reading a constructor id out of each one. Elements can
+        // also be bare: msg_container's `messages` is Vector<%Message>, whose slots
+        // start with msg_id, and mtproto's Vector<%future_salt> likewise. There is
+        // nothing to look up for those, so the caller's slice IS the length, and
+        // trusting a failed measurement would collapse the vector to its header and
+        // make every read throw at the first element.
+        _offset = TryMeasure(buffer, out int measured)
+            ? Math.Min(measured, buffer.Length)
+            : buffer.Length;
+        _buff = buffer[.._offset];
+        _position = 4;
     }
 
-    public T this[int index] { get => list[index]; }
-
-    public ReadOnlySequence<byte> TLBytes
+    /// <summary>
+    /// Measures a bare vector of boxed elements. Returns false as soon as one
+    /// element cannot be identified, rather than skipping it: an unmeasured element
+    /// contributes zero bytes, which silently produces a length that is short by a
+    /// whole element instead of an obviously wrong one.
+    /// </summary>
+    private static bool TryMeasure(Span<byte> data, out int length)
     {
-        get
+        length = 4;
+        if (data.Length < 4)
         {
-            if (serialized)
+            return false;
+        }
+
+        int count = MemoryMarshal.Read<int>(data[..4]);
+        for (int i = 0; i < count; i++)
+        {
+            if (length + 4 > data.Length)
             {
-                return writer.ToReadOnlySequence();
+                return false;
             }
-            writer.Clear();
-            writer.WriteInt32(list.Count, true);
-
-            foreach (var item in list)
+            ObjectSizeReaderDelegate? sizeReader = ObjectReader.GetObjectSizeReader(
+                MemoryMarshal.Read<int>(data.Slice(length, 4)));
+            if (sizeReader == null)
             {
-                writer.Write(item.TLBytes, true);
+                return false;
             }
-
-
-            return writer.ToReadOnlySequence();
+            length += sizeReader.Invoke(data, length);
         }
+        return true;
+    }
+    public readonly int Constructor => 0;
+    public ReadOnlySpan<byte> ToReadOnlySpan() => _buff[.._offset];
+    public readonly int Count => MemoryMarshal.Read<int>(_buff);
+    public readonly int Length => _offset;
+    private void SetCount(int count)
+    {
+        MemoryMarshal.Write(_buff[..4], ref count);
     }
 
-    public void Parse(ref SequenceReader buff)
+    public static Span<byte> Read(Span<byte> data, int offset)
     {
-        int size = buff.ReadInt32(true);
-        for (int i = 0; i < size; i++)
+        int count = MemoryMarshal.Read<int>(data.Slice(offset, 4));
+        int len = 4;
+        for (int i = 0; i < count; i++)
         {
-            list.Add(factory.Read<T>(ref buff));
+            var sizeReader = ObjectReader.GetObjectSizeReader(
+                MemoryMarshal.Read<int>(data.Slice(offset + len, 4)));
+            if (sizeReader != null) len += sizeReader.Invoke(data, offset + len);
         }
+        return data.Slice(offset, len);
     }
 
-    public void WriteTo(Span<byte> buff)
+    public static int ReadSize(Span<byte> data, int offset, ObjectSizeReaderDelegate? sizeReader = null)
     {
-        SpanWriter<byte> spanWriter = new SpanWriter<byte>(buff);
-        foreach (var item in TLBytes)
+        int count = MemoryMarshal.Read<int>(data.Slice(offset, 4));
+        int len = 4;
+        for (int i = 0; i < count; i++)
         {
-            spanWriter.Write(item.Span);
+            // The reader is resolved PER ELEMENT unless the caller forces one.
+            // A bare vector of a boxed union carries a different constructor in
+            // every slot — e2e.chainBlock's `changes` mixes changeNoop with
+            // changeSetGroupState — so caching the first element's reader
+            // mis-measures the rest and silently shifts every following field.
+            var elementReader = sizeReader ?? ObjectReader.GetObjectSizeReader(
+                MemoryMarshal.Read<int>(data.Slice(offset + len, 4)));
+            if (elementReader != null) len += elementReader.Invoke(data, offset + len);
         }
+        return len;
     }
 
-    public int Constructor => unchecked((int)0x1cb5c415);
-
-    public int Count => list.Count;
-
-    public bool IsReadOnly => false;
-
-    public void Add(T item)
+    public void Append(ReadOnlySpan<byte> value)
     {
-        serialized = false;
-        list.Add(item);
+        if (value.Length + _offset > _buff.Length)
+        {
+            int newLength = _buff.Length * 2;
+            while (value.Length + _offset > newLength)
+            {
+                newLength *= 2;
+            }
+            var tmp = new byte[newLength];
+            _buff.CopyTo(tmp);
+            _buff = tmp;
+        }
+        value.CopyTo(_buff[_offset..]);
+        MemoryMarshal.Cast<byte, int>(_buff)[0]++;
+        _offset += value.Length;
     }
-
-    public void Clear()
+    public ReadOnlySpan<byte> Read(ObjectReaderDelegate? reader = null)
     {
-        serialized = false;
-        list.Clear();
+        if (_position == _offset)
+        {
+            throw new EndOfStreamException();
+        }
+
+        reader ??= ObjectReader.GetObjectReader(
+            MemoryMarshal.Read<int>(_buff.Slice(_position, 4)));
+        if (reader == null)
+        {
+            throw new NotSupportedException();
+        }
+
+        var result = reader.Invoke(_buff, _position);
+        _position += result.Length;
+        return result;
     }
-
-    public bool Contains(T item)
+    // Mirrors Vector.ReadTLObject. Elements of a bare vector of boxed values
+    // still carry their own constructor id, so they can be handed straight to a
+    // generated view, which needs a Span rather than the ReadOnlySpan that
+    // Read returns.
+    public Span<byte> ReadTLObject()
     {
-        return list.Contains(item);
+        if (_position == _offset)
+        {
+            throw new EndOfStreamException();
+        }
+        ObjectReaderDelegate? reader = ObjectReader.GetObjectReader(
+            MemoryMarshal.Read<int>(_buff.Slice(_position, 4)));
+        if (reader == null)
+        {
+            throw new NotSupportedException();
+        }
+
+        var result = reader.Invoke(_buff, _position);
+        _position += result.Length;
+        return result;
     }
-
-    public void CopyTo(T[] array, int arrayIndex)
+    public void Reset()
     {
-        list.CopyTo(array, arrayIndex);
-    }
-
-    public IEnumerator<T> GetEnumerator()
-    {
-        return list.GetEnumerator();
-    }
-
-    public bool Remove(T item)
-    {
-        serialized = false;
-        return list.Remove(item);
-    }
-
-    IEnumerator IEnumerable.GetEnumerator()
-    {
-        return list.AsEnumerable<T>().GetEnumerator();
+        _position = 4;
     }
 }
-
-

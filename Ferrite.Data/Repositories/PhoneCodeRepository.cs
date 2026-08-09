@@ -1,22 +1,9 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
+using Ferrite.TL;
+using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Data.Repositories;
 
@@ -26,14 +13,15 @@ public class PhoneCodeRepository : IPhoneCodeRepository
     public PhoneCodeRepository(IVolatileKVStore store)
     {
         _store = store;
-        store.SetSchema(new TableDefinition("ferrite", "phone_codes",
+        store.SetSchema(new TableDefinition("ferrite", "phone_codes_tl1",
             new KeyDefinition("pk",
                 new DataColumn { Name = "phone_number", Type = DataType.String },
                 new DataColumn { Name = "phone_code_hash", Type = DataType.String })));
     }
     public void PutPhoneCode(string phoneNumber, string phoneCodeHash, string phoneCode, TimeSpan expiresIn)
     {
-        _store.Put(Encoding.UTF8.GetBytes(phoneCode), expiresIn, phoneNumber, phoneCodeHash);
+        using var row = PhoneCode.Builder().Code(Encoding.UTF8.GetBytes(phoneCode)).Build();
+        _store.Put(row.ToReadOnlySpan().ToArray(), expiresIn, phoneNumber, phoneCodeHash);
     }
 
     public string? GetPhoneCode(string phoneNumber, string phoneCodeHash)
@@ -41,7 +29,10 @@ public class PhoneCodeRepository : IPhoneCodeRepository
         var bytes = _store.Get(phoneNumber, phoneCodeHash);
         if (bytes is { Length: > 0 })
         {
-            return Encoding.UTF8.GetString(bytes);
+            var value = new TLBytes(bytes, 0, bytes.Length);
+            if (value.Constructor != Constructors.baseLayer_PhoneCode)
+                throw new InvalidDataException("Phone-code codec/version mismatch.");
+            return Encoding.UTF8.GetString(((TLPhoneCode)value).AsPhoneCode().Code);
         }
 
         return null;

@@ -1,33 +1,20 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.TL.slim;
-using Ferrite.TL.slim.baseLayer;
-using Ferrite.TL.slim.baseLayer.dto;
+using Ferrite.TL;
+using Ferrite.TL.baseLayer;
+using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Data.Repositories;
 
 public class MessageRepository : IMessageRepository
 {
     private readonly IKVStore _store;
-    public MessageRepository(IKVStore store)
+    private readonly IUpdatesStateRepository _updatesState;
+    public MessageRepository(IKVStore store, IUpdatesStateRepository updatesState)
     {
         _store = store;
+        _updatesState = updatesState;
         store.SetSchema(new TableDefinition("ferrite", "messages",
             new KeyDefinition("pk",
                 new DataColumn { Name = "user_id", Type = DataType.Long },
@@ -43,25 +30,63 @@ public class MessageRepository : IMessageRepository
     }
     public bool PutMessage(long userId, TLMessage message, int pts)
     {
-        bool outgoing = message.AsMessage().OutProperty;
-        int peerType = outgoing 
-            ? (int)message.AsMessage().Get_PeerId().Type 
-            : (int)message.AsMessage().Get_FromId().Type;
-        
-        long peerId = outgoing 
-            ? GetPeerId(message.AsMessage().Get_PeerId()) 
-            : GetPeerId(message.AsMessage().Get_FromId());
+        var metadata = GetMessageMetadata(message);
         
         using TLSavedMessage savedMessage = SavedMessage.Builder()
             .Pts(pts)
             .OriginalMessage(message.AsSpan())
             .Build();
-        _store.Put(savedMessage.AsSpan().ToArray(), userId, peerType, peerId,
-            outgoing, message.AsMessage().Id, pts, DateTimeOffset.Now.ToUnixTimeSeconds());
+        _store.Put(savedMessage.AsSpan().ToArray(), userId, metadata.PeerType, metadata.PeerId,
+            metadata.Outgoing, MessageIds.GetId(message), pts, metadata.Date);
+        _updatesState.PutPts(userId, pts);
         return true;
     }
 
-    private static long GetPeerId(TLPeer peer) => peer.Type switch
+    private static (int PeerType, long PeerId, bool Outgoing, long Date) GetMessageMetadata(TLMessage message)
+    {
+        return message.Type switch
+        {
+            TLMessage.MessageType.Message => GetMessageMetadata(message.AsMessage()),
+            TLMessage.MessageType.MessageService => GetMessageMetadata(message.AsMessageService()),
+            _ => (0, 0, false, DateTimeOffset.Now.ToUnixTimeSeconds())
+        };
+    }
+
+    private static (int PeerType, long PeerId, bool Outgoing, long Date) GetMessageMetadata(Message message)
+    {
+        var peer = message.Get_PeerIdView();
+        if (peer.Type is TLPeer.PeerType.PeerChat or TLPeer.PeerType.PeerChannel)
+        {
+            return ((int)peer.Type, GetPeerId(peer), message.OutProperty, message.Date);
+        }
+
+        if (message.OutProperty)
+        {
+            return ((int)peer.Type, GetPeerId(peer), true, message.Date);
+        }
+
+        var from = message.Get_FromIdView();
+        return ((int)from.Type, GetPeerId(from), false, message.Date);
+    }
+
+    private static (int PeerType, long PeerId, bool Outgoing, long Date) GetMessageMetadata(MessageService message)
+    {
+        var peer = message.Get_PeerIdView();
+        if (peer.Type is TLPeer.PeerType.PeerChat or TLPeer.PeerType.PeerChannel)
+        {
+            return ((int)peer.Type, GetPeerId(peer), message.OutProperty, message.Date);
+        }
+
+        if (message.OutProperty)
+        {
+            return ((int)peer.Type, GetPeerId(peer), true, message.Date);
+        }
+
+        var from = message.Get_FromIdView();
+        return ((int)from.Type, GetPeerId(from), false, message.Date);
+    }
+
+    private static long GetPeerId(PeerView peer) => peer.Type switch
     {
         TLPeer.PeerType.PeerUser => peer.AsPeerUser().UserId,
         TLPeer.PeerType.PeerChat => peer.AsPeerChat().ChatId,
@@ -94,7 +119,7 @@ public class MessageRepository : IMessageRepository
             }
         }
         messages = messages.OrderByDescending(m => 
-            m.AsSavedMessage().Get_OriginalMessage().AsMessage().Id).ToList();
+            MessageIds.GetId(m.AsSavedMessage().Get_OriginalMessage())).ToList();
         return messages;
     }
 
@@ -130,7 +155,7 @@ public class MessageRepository : IMessageRepository
             }
         }
         messages = messages.OrderByDescending(m => 
-            m.AsSavedMessage().Get_OriginalMessage().AsMessage().Id).ToList();
+            MessageIds.GetId(m.AsSavedMessage().Get_OriginalMessage())).ToList();
         return messages;
     }
 
@@ -143,13 +168,13 @@ public class MessageRepository : IMessageRepository
             var message = new TLSavedMessage(val, 0, val.Length);
             var messagePts = message.AsSavedMessage().Pts;
             if (messagePts >= pts && messagePts <= maxPts &&
-                message.AsSavedMessage().Get_OriginalMessage().AsMessage().Date <= date.ToUnixTimeSeconds())
+                GetMessageDate(message.AsSavedMessage().Get_OriginalMessage()) <= date.ToUnixTimeSeconds())
             {
                 messages.Add(message);
             }
         }
         messages = messages.OrderByDescending(m => 
-            m.AsSavedMessage().Get_OriginalMessage().AsMessage().Id).ToList();
+            MessageIds.GetId(m.AsSavedMessage().Get_OriginalMessage())).ToList();
         return messages;
     }
 
@@ -162,15 +187,22 @@ public class MessageRepository : IMessageRepository
             var message = new TLSavedMessage(val, 0, val.Length);
             var messagePts = message.AsSavedMessage().Pts;
             if (messagePts >= pts && messagePts <= maxPts && 
-                message.AsSavedMessage().Get_OriginalMessage().AsMessage().Date<= date.ToUnixTimeSeconds())
+                GetMessageDate(message.AsSavedMessage().Get_OriginalMessage()) <= date.ToUnixTimeSeconds())
             {
                 messages.Add(message);
             }
         }
         messages = messages.OrderByDescending(m => 
-            m.AsSavedMessage().Get_OriginalMessage().AsMessage().Id).ToList();
+            MessageIds.GetId(m.AsSavedMessage().Get_OriginalMessage())).ToList();
         return messages;
     }
+
+    private static int GetMessageDate(TLMessage message) => message.Type switch
+    {
+        TLMessage.MessageType.Message => message.AsMessage().Date,
+        TLMessage.MessageType.MessageService => message.AsMessageService().Date,
+        _ => 0
+    };
 
     public TLSavedMessage? GetMessage(long userId, int messageId)
     {

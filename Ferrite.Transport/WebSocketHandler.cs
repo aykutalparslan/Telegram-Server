@@ -77,12 +77,38 @@ namespace Ferrite.Transport
         }
         //---
 
+        private static bool HeaderContainsToken(string value, string expected)
+        {
+            ReadOnlySpan<char> remaining = value.AsSpan();
+            while (!remaining.IsEmpty)
+            {
+                int separator = remaining.IndexOf(',');
+                ReadOnlySpan<char> token = separator < 0
+                    ? remaining
+                    : remaining[..separator];
+
+                if (token.Trim().Equals(expected, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                if (separator < 0)
+                {
+                    break;
+                }
+
+                remaining = remaining[(separator + 1)..];
+            }
+
+            return false;
+        }
+
         public ReadOnlySequence<byte> GenerateHandshakeResponse()
         {
-            PooledArrayBufferWriter<byte> output = new();
+            ArrayBufferWriter<byte> output = new();
             if (HeadersComplete && RequestLineComplete &&
-                RequestHeaders.Connection.ToString().ToLowerInvariant().Contains("upgrade") &&
-                RequestHeaders.Upgrade.ToString().ToLowerInvariant() == "websocket")
+                HeaderContainsToken(RequestHeaders.Connection.ToString(), "upgrade") &&
+                HeaderContainsToken(RequestHeaders.Upgrade.ToString(), "websocket"))
             {
                 var websocketKey = RequestHeaders.SecWebSocketKey.ToString();
                 var protocol = RequestHeaders.SecWebSocketProtocol.ToString();
@@ -121,7 +147,7 @@ namespace Ferrite.Transport
                 }
             }
 
-            return new ReadOnlySequence<byte>(output.WrittenArray);
+            return new ReadOnlySequence<byte>(output.WrittenMemory);
         }
 
         public static byte[] GenerateHeader(long length)
@@ -266,4 +292,3 @@ namespace Ferrite.Transport
         }
     }
 }
-

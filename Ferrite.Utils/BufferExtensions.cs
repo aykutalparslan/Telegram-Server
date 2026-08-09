@@ -1,23 +1,9 @@
-﻿/*
- *   Project Ferrite is an Implementation Telegram Server API
- *   Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
- *
- *   This program is free software: you can redistribute it and/or modify
- *   it under the terms of the GNU Affero General Public License as published by
- *   the Free Software Foundation, either version 3 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU Affero General Public License for more details.
- *
- *   You should have received a copy of the GNU Affero General Public License
- *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System;
 using System.Buffers;
+using System.IO;
 using System.IO.Pipelines;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -45,7 +31,7 @@ public static class BufferExtensions
     public static Span<byte> ReadTLBytes(this ref SequenceReader reader)
     {
         int len;
-        byte b = reader.Read<byte>();
+        byte b = reader.ReadByte();
         len = b;
         int rem = (4 - ((len + 1) % 4)) % 4;
         if (len == 254)
@@ -64,17 +50,50 @@ public static class BufferExtensions
     }
     public static async Task<int> ReadTLBytesLength(this PipeReader reader)
     {
-        byte b = await reader.ReadAsync<byte>();
+        var firstByte = new byte[1];
+        await reader.ReadExactlyAsync(firstByte);
+        byte b = firstByte[0];
         int len = b;
         if (len == 254)
         {
             var lenBytes = new byte[3];
-            await reader.ReadBlockAsync(lenBytes);
+            await reader.ReadExactlyAsync(lenBytes);
             len = ((int)lenBytes[0]) |
                   ((int)lenBytes[1] << 8) |
                   ((int)lenBytes[2] << 16);
         }
         return len;
+    }
+    public static async ValueTask ReadToMemoryAsync(this PipeReader reader, Memory<byte> destination,
+        CancellationToken cancellationToken = default)
+    {
+        int copied = 0;
+        while (copied < destination.Length)
+        {
+            var result = await reader.ReadAsync(cancellationToken);
+            var buffer = result.Buffer;
+            int toCopy = (int)Math.Min(buffer.Length, destination.Length - copied);
+            if (toCopy > 0)
+            {
+                buffer.Slice(0, toCopy).CopyTo(destination.Span.Slice(copied, toCopy));
+                copied += toCopy;
+                reader.AdvanceTo(buffer.GetPosition(toCopy));
+            }
+            else
+            {
+                reader.AdvanceTo(buffer.Start, buffer.End);
+            }
+
+            if (copied == destination.Length)
+            {
+                return;
+            }
+
+            if (result.IsCompleted)
+            {
+                throw new EndOfStreamException();
+            }
+        }
     }
     public static void WriteTLString(this IBufferWriter<byte> writer, string value)
     {
@@ -210,5 +229,3 @@ public static class BufferExtensions
         }
     }*/
 }
-
-

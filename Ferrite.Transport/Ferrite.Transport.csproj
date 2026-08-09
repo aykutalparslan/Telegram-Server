@@ -1,16 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
-  </PropertyGroup>
-
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
@@ -22,9 +16,9 @@
     <None Remove="Microsoft.AspNetCore.Http" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="DotNext" Version="4.7.1" />
-    <PackageReference Include="DotNext.IO" Version="4.7.1" />
-    <PackageReference Include="DotNext.Unsafe" Version="4.7.1" />
-    <PackageReference Include="Microsoft.Extensions.Primitives" Version="6.0.0" />
+    <PackageReference Include="DotNext" Version="6.3.0" />
+    <PackageReference Include="DotNext.IO" Version="6.3.0" />
+    <PackageReference Include="DotNext.Unsafe" Version="6.3.0" />
+    <PackageReference Include="Microsoft.Extensions.Primitives" Version="10.0.9" />
   </ItemGroup>
 </Project>

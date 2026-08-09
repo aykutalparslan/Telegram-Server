@@ -1,23 +1,19 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 25.0.1700.0
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ferrite", "Ferrite\Ferrite.csproj", "{B428F202-1F08-4E6E-A3E8-CD30D82DB55A}"
+Project("{9A19103F-16F7-4668-BE54-49E9A90F60B9}") = "Ferrite", "Ferrite\Ferrite.csproj", "{B428F202-1F08-4E6E-A3E8-CD30D82DB55A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ferrite.Tests", "Ferrite.Tests\Ferrite.Tests.csproj", "{91472E42-D5C5-4DBE-8712-CB677A9F24EF}"
+Project("{9A19103F-16F7-4668-BE54-49E9A90F60B9}") = "Ferrite.Crypto", "Ferrite.Crypto\Ferrite.Crypto.csproj", "{CCB9093F-DC1F-424C-A829-0AFB4F1BEE65}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ferrite.TL", "Ferrite.TL\Ferrite.TL.csproj", "{6E7F8291-C798-4A08-A993-1EE002D0B104}"
+Project("{9A19103F-16F7-4668-BE54-49E9A90F60B9}") = "Ferrite.Core", "Ferrite.Core\Ferrite.Core.csproj", "{18258047-DFF7-4162-A431-95128BDC7B11}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ferrite.Crypto", "Ferrite.Crypto\Ferrite.Crypto.csproj", "{CCB9093F-DC1F-424C-A829-0AFB4F1BEE65}"
+Project("{9A19103F-16F7-4668-BE54-49E9A90F60B9}") = "Ferrite.Transport", "Ferrite.Transport\Ferrite.Transport.csproj", "{EE653E8F-D574-4545-92B4-12CD62FFA558}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ferrite.Core", "Ferrite.Core\Ferrite.Core.csproj", "{18258047-DFF7-4162-A431-95128BDC7B11}"
+Project("{9A19103F-16F7-4668-BE54-49E9A90F60B9}") = "Ferrite.Utils", "Ferrite.Utils\Ferrite.Utils.csproj", "{8717E205-114C-464F-885E-7A066C117679}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ferrite.Transport", "Ferrite.Transport\Ferrite.Transport.csproj", "{EE653E8F-D574-4545-92B4-12CD62FFA558}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ferrite.Utils", "Ferrite.Utils\Ferrite.Utils.csproj", "{8717E205-114C-464F-885E-7A066C117679}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ferrite.Data", "Ferrite.Data\Ferrite.Data.csproj", "{D7CCB3AB-58D0-44B3-B82F-AD6CCCD31EF6}"
+Project("{9A19103F-16F7-4668-BE54-49E9A90F60B9}") = "Ferrite.Data", "Ferrite.Data\Ferrite.Data.csproj", "{D7CCB3AB-58D0-44B3-B82F-AD6CCCD31EF6}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{F7941C38-EFDA-43FD-BC16-9734376269E9}"
 	ProjectSection(SolutionItems) = preProject
@@ -28,100 +24,163 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		LICENSE = LICENSE
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ferrite.Services", "Ferrite.Services\Ferrite.Services.csproj", "{F16083E5-FEAC-4C4F-B028-50CCE671047E}"
+Project("{9A19103F-16F7-4668-BE54-49E9A90F60B9}") = "Ferrite.Services", "Ferrite.Services\Ferrite.Services.csproj", "{F16083E5-FEAC-4C4F-B028-50CCE671047E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ferrite.TLParser", "Ferrite.TLParser\Ferrite.TLParser.csproj", "{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}"
+Project("{9A19103F-16F7-4668-BE54-49E9A90F60B9}") = "Ferrite.TLParser", "Ferrite.TLParser\Ferrite.TLParser.csproj", "{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ferrite.TL.slim", "Ferrite.TL.slim\Ferrite.TL.slim.csproj", "{21EF4764-AF52-440A-84C1-996C19F63283}"
+Project("{9A19103F-16F7-4668-BE54-49E9A90F60B9}") = "Ferrite.TL", "Ferrite.TL\Ferrite.TL.csproj", "{21EF4764-AF52-440A-84C1-996C19F63283}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WTelegramClient", "WTelegramClient\src\WTelegramClient.csproj", "{43113245-3ECC-4891-8A20-63255F0E8D41}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ferrite.GroupCallMedia", "Ferrite.GroupCallMedia\Ferrite.GroupCallMedia.csproj", "{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ferrite.AppHost", "Ferrite.AppHost\Ferrite.AppHost.csproj", "{2D3A5501-DA3E-4A8D-916B-06B1744BB678}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
 		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{B428F202-1F08-4E6E-A3E8-CD30D82DB55A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{B428F202-1F08-4E6E-A3E8-CD30D82DB55A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B428F202-1F08-4E6E-A3E8-CD30D82DB55A}.Debug|x64.ActiveCfg = Debug|x64
+		{B428F202-1F08-4E6E-A3E8-CD30D82DB55A}.Debug|x64.Build.0 = Debug|x64
+		{B428F202-1F08-4E6E-A3E8-CD30D82DB55A}.Debug|x86.ActiveCfg = Debug|x86
+		{B428F202-1F08-4E6E-A3E8-CD30D82DB55A}.Debug|x86.Build.0 = Debug|x86
 		{B428F202-1F08-4E6E-A3E8-CD30D82DB55A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B428F202-1F08-4E6E-A3E8-CD30D82DB55A}.Release|Any CPU.Build.0 = Release|Any CPU
-		{91472E42-D5C5-4DBE-8712-CB677A9F24EF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{91472E42-D5C5-4DBE-8712-CB677A9F24EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{91472E42-D5C5-4DBE-8712-CB677A9F24EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{91472E42-D5C5-4DBE-8712-CB677A9F24EF}.Release|Any CPU.Build.0 = Release|Any CPU
-		{6E7F8291-C798-4A08-A993-1EE002D0B104}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{6E7F8291-C798-4A08-A993-1EE002D0B104}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{6E7F8291-C798-4A08-A993-1EE002D0B104}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{6E7F8291-C798-4A08-A993-1EE002D0B104}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B428F202-1F08-4E6E-A3E8-CD30D82DB55A}.Release|x64.ActiveCfg = Release|x64
+		{B428F202-1F08-4E6E-A3E8-CD30D82DB55A}.Release|x64.Build.0 = Release|x64
+		{B428F202-1F08-4E6E-A3E8-CD30D82DB55A}.Release|x86.ActiveCfg = Release|x86
+		{B428F202-1F08-4E6E-A3E8-CD30D82DB55A}.Release|x86.Build.0 = Release|x86
 		{CCB9093F-DC1F-424C-A829-0AFB4F1BEE65}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{CCB9093F-DC1F-424C-A829-0AFB4F1BEE65}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CCB9093F-DC1F-424C-A829-0AFB4F1BEE65}.Debug|x64.ActiveCfg = Debug|x64
+		{CCB9093F-DC1F-424C-A829-0AFB4F1BEE65}.Debug|x64.Build.0 = Debug|x64
+		{CCB9093F-DC1F-424C-A829-0AFB4F1BEE65}.Debug|x86.ActiveCfg = Debug|x86
+		{CCB9093F-DC1F-424C-A829-0AFB4F1BEE65}.Debug|x86.Build.0 = Debug|x86
 		{CCB9093F-DC1F-424C-A829-0AFB4F1BEE65}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CCB9093F-DC1F-424C-A829-0AFB4F1BEE65}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CCB9093F-DC1F-424C-A829-0AFB4F1BEE65}.Release|x64.ActiveCfg = Release|x64
+		{CCB9093F-DC1F-424C-A829-0AFB4F1BEE65}.Release|x64.Build.0 = Release|x64
+		{CCB9093F-DC1F-424C-A829-0AFB4F1BEE65}.Release|x86.ActiveCfg = Release|x86
+		{CCB9093F-DC1F-424C-A829-0AFB4F1BEE65}.Release|x86.Build.0 = Release|x86
 		{18258047-DFF7-4162-A431-95128BDC7B11}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{18258047-DFF7-4162-A431-95128BDC7B11}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{18258047-DFF7-4162-A431-95128BDC7B11}.Debug|x64.ActiveCfg = Debug|x64
+		{18258047-DFF7-4162-A431-95128BDC7B11}.Debug|x64.Build.0 = Debug|x64
+		{18258047-DFF7-4162-A431-95128BDC7B11}.Debug|x86.ActiveCfg = Debug|x86
+		{18258047-DFF7-4162-A431-95128BDC7B11}.Debug|x86.Build.0 = Debug|x86
 		{18258047-DFF7-4162-A431-95128BDC7B11}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{18258047-DFF7-4162-A431-95128BDC7B11}.Release|Any CPU.Build.0 = Release|Any CPU
+		{18258047-DFF7-4162-A431-95128BDC7B11}.Release|x64.ActiveCfg = Release|x64
+		{18258047-DFF7-4162-A431-95128BDC7B11}.Release|x64.Build.0 = Release|x64
+		{18258047-DFF7-4162-A431-95128BDC7B11}.Release|x86.ActiveCfg = Release|x86
+		{18258047-DFF7-4162-A431-95128BDC7B11}.Release|x86.Build.0 = Release|x86
 		{EE653E8F-D574-4545-92B4-12CD62FFA558}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{EE653E8F-D574-4545-92B4-12CD62FFA558}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EE653E8F-D574-4545-92B4-12CD62FFA558}.Debug|x64.ActiveCfg = Debug|x64
+		{EE653E8F-D574-4545-92B4-12CD62FFA558}.Debug|x64.Build.0 = Debug|x64
+		{EE653E8F-D574-4545-92B4-12CD62FFA558}.Debug|x86.ActiveCfg = Debug|x86
+		{EE653E8F-D574-4545-92B4-12CD62FFA558}.Debug|x86.Build.0 = Debug|x86
 		{EE653E8F-D574-4545-92B4-12CD62FFA558}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EE653E8F-D574-4545-92B4-12CD62FFA558}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EE653E8F-D574-4545-92B4-12CD62FFA558}.Release|x64.ActiveCfg = Release|x64
+		{EE653E8F-D574-4545-92B4-12CD62FFA558}.Release|x64.Build.0 = Release|x64
+		{EE653E8F-D574-4545-92B4-12CD62FFA558}.Release|x86.ActiveCfg = Release|x86
+		{EE653E8F-D574-4545-92B4-12CD62FFA558}.Release|x86.Build.0 = Release|x86
 		{8717E205-114C-464F-885E-7A066C117679}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{8717E205-114C-464F-885E-7A066C117679}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8717E205-114C-464F-885E-7A066C117679}.Debug|x64.ActiveCfg = Debug|x64
+		{8717E205-114C-464F-885E-7A066C117679}.Debug|x64.Build.0 = Debug|x64
+		{8717E205-114C-464F-885E-7A066C117679}.Debug|x86.ActiveCfg = Debug|x86
+		{8717E205-114C-464F-885E-7A066C117679}.Debug|x86.Build.0 = Debug|x86
 		{8717E205-114C-464F-885E-7A066C117679}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8717E205-114C-464F-885E-7A066C117679}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8717E205-114C-464F-885E-7A066C117679}.Release|x64.ActiveCfg = Release|x64
+		{8717E205-114C-464F-885E-7A066C117679}.Release|x64.Build.0 = Release|x64
+		{8717E205-114C-464F-885E-7A066C117679}.Release|x86.ActiveCfg = Release|x86
+		{8717E205-114C-464F-885E-7A066C117679}.Release|x86.Build.0 = Release|x86
 		{D7CCB3AB-58D0-44B3-B82F-AD6CCCD31EF6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{D7CCB3AB-58D0-44B3-B82F-AD6CCCD31EF6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D7CCB3AB-58D0-44B3-B82F-AD6CCCD31EF6}.Debug|x64.ActiveCfg = Debug|x64
+		{D7CCB3AB-58D0-44B3-B82F-AD6CCCD31EF6}.Debug|x64.Build.0 = Debug|x64
+		{D7CCB3AB-58D0-44B3-B82F-AD6CCCD31EF6}.Debug|x86.ActiveCfg = Debug|x86
+		{D7CCB3AB-58D0-44B3-B82F-AD6CCCD31EF6}.Debug|x86.Build.0 = Debug|x86
 		{D7CCB3AB-58D0-44B3-B82F-AD6CCCD31EF6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D7CCB3AB-58D0-44B3-B82F-AD6CCCD31EF6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D7CCB3AB-58D0-44B3-B82F-AD6CCCD31EF6}.Release|x64.ActiveCfg = Release|x64
+		{D7CCB3AB-58D0-44B3-B82F-AD6CCCD31EF6}.Release|x64.Build.0 = Release|x64
+		{D7CCB3AB-58D0-44B3-B82F-AD6CCCD31EF6}.Release|x86.ActiveCfg = Release|x86
+		{D7CCB3AB-58D0-44B3-B82F-AD6CCCD31EF6}.Release|x86.Build.0 = Release|x86
 		{F16083E5-FEAC-4C4F-B028-50CCE671047E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{F16083E5-FEAC-4C4F-B028-50CCE671047E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F16083E5-FEAC-4C4F-B028-50CCE671047E}.Debug|x64.ActiveCfg = Debug|x64
+		{F16083E5-FEAC-4C4F-B028-50CCE671047E}.Debug|x64.Build.0 = Debug|x64
+		{F16083E5-FEAC-4C4F-B028-50CCE671047E}.Debug|x86.ActiveCfg = Debug|x86
+		{F16083E5-FEAC-4C4F-B028-50CCE671047E}.Debug|x86.Build.0 = Debug|x86
 		{F16083E5-FEAC-4C4F-B028-50CCE671047E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F16083E5-FEAC-4C4F-B028-50CCE671047E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F16083E5-FEAC-4C4F-B028-50CCE671047E}.Release|x64.ActiveCfg = Release|x64
+		{F16083E5-FEAC-4C4F-B028-50CCE671047E}.Release|x64.Build.0 = Release|x64
+		{F16083E5-FEAC-4C4F-B028-50CCE671047E}.Release|x86.ActiveCfg = Release|x86
+		{F16083E5-FEAC-4C4F-B028-50CCE671047E}.Release|x86.Build.0 = Release|x86
 		{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}.Debug|x64.ActiveCfg = Debug|x64
+		{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}.Debug|x64.Build.0 = Debug|x64
+		{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}.Debug|x86.ActiveCfg = Debug|x86
+		{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}.Debug|x86.Build.0 = Debug|x86
 		{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}.Release|x64.ActiveCfg = Release|x64
+		{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}.Release|x64.Build.0 = Release|x64
+		{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}.Release|x86.ActiveCfg = Release|x86
+		{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}.Release|x86.Build.0 = Release|x86
 		{21EF4764-AF52-440A-84C1-996C19F63283}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{21EF4764-AF52-440A-84C1-996C19F63283}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{21EF4764-AF52-440A-84C1-996C19F63283}.Debug|x64.ActiveCfg = Debug|x64
+		{21EF4764-AF52-440A-84C1-996C19F63283}.Debug|x64.Build.0 = Debug|x64
+		{21EF4764-AF52-440A-84C1-996C19F63283}.Debug|x86.ActiveCfg = Debug|x86
+		{21EF4764-AF52-440A-84C1-996C19F63283}.Debug|x86.Build.0 = Debug|x86
 		{21EF4764-AF52-440A-84C1-996C19F63283}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{21EF4764-AF52-440A-84C1-996C19F63283}.Release|Any CPU.Build.0 = Release|Any CPU
-		{43113245-3ECC-4891-8A20-63255F0E8D41}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{43113245-3ECC-4891-8A20-63255F0E8D41}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{43113245-3ECC-4891-8A20-63255F0E8D41}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{43113245-3ECC-4891-8A20-63255F0E8D41}.Release|Any CPU.Build.0 = Release|Any CPU
+		{21EF4764-AF52-440A-84C1-996C19F63283}.Release|x64.ActiveCfg = Release|x64
+		{21EF4764-AF52-440A-84C1-996C19F63283}.Release|x64.Build.0 = Release|x64
+		{21EF4764-AF52-440A-84C1-996C19F63283}.Release|x86.ActiveCfg = Release|x86
+		{21EF4764-AF52-440A-84C1-996C19F63283}.Release|x86.Build.0 = Release|x86
+		{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}.Debug|x64.Build.0 = Debug|Any CPU
+		{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}.Debug|x86.Build.0 = Debug|Any CPU
+		{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}.Release|x64.ActiveCfg = Release|Any CPU
+		{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}.Release|x64.Build.0 = Release|Any CPU
+		{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}.Release|x86.ActiveCfg = Release|Any CPU
+		{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}.Release|x86.Build.0 = Release|Any CPU
+		{2D3A5501-DA3E-4A8D-916B-06B1744BB678}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2D3A5501-DA3E-4A8D-916B-06B1744BB678}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2D3A5501-DA3E-4A8D-916B-06B1744BB678}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2D3A5501-DA3E-4A8D-916B-06B1744BB678}.Debug|x64.Build.0 = Debug|Any CPU
+		{2D3A5501-DA3E-4A8D-916B-06B1744BB678}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2D3A5501-DA3E-4A8D-916B-06B1744BB678}.Debug|x86.Build.0 = Debug|Any CPU
+		{2D3A5501-DA3E-4A8D-916B-06B1744BB678}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2D3A5501-DA3E-4A8D-916B-06B1744BB678}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2D3A5501-DA3E-4A8D-916B-06B1744BB678}.Release|x64.ActiveCfg = Release|Any CPU
+		{2D3A5501-DA3E-4A8D-916B-06B1744BB678}.Release|x64.Build.0 = Release|Any CPU
+		{2D3A5501-DA3E-4A8D-916B-06B1744BB678}.Release|x86.ActiveCfg = Release|Any CPU
+		{2D3A5501-DA3E-4A8D-916B-06B1744BB678}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {1C5A3FAA-8152-4EA0-80DB-CB39B982782D}
-	EndGlobalSection
-	GlobalSection(MonoDevelopProperties) = preSolution
-		Policies = $0
-		$0.StandardHeader = $1
-		$1.Text = "@\n Project Ferrite is an Implementation of the Telegram Server API\n Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>\n\n This program is free software: you can redistribute it and/or modify\n it under the terms of the GNU Affero General Public License as published by\n the Free Software Foundation, either version 3 of the License, or\n (at your option) any later version.\n\n This program is distributed in the hope that it will be useful,\n but WITHOUT ANY WARRANTY; without even the implied warranty of\n MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n GNU Affero General Public License for more details.\n\n You should have received a copy of the GNU Affero General Public License\n along with this program.  If not, see <https://www.gnu.org/licenses/>.\n "
-		$0.TextStylePolicy = $2
-		$2.FileWidth = 80
-		$2.TabsToSpaces = True
-		$2.scope = text/x-csharp
-		$0.CSharpFormattingPolicy = $3
-		$3.scope = text/x-csharp
-		$0.TextStylePolicy = $4
-		$4.FileWidth = 80
-		$4.TabsToSpaces = True
-		$4.scope = text/plain
-		$0.TextStylePolicy = $5
-		$5.FileWidth = 80
-		$5.TabsToSpaces = True
-		$5.scope = text/x-json
-		$0.TextStylePolicy = $6
-		$6.FileWidth = 80
-		$6.TabsToSpaces = True
-		$6.scope = text/x-web
-		$0.TextStylePolicy = $7
-		$7.FileWidth = 80
-		$7.TabsToSpaces = True
-		$7.scope = text/x-vs
 	EndGlobalSection
 EndGlobal

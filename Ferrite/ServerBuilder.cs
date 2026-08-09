@@ -1,45 +1,32 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Numerics;
 using System.Reflection;
 using Autofac;
+using Autofac.Core;
 using Ferrite.Core;
+using Ferrite.Core.Calls;
 using Ferrite.Core.Connection;
 using Ferrite.Core.Connection.TransportFeatures;
 using Ferrite.Core.Execution;
 using Ferrite.Core.Execution.Functions;
 using Ferrite.Core.Execution.Functions.BaseLayer;
-using Ferrite.Core.Execution.Functions.BaseLayer.Account;
-using Ferrite.Core.Execution.Functions.BaseLayer.Auth;
-using Ferrite.Core.Execution.Functions.BaseLayer.Contacts;
-using Ferrite.Core.Execution.Functions.BaseLayer.Help;
-using Ferrite.Core.Execution.Functions.BaseLayer.Messages;
-using Ferrite.Core.Execution.Functions.BaseLayer.Users;
 using Ferrite.Core.Framing;
 using Ferrite.Core.RequestChain;
 using Ferrite.Crypto;
 using Ferrite.Data;
 using Ferrite.Data.Repositories;
+using Ferrite.GroupCallMedia;
 using Ferrite.Services;
+using Ferrite.Services.Calls;
+using Ferrite.Services.Calls.E2E;
 using Ferrite.Services.Gateway;
+using Ferrite.Services.Phone.Handlers;
+using Ferrite.Services.SecretChats;
+using Ferrite.Services.SecretChats.Handlers;
+using Ferrite.Services.Stats;
 using Ferrite.TL;
-using Ferrite.TL.slim;
 using Ferrite.Transport;
 using Ferrite.Utils;
 
@@ -47,14 +34,20 @@ namespace Ferrite;
 
 public class ServerBuilder
 {
-    private const int DefaultLayer = 150;
     public static IFerriteServer BuildServer(string ipAddress, int port, string path = "data")
     {
-        IContainer container = BuildContainer(ipAddress, port, path);
+        return BuildServer(new FerriteServerOptions
+        {
+            PublicAddress = ipAddress,
+            Port = port,
+            DataPath = path
+        });
+    }
 
-        var scope = container.BeginLifetimeScope();
-
-        var keyProvider = scope.Resolve<IKeyProvider>();
+    public static IFerriteServer BuildServer(FerriteServerOptions options)
+    {
+        IContainer container = BuildContainer(options);
+        var keyProvider = container.Resolve<IKeyProvider>();
         var fingerprints = keyProvider.GetRSAFingerprints();
         foreach (var fingerprint in fingerprints)
         {
@@ -66,18 +59,43 @@ public class ServerBuilder
             Console.WriteLine($"Fingerprint-DECIMAL: {fingerprint}");
         }
         
-        return scope.Resolve<IFerriteServer>();
+        return container.Resolve<IFerriteServer>();
     }
-    private static IContainer BuildContainer(string ipAddress, int port, string path)
+    internal static IContainer BuildContainer(FerriteServerOptions options)
     {
         var builder = new ContainerBuilder();
         RegisterPrimitives(builder);
-        RegisterServices(builder);
-        RegisterSchema(builder);
+        RegisterServices(builder, options);
         RegisterCoreComponents(builder);
-        RegisterLocalDataStores(builder, path);
-        builder.Register(c=> new DataCenter(1, ipAddress, port, false))
+        if (!options.Storage.TryValidate(out string storageError))
+        {
+            throw new ArgumentException(storageError, nameof(options));
+        }
+        RegisterDataStores(builder, options.DataPath, options.Storage);
+        builder.Register(_ => new DataCenter(1, options.PublicAddress,
+                options.Port, false))
             .As<IDataCenter>().SingleInstance();
+        // Bind and advertised call-media endpoints stay separate from the
+        // MTProto DataCenter address. The development default binds an
+        // ephemeral port; only an empty advertised address falls back to the
+        // server's public address.
+        CallMediaRelayOptions callMedia = options.CallMedia
+            ?? new CallMediaRelayOptions();
+        if (callMedia.AdvertisedAddress.Length == 0)
+        {
+            callMedia = callMedia with { AdvertisedAddress = options.PublicAddress };
+        }
+        if (!callMedia.TryValidate(out string callMediaError))
+        {
+            throw new ArgumentException(callMediaError, nameof(options));
+        }
+        CallTurnOptions callTurn = options.CallTurn ?? new CallTurnOptions();
+        if (!callTurn.TryValidate(out string callTurnError))
+        {
+            throw new ArgumentException(callTurnError, nameof(options));
+        }
+        builder.RegisterInstance(callMedia).SingleInstance();
+        builder.RegisterInstance(callTurn).SingleInstance();
         builder.RegisterType<SerilogLogger>().As<ILogger>().SingleInstance();
         var container = builder.Build();
         return container;
@@ -90,24 +108,262 @@ public class ServerBuilder
         builder.RegisterType<KeyProvider>().As<IKeyProvider>().SingleInstance();
     }
 
-    private static void RegisterLocalDataStores(ContainerBuilder builder, string path)
+    private static void RegisterDataStores(ContainerBuilder builder, string path,
+        StorageOptions options)
     {
         if (!Directory.Exists(path))
         {
             Directory.CreateDirectory(path);
         }
-        builder.Register(_ => new LocalPipe())
-            .As<IMessagePipe>().SingleInstance();
-        builder.Register(_ => new LocalObjectStore(Path.Combine(path, "uploaded-files")))
-            .As<IObjectStore>().SingleInstance();
-        builder.Register(_ => new LuceneSearchEngine(Path.Combine(path, "lucene-index-data")))
-            .As<ISearchEngine>().SingleInstance();
-        builder.Register(_ => new FasterCounterFactory(Path.Combine(path, "faster-counter-data")))
-            .As<ICounterFactory>().SingleInstance();
-        builder.Register(_ => new FasterUpdatesContextFactory(Path.Combine(path,"faster-updates-data")))
-            .As<IUpdatesContextFactory>().SingleInstance();
-        builder.Register(_ => new LocalUnitOfWork(Path.Combine(path, "rocksdb-data")))
+
+        ResolvedStorageOptions selected = options.Resolve();
+        if (selected.KeyValue == KeyValueBackend.RocksDb)
+        {
+            builder.Register(_ => new RocksDbKVStoreFactory(
+                    Path.Combine(path, "rocksdb-data")))
+                .As<IKVStoreFactory>().SingleInstance();
+            builder.RegisterType<ImmediateWriteBatchAccessor>()
+                .As<IWriteBatchAccessor>().SingleInstance();
+        }
+        else
+        {
+            builder.Register(_ => new CassandraKVStoreFactory(
+                    options.CassandraKeyspace, options.CassandraPort,
+                    options.CassandraHosts))
+                .As<IKVStoreFactory>().SingleInstance();
+            builder.Register(c =>
+                {
+                    var factory = (CassandraKVStoreFactory)c.Resolve<IKVStoreFactory>();
+                    return new CassandraWriteBatchAccessor(factory.Context,
+                        options.CassandraKeyspace);
+                })
+                .As<IWriteBatchAccessor>().SingleInstance();
+        }
+
+        if (selected.Ephemeral == EphemeralBackend.InMemory)
+        {
+            builder.RegisterType<InMemoryStoreFactory>()
+                .As<IVolatileKVStoreFactory>().SingleInstance();
+        }
+        else
+        {
+            builder.Register(_ => new RedisDataStoreFactory(options.RedisConfiguration))
+                .As<IVolatileKVStoreFactory>().SingleInstance();
+        }
+
+        switch (selected.Pipe)
+        {
+            case PipeBackend.Local:
+                builder.RegisterType<LocalPipe>().As<IMessagePipe>().SingleInstance();
+                break;
+            case PipeBackend.Redis:
+                builder.Register(_ => new RedisPipe(options.RedisConfiguration))
+                    .As<IMessagePipe>().SingleInstance();
+                break;
+            case PipeBackend.Kafka:
+                builder.Register(_ => new KafkaPipe(options.KafkaConfiguration))
+                    .As<IMessagePipe>().SingleInstance();
+                break;
+        }
+
+        if (selected.ObjectStore == ObjectStoreBackend.Local)
+        {
+            builder.Register(_ => new LocalObjectStore(
+                    Path.Combine(path, "uploaded-files")))
+                .As<IObjectStore>().SingleInstance();
+        }
+        else
+        {
+            builder.Register(_ => new S3ObjectStore(options.S3ServiceUrl,
+                    options.S3AccessKey, options.S3SecretKey))
+                .As<IObjectStore>().SingleInstance();
+        }
+
+        if (selected.Search == SearchBackend.Lucene)
+        {
+            builder.Register(_ => new LuceneSearchEngine(
+                    Path.Combine(path, "lucene-index-data")))
+                .As<ISearchEngine>().SingleInstance();
+        }
+        else
+        {
+            builder.Register(_ => new ElasticSearchEngine(options.ElasticsearchUrl,
+                    options.ElasticsearchUsername, options.ElasticsearchPassword,
+                    options.ElasticsearchFingerprint))
+                .As<ISearchEngine>().SingleInstance();
+        }
+
+        if (selected.Counters == CounterBackend.Faster)
+        {
+            builder.Register(_ => new FasterCounterFactory(
+                    Path.Combine(path, "faster-counter-data")))
+                .As<ICounterFactory>().SingleInstance();
+        }
+        else
+        {
+            builder.Register(_ => new RedisCounterFactory(options.RedisConfiguration))
+                .As<ICounterFactory>().SingleInstance();
+        }
+        builder.RegisterType<ChatIdAllocator>()
+            .As<IChatIdAllocator>().SingleInstance();
+
+        if (selected.UpdatesContext == UpdatesContextBackend.Faster)
+        {
+            builder.Register(_ => new FasterUpdatesContextFactory(
+                    Path.Combine(path, "faster-updates-data")))
+                .As<IUpdatesContextFactory>().SingleInstance();
+        }
+        else
+        {
+            builder.Register(_ => new RedisUpdatesContextFactory(
+                    options.RedisConfiguration))
+                .As<IUpdatesContextFactory>().SingleInstance();
+        }
+
+        builder.RegisterType<StorageUnitOfWork>()
             .As<IUnitOfWork>().SingleInstance();
+        RegisterRepositories(builder);
+    }
+
+    private static void RegisterRepositories(ContainerBuilder builder)
+    {
+        static IKVStore Durable(IComponentContext context) =>
+            context.Resolve<IKVStoreFactory>()
+                .Create(context.Resolve<IWriteBatchAccessor>());
+        static IVolatileKVStore Ephemeral(IComponentContext context) =>
+            context.Resolve<IVolatileKVStoreFactory>().Create();
+
+        builder.Register(c => new AuthKeyRepository(Durable(c), Ephemeral(c)))
+            .As<IAuthKeyRepository>().SingleInstance();
+        builder.Register(c => new AuthorizationRepository(Durable(c), Durable(c)))
+            .As<IAuthorizationRepository>().SingleInstance();
+        builder.Register(c => new TempAuthKeyRepository(Ephemeral(c)))
+            .As<ITempAuthKeyRepository>().SingleInstance();
+        builder.Register(c => new BoundAuthKeyRepository(Ephemeral(c), Ephemeral(c),
+                Ephemeral(c)))
+            .As<IBoundAuthKeyRepository>().SingleInstance();
+        builder.Register(c => new UpdatesStateRepository(Durable(c)))
+            .As<IUpdatesStateRepository>().SingleInstance();
+        builder.Register(c => new MessageRepository(Durable(c),
+                c.Resolve<IUpdatesStateRepository>()))
+            .As<IMessageRepository>().SingleInstance();
+        builder.Register(c => new DraftsRepository(Durable(c)))
+            .As<IDraftsRepository>().SingleInstance();
+        builder.Register(c => new WebPagesRepository(Durable(c)))
+            .As<IWebPagesRepository>().SingleInstance();
+        builder.Register(c => new ChannelContentReadsRepository(Durable(c)))
+            .As<IChannelContentReadsRepository>().SingleInstance();
+        builder.Register(c => new MessageInteractionsRepository(Durable(c), Durable(c)))
+            .As<IMessageInteractionsRepository>().SingleInstance();
+        builder.Register(c => new MessageReadReceiptsRepository(Durable(c)))
+            .As<IMessageReadReceiptsRepository>().SingleInstance();
+        builder.Register(c => new PollsRepository(Durable(c), Durable(c)))
+            .As<IPollsRepository>().SingleInstance();
+        builder.Register(c => new ScheduledMessagesRepository(Durable(c)))
+            .As<IScheduledMessagesRepository>().SingleInstance();
+        builder.Register(c => new MessagingSettingsRepository(Durable(c), Durable(c),
+                Durable(c), Durable(c)))
+            .As<IMessagingSettingsRepository>().SingleInstance();
+        builder.Register(c => new ExpiringMessagesRepository(Durable(c)))
+            .As<IExpiringMessagesRepository>().SingleInstance();
+        builder.Register(c => new TopPeersRepository(Durable(c)))
+            .As<ITopPeersRepository>().SingleInstance();
+        builder.Register(c => new DialogOrganizationRepository(Durable(c), Durable(c),
+                Durable(c), Durable(c), Durable(c)))
+            .As<IDialogOrganizationRepository>().SingleInstance();
+        builder.Register(c => new StickerRepository(Durable(c), Durable(c), Durable(c),
+                Durable(c), Durable(c)))
+            .As<IStickerRepository>().SingleInstance();
+        builder.Register(c => new ChannelAdminRepository(Durable(c), Durable(c)))
+            .As<IChannelAdminRepository>().SingleInstance();
+        builder.Register(c => new ChannelAdminLogRepository(Durable(c)))
+            .As<IChannelAdminLogRepository>().SingleInstance();
+        builder.Register(c => new StatisticsRepository(Durable(c), Durable(c)))
+            .As<IStatisticsRepository>().SingleInstance();
+        builder.Register(c => new AccountSettingsRepository(Durable(c), Durable(c),
+                Durable(c), Durable(c), Durable(c), Durable(c), Durable(c), Durable(c),
+                Durable(c), Durable(c), Durable(c), Durable(c), Durable(c)))
+            .As<IAccountSettingsRepository>().SingleInstance();
+        builder.Register(c => new NearbyLocationsRepository(Durable(c)))
+            .As<INearbyLocationsRepository>().SingleInstance();
+        builder.Register(c => new ModerationRepository(Durable(c), Durable(c)))
+            .As<IModerationRepository>().SingleInstance();
+        builder.Register(c => new UserStatusRepository(Durable(c)))
+            .As<IUserStatusRepository>().SingleInstance();
+        builder.Register(c => new SessionRepository(Ephemeral(c), Ephemeral(c)))
+            .As<ISessionRepository>().SingleInstance();
+        builder.Register(c => new AuthSessionRepository(Ephemeral(c)))
+            .As<IAuthSessionRepository>().SingleInstance();
+        builder.Register(c => new PhoneCodeRepository(Ephemeral(c)))
+            .As<IPhoneCodeRepository>().SingleInstance();
+        builder.Register(c => new SignInRepository(Ephemeral(c)))
+            .As<ISignInRepository>().SingleInstance();
+        builder.Register(c => new ServerSaltRepository(Ephemeral(c), Ephemeral(c)))
+            .As<IServerSaltRepository>().SingleInstance();
+        builder.Register(c => new DeviceLockedRepository(Ephemeral(c)))
+            .As<IDeviceLockedRepository>().SingleInstance();
+        builder.Register(c => new UserRepository(Durable(c), Durable(c), Durable(c)))
+            .As<IUserRepository>().SingleInstance();
+        builder.Register(c => new AppInfoRepository(Durable(c)))
+            .As<IAppInfoRepository>().SingleInstance();
+        builder.Register(c => new DeviceInfoRepository(Durable(c), Durable(c)))
+            .As<IDeviceInfoRepository>().SingleInstance();
+        builder.Register(c => new NotifySettingsRepository(Durable(c)))
+            .As<INotifySettingsRepository>().SingleInstance();
+        builder.Register(c => new ReportReasonRepository(Durable(c)))
+            .As<IReportReasonRepository>().SingleInstance();
+        builder.Register(c => new PrivacyRulesRepository(Durable(c)))
+            .As<IPrivacyRulesRepository>().SingleInstance();
+        builder.Register(c => new ChatRepository(Durable(c), Durable(c), Durable(c)))
+            .As<IChatRepository>().SingleInstance();
+        builder.Register(c => new ChatParticipantsRepository(Durable(c)))
+            .As<IChatParticipantsRepository>().SingleInstance();
+        builder.Register(c => new ChatInvitesRepository(Durable(c), Durable(c), Durable(c)))
+            .As<IChatInvitesRepository>().SingleInstance();
+        builder.Register(c => new ForumTopicsRepository(Durable(c), Durable(c), Durable(c)))
+            .As<IForumTopicsRepository>().SingleInstance();
+        builder.Register(c => new ChannelMessagesRepository(Durable(c), Durable(c),
+                Durable(c)))
+            .As<IChannelMessagesRepository>().SingleInstance();
+        builder.Register(c => new MessageReactionsRepository(Durable(c), Durable(c),
+                Durable(c)))
+            .As<IMessageReactionsRepository>().SingleInstance();
+        builder.Register(c => new ContactsRepository(Durable(c), Durable(c)))
+            .As<IContactsRepository>().SingleInstance();
+        builder.Register(c => new BlockedPeersRepository(Durable(c)))
+            .As<IBlockedPeersRepository>().SingleInstance();
+        builder.Register(c => new FileInfoRepository(Durable(c), Durable(c), Durable(c),
+                Durable(c), Durable(c), Durable(c)))
+            .As<IFileInfoRepository>().SingleInstance();
+        builder.Register(c => new PhotoRepository(Durable(c), Durable(c), Durable(c)))
+            .As<IPhotoRepository>().SingleInstance();
+        builder.Register(c => new DocumentsRepository(Durable(c), Durable(c)))
+            .As<IDocumentsRepository>().SingleInstance();
+        builder.Register(c => new LangPackRepository(Durable(c), Durable(c)))
+            .As<ILangPackRepository>().SingleInstance();
+        builder.Register(c => new SignUpNotificationRepository(Durable(c)))
+            .As<ISignUpNotificationRepository>().SingleInstance();
+        builder.Register(c => new SecretChatsRepository(Durable(c), Durable(c), Durable(c),
+                Durable(c), Durable(c), Durable(c), Durable(c), Durable(c), Durable(c),
+                Durable(c), Durable(c), c.Resolve<IUnitOfWork>().SaveAsync))
+            .As<ISecretChatsRepository>().SingleInstance();
+        builder.Register(c => new GroupCallsRepository(Durable(c), Durable(c), Durable(c),
+                Durable(c), Durable(c), Durable(c), Durable(c),
+                c.Resolve<IUnitOfWork>().SaveAsync))
+            .As<IGroupCallsRepository>().SingleInstance();
+        builder.Register(c => new GroupCallChainRepository(Durable(c), Durable(c),
+                c.Resolve<IUnitOfWork>().SaveAsync))
+            .As<IGroupCallChainRepository>().SingleInstance();
+        builder.Register(c => new AccountPasswordRepository(Durable(c), Durable(c),
+                Ephemeral(c), Ephemeral(c), c.Resolve<IUnitOfWork>().SaveAsync))
+            .As<IAccountPasswordRepository>().SingleInstance();
+        builder.Register(c => new VerificationCodeRepository(Ephemeral(c), Ephemeral(c),
+                Ephemeral(c)))
+            .As<IVerificationCodeRepository>().SingleInstance();
+        builder.Register(c => new LoginAttemptRepository(Ephemeral(c), Ephemeral(c)))
+            .As<ILoginAttemptRepository>().SingleInstance();
+        builder.Register(c => new LoginTokenRepository(Ephemeral(c), Ephemeral(c)))
+            .As<ILoginTokenRepository>().SingleInstance();
     }
 
     private static void RegisterCoreComponents(ContainerBuilder builder)
@@ -117,7 +373,6 @@ public class ServerBuilder
         builder.RegisterType<MsgContainerProcessor>();
         builder.RegisterType<ServiceMessagesProcessor>();
         builder.RegisterType<GZipProcessor>();
-        builder.RegisterType<AuthorizationProcessor>();
         builder.RegisterType<MTProtoRequestProcessor>();
         builder.RegisterType<DefaultChain>().As<ITLHandler>().SingleInstance();
         RegisterApiLayers(builder);
@@ -127,341 +382,286 @@ public class ServerBuilder
         builder.RegisterType<TransportErrorFeature>().As<ITransportErrorFeature>().SingleInstance();
         builder.RegisterType<WebSocketFeature>().As<IWebSocketFeature>();
         builder.RegisterType<ProtoTransport>();
-        builder.RegisterType<SerializationFeature>();
         builder.RegisterType<MTProtoSession>().As<IMTProtoSession>();
         builder.RegisterType<MTProtoTransportDetector>().As<ITransportDetector>();
         builder.RegisterType<SocketConnectionListener>().As<IConnectionListener>();
         builder.RegisterType<FerriteServer>().As<IFerriteServer>().SingleInstance();
     }
 
-    private static void RegisterApiLayers(ContainerBuilder builder)
+    internal static void RegisterApiLayers(ContainerBuilder builder)
     {
-        RegisterMTProtoMethods(builder);
-        RegisterBaseMethods(builder);
-        RegisterHelpMethods(builder);
-        RegisterAuthMethods(builder);
-        RegisterAccountMethods(builder);
-        RegisterUsersMethods(builder);
-        RegisterContactsMethods(builder);
-        RegisterMessagesMethods(builder);
-    }
+        // Bespoke protocol handlers self-declare their FunctionKey at class level.
+        // Business handlers in Ferrite.Services declare it on Handle; the generic
+        // adapter below supplies CurrentAuthKeyId and the rpc_result envelope so
+        // method orchestration never moves into Ferrite.Core.
+        Type[] handlerTypes = typeof(ITLFunction).Assembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false }
+                        && t.GetCustomAttribute<TLFunctionAttribute>() is not null)
+            .ToArray();
+        var serviceMethods = typeof(DialogBuilder).Assembly.GetTypes()
+            .SelectMany(t => t.GetMethods(BindingFlags.Instance | BindingFlags.Public |
+                                          BindingFlags.DeclaredOnly))
+            .Select(m => (Method: m, Attribute: m.GetCustomAttribute<TLFunctionAttribute>()))
+            .Where(x => x.Attribute is not null)
+            .Select(x => (x.Method, Attribute: x.Attribute!))
+            .ToArray();
 
-    private static void RegisterMessagesMethods(ContainerBuilder builder)
-    {
-        builder.RegisterType<SetTypingFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_SetTyping))
-            .SingleInstance();
-        builder.RegisterType<SendMessageFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_SendMessage))
-            .SingleInstance();
-    }
+        EnsureUniqueDispatchKeys(handlerTypes, serviceMethods);
 
-    private static void RegisterContactsMethods(ContainerBuilder builder)
-    {
-        builder.RegisterType<GetStatusesFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_GetStatuses))
-            .SingleInstance();
-        builder.RegisterType<GetContactsFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_GetContacts))
-            .SingleInstance();
-        builder.RegisterType<ImportContactsFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_ImportContacts))
-            .SingleInstance();
-        builder.RegisterType<DeleteContactsFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_DeleteContacts))
-            .SingleInstance();
-        builder.RegisterType<DeleteByPhonesFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_DeleteByPhones))
-            .SingleInstance();
-        builder.RegisterType<BlockFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_Block))
-            .SingleInstance();
-        builder.RegisterType<UnblockFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_Unblock))
-            .SingleInstance();
-        builder.RegisterType<SearchFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_ContactsSearch))
-            .SingleInstance();
-        builder.RegisterType<ResolveUsernameFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_ResolveUsername))
-            .SingleInstance();
-        builder.RegisterType<GetContactIdsFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_GetContactIDs))
-            .SingleInstance();
-        builder.RegisterType<GetBlockedFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_GetBlocked))
-            .SingleInstance();
-    }
+        foreach (Type serviceHandlerType in serviceMethods
+                     .Select(x => x.Method.DeclaringType!)
+                     .Where(t => t.IsClass)
+                     .Distinct())
+        {
+            builder.RegisterType(serviceHandlerType).AsSelf().SingleInstance();
+        }
 
-    private static void RegisterUsersMethods(ContainerBuilder builder)
-    {
-        builder.RegisterType<GetUsersFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_GetUsers))
-            .SingleInstance();
-        builder.RegisterType<GetFullUserFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_GetFullUser))
-            .SingleInstance();
-    }
-
-    private static void RegisterAccountMethods(ContainerBuilder builder)
-    {
-        builder.RegisterType<RegisterDeviceFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_RegisterDevice))
-            .SingleInstance();
-        builder.RegisterType<RegisterDeviceL57Func>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_RegisterDeviceL57))
-            .SingleInstance();
-        builder.RegisterType<UnregisterDeviceFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_UnregisterDevice))
-            .SingleInstance();
-        builder.RegisterType<UpdateNotifySettingsFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_AccountUpdateNotifySettings))
-            .SingleInstance();
-        builder.RegisterType<GetNotifySettingsFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_GetNotifySettings))
-            .SingleInstance();
-        builder.RegisterType<ResetNotifySettingsFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_ResetNotifySettings))
-            .SingleInstance();
-        builder.RegisterType<UpdateProfileFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_UpdateProfile))
-            .SingleInstance();
-        builder.RegisterType<UpdateStatusFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_UpdateStatus))
-            .SingleInstance();
-        builder.RegisterType<ReportPeerFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_ReportPeer))
-            .SingleInstance();
-        builder.RegisterType<CheckUsernameFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_AccountCheckUsername))
-            .SingleInstance();
-        builder.RegisterType<UpdateUsernameFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_AccountUpdateUsername))
-            .SingleInstance();
-        builder.RegisterType<SetPrivacyFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_SetPrivacy))
-            .SingleInstance();
-        builder.RegisterType<GetPrivacyFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_GetPrivacy))
-            .SingleInstance();
-        builder.RegisterType<DeleteAccountFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_DeleteAccount))
-            .SingleInstance();
-        builder.RegisterType<SetAccountTtlFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_SetAccountTTL))
-            .SingleInstance();
-        builder.RegisterType<GetAccountTtlFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_GetAccountTTL))
-            .SingleInstance();
-        builder.RegisterType<SendChangePhoneCodeFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_SendChangePhoneCode))
-            .SingleInstance();
-        builder.RegisterType<ChangePhoneFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_ChangePhone))
-            .SingleInstance();
-        builder.RegisterType<UpdateDeviceLockedFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_UpdateDeviceLocked))
-            .SingleInstance();
-        builder.RegisterType<GetAuthorizationsFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_GetAuthorizations))
-            .SingleInstance();
-        builder.RegisterType<ResetAuthorizationFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_ResetAuthorization))
-            .SingleInstance();
-        builder.RegisterType<SetContactSignUpNotificationFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_SetContactSignUpNotification))
-            .SingleInstance();
-        builder.RegisterType<GetContactSignUpNotificationFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_GetContactSignUpNotification))
-            .SingleInstance();
-        builder.RegisterType<ChangeAuthorizationSettingsFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_ChangeAuthorizationSettings))
-            .SingleInstance();
-    }
-
-    private static void RegisterAuthMethods(ContainerBuilder builder)
-    {
-        builder.RegisterType<SendCodeFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_SendCode))
-            .SingleInstance();
-        builder.RegisterType<ResendCodeFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_ResendCode))
-            .SingleInstance();
-        builder.RegisterType<CancelCodeFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_CancelCode))
-            .SingleInstance();
-        builder.RegisterType<SignUpFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_SignUp))
-            .SingleInstance();
-        builder.RegisterType<SignInFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_SignIn))
-            .SingleInstance();
-        builder.RegisterType<BindTempAuthKeyFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_BindTempAuthKey))
-            .SingleInstance();
-        builder.RegisterType<LogOutFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_LogOut))
-            .SingleInstance();
-        builder.RegisterType<DropTempAuthKeysFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_DropTempAuthKeys))
-            .SingleInstance();
-        builder.RegisterType<ResetAuthorizationsFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_ResetAuthorizations))
-            .SingleInstance();
-        builder.RegisterType<ExportLoginTokenFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_ExportLoginToken))
-            .SingleInstance();
-        builder.RegisterType<ExportAuthorizationFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_ExportAuthorization))
-            .SingleInstance();
-        builder.RegisterType<ImportAuthorizationFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_ImportAuthorization))
-            .SingleInstance();
-    }
-
-    private static void RegisterHelpMethods(ContainerBuilder builder)
-    {
-        builder.RegisterType<GetConfigFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_GetConfig))
-            .SingleInstance();
-    }
-
-    private static void RegisterBaseMethods(ContainerBuilder builder)
-    {
-        builder.RegisterType<InitConnectionFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_InitConnection))
+        builder.RegisterAssemblyTypes(typeof(ITLFunction).Assembly)
+            .Where(t => t.GetCustomAttribute<TLFunctionAttribute>() is not null)
+            .As(t =>
+            {
+                var a = t.GetCustomAttribute<TLFunctionAttribute>()!;
+                var iface = typeof(ITLStreamingFunction).IsAssignableFrom(t)
+                    ? typeof(ITLStreamingFunction)
+                    : typeof(ITLFileFunction).IsAssignableFrom(t)
+                        ? typeof(ITLFileFunction)
+                        : typeof(ITLFunction);
+                return new[] { new KeyedService(new FunctionKey(a.Layer, a.Constructor), iface) };
+            })
             .SingleInstance()
             .PropertiesAutowired(PropertyWiringOptions.AllowCircularDependencies);
-        builder.RegisterType<InvokeWithLayerFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.baseLayer_InvokeWithLayer))
-            .SingleInstance()
-            .PropertiesAutowired(PropertyWiringOptions.AllowCircularDependencies);
+
+        foreach (var (method, attribute) in serviceMethods)
+        {
+            Func<object, ITLFunction> functionFactory =
+                ServiceMethodFunction.CreateFactory(method);
+            builder.Register(c => functionFactory(c.Resolve(method.DeclaringType!)))
+                .Keyed<ITLFunction>(new FunctionKey(attribute.Layer, attribute.Constructor))
+                .SingleInstance();
+        }
+
+        builder.RegisterType<DisabledFunc>()
+            .As(DisabledMethods.Keys.Select(k => new KeyedService(k, typeof(ITLFunction))).ToArray())
+            .SingleInstance();
+
+        // The deferred bucket is empty, and Autofac refuses a
+        // registration that exposes no service at all, so the 501 fallback is
+        // only registered while something still needs it.
+        if (NotImplementedMethods.Keys.Length > 0)
+        {
+            builder.RegisterType<NotImplementedFunc>()
+                .As(NotImplementedMethods.Keys.Select(k => new KeyedService(k, typeof(ITLFunction))).ToArray())
+                .SingleInstance();
+        }
     }
 
-    private static void RegisterMTProtoMethods(ContainerBuilder builder)
+    internal static void EnsureUniqueDispatchKeys(Type[] handlerTypes,
+        (MethodInfo Method, TLFunctionAttribute Attribute)[] serviceMethods)
     {
-        builder.RegisterType<ReqPQFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.mtproto_ReqPqMulti))
-            .SingleInstance();
-        builder.RegisterType<ReqDhParamsFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.mtproto_ReqDhParams))
-            .SingleInstance();
-        builder.RegisterType<SetClientDhParamsFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.mtproto_SetClientDhParams))
-            .SingleInstance();
-        builder.RegisterType<MsgsAckFunc>()
-            .Keyed<ITLFunction>(
-                new FunctionKey(DefaultLayer, Constructors.mtproto_MsgsAck))
-            .SingleInstance();
+        var declarations = handlerTypes.Select(t =>
+            {
+                var attribute = t.GetCustomAttribute<TLFunctionAttribute>()!;
+                Type functionType = typeof(ITLStreamingFunction).IsAssignableFrom(t)
+                    ? typeof(ITLStreamingFunction)
+                    : typeof(ITLFileFunction).IsAssignableFrom(t)
+                        ? typeof(ITLFileFunction)
+                        : typeof(ITLFunction);
+                return (Key: new FunctionKey(attribute.Layer, attribute.Constructor),
+                    FunctionType: functionType, Source: t.FullName!);
+            })
+            .Concat(serviceMethods.Select(x =>
+                (Key: new FunctionKey(x.Attribute.Layer, x.Attribute.Constructor),
+                    FunctionType: typeof(ITLFunction),
+                    Source: $"{x.Method.DeclaringType!.FullName}.{x.Method.Name}")))
+            .Concat(DisabledMethods.Keys.Select(k =>
+                (Key: k, FunctionType: typeof(ITLFunction),
+                    Source: $"{typeof(DisabledMethods).FullName}")))
+            .Concat(NotImplementedMethods.Keys.Select(k =>
+                (Key: k, FunctionType: typeof(ITLFunction),
+                    Source: $"{typeof(NotImplementedMethods).FullName}")))
+            .ToArray();
+
+        var duplicate = declarations
+            .GroupBy(x => (x.Key, x.FunctionType))
+            .FirstOrDefault(g => g.Count() > 1);
+        if (duplicate != null)
+        {
+            throw new InvalidOperationException(
+                $"Duplicate TL dispatch key declared by {string.Join(", ", duplicate.Select(x => x.Source))}.");
+        }
     }
 
-    private static void RegisterSchema(ContainerBuilder builder)
-    {
-        var tl = Assembly.Load("Ferrite.TL");
-        var core = Assembly.Load("Ferrite.Core");
-        builder.RegisterAssemblyTypes(tl)
-            .Where(t => t.Namespace == "Ferrite.TL.mtproto")
-            .AsSelf();
-        builder.RegisterAssemblyTypes(tl)
-            .Where(t => t.Namespace == "Ferrite.TL")
-            .AsSelf();
-        builder.RegisterAssemblyOpenGenericTypes(tl)
-            .Where(t => t.Namespace == "Ferrite.TL")
-            .AsSelf();
-        builder.RegisterAssemblyTypes(tl)
-            .Where(t => t.Namespace != null && t.Namespace.StartsWith("Ferrite.TL.currentLayer"))
-            .AsSelf();
-        builder.RegisterAssemblyTypes(core)
-            .Where(t => t.Namespace == "Ferrite.Core.Methods")
-            .AsSelf();
-        builder.RegisterAssemblyOpenGenericTypes(core)
-            .Where(t => t.Namespace == "Ferrite.Core.Methods")
-            .AsSelf();
-        builder.Register(_ => new Ferrite.TL.Int128());
-        builder.Register(_ => new Int256());
-        builder.RegisterType<TLObjectFactory>().As<ITLObjectFactory>();
-    }
-
-    private static void RegisterServices(ContainerBuilder builder)
+    private static void RegisterServices(ContainerBuilder builder,
+        FerriteServerOptions options)
     {
         builder.RegisterType<VerificationGateway>()
             .As<IVerificationGateway>().SingleInstance();
+        builder.RegisterType<RejectingWebAuthorizationTokenValidator>()
+            .As<IWebAuthorizationTokenValidator>().SingleInstance();
+        builder.RegisterType<RejectingDeviceAttestationTokenValidator>()
+            .As<IDeviceAttestationTokenValidator>().SingleInstance();
+        builder.RegisterType<RejectingEmailIdentityTokenValidator>()
+            .As<IEmailIdentityTokenValidator>().SingleInstance();
+        builder.RegisterType<AuthorizationCompletion>()
+            .As<IAuthorizationCompletion>().SingleInstance();
+        builder.RegisterType<VerificationCodeService>()
+            .As<IVerificationCodeService>().SingleInstance();
+        builder.RegisterType<AccountPasswordManager>()
+            .As<IAccountPasswordManager>().SingleInstance();
+        builder.RegisterType<PasswordResetService>()
+            .As<IPasswordResetService>().SingleInstance();
+        builder.RegisterType<PasswordRecoveryService>()
+            .As<IPasswordRecoveryService>().SingleInstance();
+        builder.RegisterType<LoginTokenService>()
+            .As<ILoginTokenService>().SingleInstance();
         builder.RegisterType<MTProtoService>().As<IMTProtoService>()
-            .SingleInstance();
-        builder.RegisterType<LangPackService>().As<ILangPackService>()
             .SingleInstance();
         builder.RegisterType<UpdatesService>().As<IUpdatesService>()
             .SingleInstance();
-        builder.RegisterType<ContactsService>().As<IContactsService>()
+        builder.RegisterType<UpdatesStateService>().As<IUpdatesStateService>()
             .SingleInstance();
-        builder.RegisterType<UserService>().As<IUsersService>()
+        builder.RegisterType<SecretChatDeviceSelector>()
+            .As<ISecretChatDeviceSelector>().SingleInstance();
+        builder.RegisterInstance(new SecretChatLimits()).SingleInstance();
+        builder.RegisterType<SecretChatTelemetry>().AsSelf().SingleInstance();
+        builder.RegisterType<SecretChatMaintenance>()
+            .As<ISecretChatMaintenance>().SingleInstance();
+        builder.RegisterType<SecretChatQtsQueue>()
+            .As<ISecretChatQtsQueue>().SingleInstance();
+        builder.RegisterType<SecretChatEncryptedFileResolver>().AsSelf()
             .SingleInstance();
-        builder.RegisterType<PhotosService>().As<IPhotosService>()
+        builder.RegisterType<SecretChatControlDelivery>().AsSelf().SingleInstance();
+        builder.RegisterType<SecretChatTransitionRepair>()
+            .As<ISecretChatTransitionRepair>().SingleInstance();
+        builder.RegisterType<SecretChatAuthKeyCleanup>()
+            .As<ISecretChatAuthKeyCleanup>().SingleInstance();
+        // 1:1 call collaborators. CallMediaRelayOptions and
+        // CallTurnOptions instances come from the structured server options in
+        // BuildContainer; no PhoneService aggregate or manual function key is
+        // registered — phone.* handlers register through the assembly scan.
+        builder.RegisterInstance(TimeProvider.System).As<TimeProvider>()
+            .SingleInstance();
+        builder.RegisterInstance(new CallRegistryOptions()).SingleInstance();
+        builder.RegisterType<CallRegistry>().As<ICallRegistry>().SingleInstance();
+        builder.RegisterType<TelegramCallReflector>().As<ICallMediaRelay>()
+            .SingleInstance();
+        builder.RegisterType<CoturnRestCredentialProvider>()
+            .As<ITurnCredentialProvider>().SingleInstance();
+        builder.RegisterInstance(new StaticTurnEndpointHealth(true))
+            .As<ITurnEndpointHealth>().SingleInstance();
+        builder.RegisterType<CallTurnConnectionBuilder>().AsSelf().SingleInstance();
+        builder.RegisterInstance(new CallSignalingLimiterOptions()).SingleInstance();
+        builder.RegisterType<CallSignalingLimiter>().AsSelf().SingleInstance();
+        builder.RegisterType<CallTerminator>().AsSelf().SingleInstance();
+        builder.RegisterType<PhotoProcessingService>().As<IPhotoProcessingService>()
             .SingleInstance();
         builder.RegisterType<UploadService>().As<IUploadService>()
             .SingleInstance();
-        builder.RegisterType<MessagesService>().As<IMessagesService>()
+        builder.RegisterType<ChatRowStore>().AsSelf().SingleInstance();
+        builder.RegisterType<GroupCallChatLink>().AsSelf().SingleInstance();
+        builder.RegisterType<GroupCallActionMessages>().AsSelf().SingleInstance();
+        builder.RegisterInstance(new GroupCallActivityOptions()).AsSelf().SingleInstance();
+        GroupCallVideoOptions groupCallVideo = options.GroupCallVideo ??
+            new GroupCallVideoOptions();
+        groupCallVideo.Validate();
+        builder.RegisterInstance(groupCallVideo)
+            .AsSelf().SingleInstance();
+        builder.RegisterInstance(options.GroupCallMediaRuntime ??
+                new GroupCallMediaRuntimeOptions())
+            .AsSelf().SingleInstance();
+        GroupCallBroadcastOptions groupCallBroadcast = options.GroupCallBroadcast ??
+            new GroupCallBroadcastOptions();
+        groupCallBroadcast.Validate();
+        builder.RegisterInstance(groupCallBroadcast).AsSelf().SingleInstance();
+        GroupCallRecordingOptions groupCallRecording = options.GroupCallRecording ??
+            new GroupCallRecordingOptions();
+        groupCallRecording.Validate();
+        builder.RegisterInstance(groupCallRecording).AsSelf().SingleInstance();
+        builder.RegisterType<GroupCallActivityTracker>().AsSelf().SingleInstance();
+        // Live per-viewer SSRC mappings. Deliberately in-memory: the worker
+        // re-derives them on every join, so a persisted snapshot would outlive the
+        // transports it names.
+        builder.RegisterType<GroupCallMediaSourceMap>().AsSelf().SingleInstance();
+        // The tde2e conference chain: the authoritative validator and ordering
+        // server for E2E conference calls, plus the join half both
+        // createConferenceCall and joinGroupCall's flags.3 branch run.
+        builder.RegisterType<GroupCallChainService>()
+            .As<IGroupCallChainService>().AsSelf().SingleInstance();
+        builder.RegisterType<ConferenceJoinOperation>().AsSelf().SingleInstance();
+        builder.RegisterInstance(new GroupCallDisconnectOptions()).AsSelf()
             .SingleInstance();
-        builder.RegisterType<SessionService>().As<ISessionService>().SingleInstance();
+        builder.RegisterType<GroupCallDisconnectMonitor>().AsSelf().SingleInstance();
+        builder.RegisterType<GroupCallSourcesChangedMonitor>().AsSelf().SingleInstance();
+        if (options.GroupCallMediaWorker is { } workerOptions)
+        {
+            workerOptions.Validate();
+            builder.RegisterInstance(workerOptions).AsSelf().SingleInstance();
+            builder.Register(_ => new HttpClient()).AsSelf().SingleInstance();
+            builder.RegisterType<MediasoupGroupCallMediaPlane>()
+                .As<IGroupCallMediaPlane>().AsSelf().SingleInstance();
+            builder.RegisterType<MediasoupGroupCallBroadcastPlane>()
+                .As<IGroupCallBroadcastPlane>().AsSelf().SingleInstance();
+            builder.RegisterType<MediasoupGroupCallRecorder>()
+                .As<IGroupCallRecorder>().AsSelf().SingleInstance();
+        }
+        else
+        {
+            builder.RegisterType<UnavailableGroupCallMediaPlane>()
+                .As<IGroupCallMediaPlane>().SingleInstance();
+            builder.RegisterType<UnavailableGroupCallBroadcastPlane>()
+                .As<IGroupCallBroadcastPlane>().SingleInstance();
+            builder.RegisterType<UnavailableGroupCallRecorder>()
+                .As<IGroupCallRecorder>().SingleInstance();
+        }
+        builder.RegisterType<GroupCallMediaRuntime>().AsSelf().SingleInstance();
+        builder.RegisterType<GroupCallBroadcastRuntime>().AsSelf().SingleInstance();
+        builder.RegisterType<GroupCallRecordingDelivery>()
+            .As<IGroupCallRecordingDelivery>().AsSelf().SingleInstance();
+        builder.RegisterType<GroupCallRecordingCoordinator>()
+            .As<IGroupCallRecordingCoordinator>().AsSelf().SingleInstance();
+        builder.RegisterType<GroupCallRecordingRuntime>().AsSelf().SingleInstance();
+        builder.RegisterType<InviteStore>().AsSelf().SingleInstance();
+        builder.RegisterType<ReactionStore>().AsSelf().SingleInstance();
+        builder.RegisterType<PrivacyEvaluator>().AsSelf().SingleInstance();
+        builder.RegisterType<IdAllocators>().AsSelf().SingleInstance();
+        builder.RegisterType<MessageStore>().AsSelf().SingleInstance();
+        builder.RegisterType<MessageLocator>().AsSelf().SingleInstance();
+        builder.RegisterType<ReadReceiptStore>().AsSelf().SingleInstance();
+        builder.RegisterType<MentionScope>().AsSelf().SingleInstance();
+        builder.RegisterType<DraftStore>().AsSelf().SingleInstance();
+        builder.RegisterType<PollStore>().AsSelf().SingleInstance();
+        builder.RegisterType<ChatSettingsStore>().AsSelf().SingleInstance();
+        builder.RegisterType<ModerationStore>().AsSelf().SingleInstance();
+        builder.RegisterType<NearbyLocationStore>().AsSelf().SingleInstance();
+        builder.RegisterType<MessageExpiryStore>().AsSelf().SingleInstance();
+        builder.RegisterType<MessageExpiryRuntime>().AsSelf().SingleInstance();
+        builder.RegisterType<ScheduledMessageStore>().AsSelf().SingleInstance();
+        builder.RegisterType<ScheduledMessageSender>().AsSelf().SingleInstance();
+        builder.RegisterType<ScheduledMessageFlusher>().AsSelf().SingleInstance();
+        builder.RegisterType<ScheduledMessageRuntime>().AsSelf().SingleInstance();
+        builder.RegisterType<UpdateFanout>().AsSelf().SingleInstance();
+        builder.RegisterType<DialogOrganizationStore>().AsSelf().SingleInstance();
+        builder.RegisterType<DialogFilterStore>().AsSelf().SingleInstance();
+        builder.RegisterType<ChatlistInviteStore>().AsSelf().SingleInstance();
+        builder.RegisterType<StickerStore>().AsSelf().SingleInstance();
+        builder.RegisterType<StatisticsStore>().AsSelf().SingleInstance();
+        builder.RegisterType<StatsGraphTokens>().AsSelf().SingleInstance();
+        builder.RegisterType<AccountSettingsStore>().AsSelf().SingleInstance();
+        builder.RegisterType<ProfileStore>().AsSelf().SingleInstance();
+        builder.RegisterType<WallpaperStore>().AsSelf().SingleInstance();
+        builder.RegisterType<ThemeStore>().AsSelf().SingleInstance();
+        builder.RegisterType<AccountAudioStore>().AsSelf().SingleInstance();
+        builder.RegisterType<DialogBuilder>().AsSelf().SingleInstance();
+        builder.RegisterType<MessageSearchService>().AsSelf().SingleInstance();
+        builder.RegisterType<PublicPostSearchService>().AsSelf().SingleInstance();
+        builder.RegisterType<SendPipeline>().AsSelf().SingleInstance();
+        builder.RegisterType<MediaMessageSender>().AsSelf().SingleInstance();
+        builder.Register(c => new SessionService(c.Resolve<IUnitOfWork>(),
+                c.Resolve<IAuthSessionRepository>(),
+                c.Resolve<ISessionRepository>(), c.Resolve<ILogger>(),
+                options.NodeId))
+            .As<ISessionService>().SingleInstance();
         builder.RegisterType<AuthService>().As<IAuthService>().SingleInstance();
-        builder.RegisterType<AccountService>().As<IAccountService>().SingleInstance();
         builder.RegisterType<SkiaPhotoProcessor>().As<IPhotoProcessor>()
             .SingleInstance();
     }

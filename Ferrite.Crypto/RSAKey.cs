@@ -1,20 +1,5 @@
-﻿/*
- *   Project Ferrite is an Implementation Telegram Server API
- *   Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
- *
- *   This program is free software: you can redistribute it and/or modify
- *   it under the terms of the GNU Affero General Public License as published by
- *   the Free Software Foundation, either version 3 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU Affero General Public License for more details.
- *
- *   You should have received a copy of the GNU Affero General Public License
- *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System;
 using System.Buffers;
@@ -43,29 +28,30 @@ public class RSAKey : IRSAKey
 
     private void CalculateFingerprint()
     {
-        SparseBufferWriter<byte> writer = new SparseBufferWriter<byte>(UnmanagedMemoryPool<byte>.Shared);
+        using SparseBufferWriter<byte> writer = new SparseBufferWriter<byte>(UnmanagedMemoryPool<byte>.Shared);
         if (publicKeyParameters.Modulus != null) writer.WriteTLBytes(publicKeyParameters.Modulus);
         if (publicKeyParameters.Exponent != null) writer.WriteTLBytes(publicKeyParameters.Exponent);
-        var sha1 = SHA1.HashData(writer.ToReadOnlySequence().ToArray());
+        var bytes = new byte[checked((int)writer.WrittenCount)];
+        writer.CopyTo(bytes);
+        var sha1 = SHA1.HashData(bytes);
         fingerprint = BitConverter.ToInt64(sha1, 12);
     }
     private RSA? GetRSAKeyPair(string alias)
     {
         RSA? rsa = RSA.Create(2048);
-        string[] keyFiles = new string[] { alias + "-private.key", alias + "-public.key" };
-        bool exists = true;
-        foreach (var filename in keyFiles)
-        {
-            exists = File.Exists(filename);
-        }
+        string privateKeyFile = alias + "-private.key";
+        string publicKeyFile = alias + "-public.key";
+        // Both files must be present to reuse the pair. Accepting a partial pair
+        // would import a private key that the published public key does not match.
+        bool exists = File.Exists(privateKeyFile) && File.Exists(publicKeyFile);
         if (!exists)
         {
-            File.WriteAllBytes(alias + "-private.key", rsa.ExportRSAPrivateKey());
-            File.WriteAllBytes(alias + "-public.key", rsa.ExportRSAPrivateKey());
+            File.WriteAllBytes(privateKeyFile, rsa.ExportRSAPrivateKey());
+            File.WriteAllBytes(publicKeyFile, rsa.ExportRSAPublicKey());
         }
         else
         {
-            rsa.ImportRSAPrivateKey(File.ReadAllBytes(alias + "-private.key"),
+            rsa.ImportRSAPrivateKey(File.ReadAllBytes(privateKeyFile),
                 out var bytesRead);
         }
         return rsa;

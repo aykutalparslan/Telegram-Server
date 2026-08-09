@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1
+FROM mcr.microsoft.com/dotnet/sdk:10.0.100-noble AS build
+
+WORKDIR /src
+COPY . .
+RUN dotnet restore Ferrite/Ferrite.csproj
+RUN dotnet publish Ferrite/Ferrite.csproj -c Release -m:1 --no-restore \
+    --output /out
+
+FROM mcr.microsoft.com/dotnet/runtime:10.0.0-noble
+
+WORKDIR /app
+RUN mkdir -p /data && chown app:app /app /data
+COPY --from=build --chown=app:app /out .
+
+USER app
+EXPOSE 5222/tcp
+ENTRYPOINT ["dotnet", "Ferrite.dll"]

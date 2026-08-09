@@ -1,23 +1,7 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Net;
-using Ferrite.Data;
 
 namespace Ferrite.Core.Connection;
 
@@ -30,11 +14,16 @@ public interface IMTProtoSession
     byte[]? AuthKey { get; }
     long SessionId { get; }
     long UniqueSessionId { get; }
-    ServerSaltDTO ServerSalt { get; }
+    long ServerSalt { get; }
     Dictionary<string, object> SessionData { get; }
     bool TryFetchAuthKey(long authKeyId);
     int GenerateQuickAck(Span<byte> messageSpan);
     int GenerateSeqNo(bool isContentRelated);
+    void RecordSentMessage(long messageId, int sequenceNo, int length, bool contentRelated);
+    void RecordSentMessage(long messageId, int sequenceNo, int length, bool contentRelated,
+        long responseToMessageId);
+    bool TryGetSentMessage(long messageId, out MTProtoSentMessage message);
+    bool MarkSentMessageAcknowledged(long messageId);
 
     /// <summary>
     /// Gets the next Message Identifier (msg_id) for this session.
@@ -51,6 +40,9 @@ public interface IMTProtoSession
     /// <param name="messageId"></param>
     /// <returns></returns>
     bool IsValidMessageId(long messageId);
+    bool TryValidateMessageId(long messageId, out int errorCode,
+        bool isContainer = false);
+    bool IsValidServerSalt(long serverSalt, out long currentServerSalt);
 
     Services.MTProtoMessage GenerateSessionCreated(long firstMessageId, long serverSalt);
 

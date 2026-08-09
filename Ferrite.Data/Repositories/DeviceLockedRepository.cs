@@ -1,22 +1,10 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 namespace Ferrite.Data.Repositories;
+
+using Ferrite.TL;
+using Ferrite.TL.baseLayer.dto;
 
 public class DeviceLockedRepository : IDeviceLockedRepository
 {
@@ -24,14 +12,15 @@ public class DeviceLockedRepository : IDeviceLockedRepository
     public DeviceLockedRepository(IVolatileKVStore store)
     {
         _store = store;
-        store.SetSchema(new TableDefinition("ferrite", "locked_devices",
+        store.SetSchema(new TableDefinition("ferrite", "locked_devices_tl1",
             new KeyDefinition("pk",
                 new DataColumn { Name = "auth_key_id", Type = DataType.Long })));
     }
     public bool PutDeviceLocked(long authKeyId, TimeSpan period)
     {
         var lockedUntil = DateTimeOffset.Now.Add(period).ToUnixTimeMilliseconds();
-        _store.Put(BitConverter.GetBytes(lockedUntil), period, authKeyId);
+        using var row = DeviceLockState.Builder().LockedUntil(lockedUntil).Build();
+        _store.Put(row.ToReadOnlySpan().ToArray(), period, authKeyId);
         return true;
     }
 
@@ -40,7 +29,10 @@ public class DeviceLockedRepository : IDeviceLockedRepository
         var status = _store.Get(authKeyId);
         if (status != null)
         {
-            long lockedUntil = BitConverter.ToInt64(status);
+            var value = new TLBytes(status, 0, status.Length);
+            if (value.Constructor != Constructors.baseLayer_DeviceLockState)
+                throw new InvalidDataException("Device-lock codec/version mismatch.");
+            long lockedUntil = ((TLDeviceLockState)value).AsDeviceLockState().LockedUntil;
             var now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
             return TimeSpan.FromMilliseconds(lockedUntil - now);
         }

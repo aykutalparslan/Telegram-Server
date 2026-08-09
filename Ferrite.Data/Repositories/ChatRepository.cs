@@ -1,36 +1,31 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.TL.slim;
-using Ferrite.TL.slim.baseLayer;
-using MessagePack;
+using Ferrite.TL;
+using Ferrite.TL.baseLayer;
+using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Data.Repositories;
 
 public class ChatRepository : IChatRepository
 {
     private readonly IKVStore _store;
-    public ChatRepository(IKVStore store)
+    private readonly IKVStore _storeFullInfo;
+    private readonly IKVStore _storeUsernames;
+    public ChatRepository(IKVStore store, IKVStore storeFullInfo, IKVStore storeUsernames)
     {
         _store = store;
         store.SetSchema(new TableDefinition("ferrite", "chats",
             new KeyDefinition("pk",
                 new DataColumn { Name = "chat_id", Type = DataType.Long })));
+        _storeFullInfo = storeFullInfo;
+        storeFullInfo.SetSchema(new TableDefinition("ferrite", "chat_full",
+            new KeyDefinition("pk",
+                new DataColumn { Name = "chat_id", Type = DataType.Long })));
+        _storeUsernames = storeUsernames;
+        storeUsernames.SetSchema(new TableDefinition("ferrite", "chat_usernames_tl1",
+            new KeyDefinition("pk",
+                new DataColumn { Name = "username", Type = DataType.String })));
     }
     public bool PutChat(TLChat chat)
     {
@@ -53,5 +48,58 @@ public class ChatRepository : IChatRepository
         }
 
         return null;
+    }
+
+    public bool DeleteChat(long chatId)
+    {
+        bool deleted = _store.Delete(chatId);
+        return _storeFullInfo.Delete(chatId) && deleted;
+    }
+
+    public bool PutFullInfo(TLChatFullInfo fullInfo)
+    {
+        return _storeFullInfo.Put(fullInfo.AsSpan().ToArray(),
+            fullInfo.AsChatFullInfo().ChatId);
+    }
+
+    public async ValueTask<TLChatFullInfo?> GetFullInfoAsync(long chatId)
+    {
+        var fullInfoBytes = await _storeFullInfo.GetAsync(chatId);
+        if (fullInfoBytes is { Length: > 0 })
+        {
+            return new TLChatFullInfo(fullInfoBytes, 0, fullInfoBytes.Length);
+        }
+
+        return null;
+    }
+
+    public bool DeleteFullInfo(long chatId)
+    {
+        return _storeFullInfo.Delete(chatId);
+    }
+
+    public bool PutUsername(string username, long chatId)
+    {
+        using var row = ChatUsernameReference.Builder().ChatId(chatId).Build();
+        return _storeUsernames.Put(row.ToReadOnlySpan().ToArray(), username);
+    }
+
+    public long? GetChatIdByUsername(string username)
+    {
+        var chatIdBytes = _storeUsernames.Get(username);
+        if (chatIdBytes is { Length: > 0 })
+        {
+            var value = new TLBytes(chatIdBytes, 0, chatIdBytes.Length);
+            if (value.Constructor != Constructors.baseLayer_ChatUsernameReference)
+                throw new InvalidDataException("Chat username codec/version mismatch.");
+            return ((TLChatUsernameReference)value).AsChatUsernameReference().ChatId;
+        }
+
+        return null;
+    }
+
+    public bool DeleteUsername(string username)
+    {
+        return _storeUsernames.Delete(username);
     }
 }

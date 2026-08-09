@@ -1,63 +1,89 @@
-# Project Ferrite (Telegram Server)
+<p align="center">
+  <img src="logo.jpeg" width="160" alt="Ferrite">
+</p>
 
-Project Ferrite is an implementation of the Telegram Server API in C# and this repo records it's work-in-progress. Development is focused on implementing must have features before the first release.
+# Ferrite
 
-## What works?
+Ferrite is an implementation of the Telegram server API in C#/.NET. It speaks
+MTProto over TCP and WebSocket and implements the Telegram client API at
+**layer 214**, including messaging, channels and supergroups, media and file
+transfer, secret chats, and voice, video and group calls.
 
-The following are the features that are implemented and working so far:
-- All MTProto transports are implemented
-- Websockets and Obfuscation
-- Creation of an Auth Key
-- MTProto Encryption/Decryption (AES-IGE, AES-CTR, RSA with custom padding etc.)
-- TL Serialization/Deserialization
-- auth, account, users, contacts, photos, upload, help, langpack namespaces have been implemented to some extend
-- Saved Messages and Sending messages works with text messages and photos.
+Ferrite is independent software. It is not affiliated with, endorsed by, or
+connected to Telegram Messenger Inc.
 
-## Debugging the server
-Debugging previously required an infrastructure comprised of Redis, Cassandra, MinIO and ElasticSearch. Currently however Ferrite has a pluggable storage system and local data stores based on RocksDB, FASTER and Lucene are implemented as well as an in-memory cache so we won't need that infrastructure for debugging.
-- Clone the repository.
-```console
-git clone https://github.com/aykutalparslan/Ferrite
+## Requirements
+
+- .NET SDK **10.0.100** or later (`global.json` pins the feature band)
+- Node.js 20+ and Docker, if you need group calls — the media plane is a
+  [mediasoup](https://mediasoup.org) worker in `group-call-worker/`
+
+## Build and run
+
+```sh
+dotnet build Ferrite.sln
+dotnet run --project Ferrite
 ```
-- Install .NET 7 
-- Make sure default-private.key and default-public-key are copied to the output directory as those are the keys embedded into the modified client.
-- Make sure Ferrite.Data/LangData is also copied to the output directory.
-- Debug the Ferrite Console Application with your favourite IDE or
-```console
-dotnet run
+
+The server listens on port **5222** and advertises **10.0.2.2** by default, which
+suits an Android emulator talking to its host. Point a client at your own address
+with:
+
+```sh
+FERRITE_PUBLIC_ADDRESS=192.0.2.10 FERRITE_PORT=5222 dotnet run --project Ferrite
 ```
-- Telegram protocol requires clients to have the server's public key.
-- Use the [modified Android client](https://github.com/aykutalparslan/Telegram) to test with.
 
+State is written under `data/`. The repository ships **sample** server keys so a
+fresh clone runs immediately; delete `default-private.key` and
+`default-public.key` before any real deployment so Ferrite generates its own.
+Clients need the server's public key and address — see
+[docs/installation.md](docs/installation.md).
 
-## Roadmap
+This runs a single process against local file-backed storage, with no external
+dependencies. To bring up the distributed topology instead — Cassandra, Redis,
+Kafka, object storage, search, TURN, and the group-call worker — use the .NET
+Aspire host:
 
-A planned refactor is currently in progress(There's a release with the latest commits before this). 
-After the refactor, more unit and integration tests will be added before continuing development. 
-Future development will focus on getting the Android application to run in a stable state and the planned order of steps to achieve that are:
-- All settings screens should work on the Android application
-- Contacts related features should work as expected
-- Phone calls.
-- Basic messaging
-- Groups and channels
+```sh
+dotnet run --project Ferrite.AppHost
+```
 
-After the Android application is working as expected the development will focus on the iOS application and then the Desktop and Web applications. Basic features are planned to be implemented in the beginning. After all this the next planned steps are:
-- There will be a refactor to support memory efficient serialization
-- Support for so called API layers will be added
-- Optimizations and benchmarks
-- Implementation of the missing features
+That graph is a local development environment: it publishes fixed ports, uses
+development credentials, and advertises loopback, so it serves clients on the
+same machine. See [docs/deployment.md](docs/deployment.md).
 
-## Contributions
+## Deployment
 
-The project is not open to contributions at this point unless they are very trivial bug fixes with only a couple of lines. 
-It is planned to open the project to contributions after the first stable release.
+`deploy/` holds a Compose definition that builds and runs the server together
+with the group-call worker:
+
+```sh
+docker compose -f deploy/docker-compose.yml up --build
+```
+
+Relayed calls additionally need a TURN server; `deploy/coturn/` contains a
+working configuration. See [docs/deployment.md](docs/deployment.md).
+
+## Configuration
+
+Everything is configured through `FERRITE_*` environment variables. Ferrite runs
+out of the box on local file-backed storage and needs no external services. It can
+also be pointed at Cassandra, Redis, Kafka, S3-compatible object storage, and
+Elasticsearch. See [docs/configuration.md](docs/configuration.md).
+
+## Security
+
+Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+Please do not open a public issue for a security problem.
 
 ## License
 
-Project Ferrite is licensed under GNU AGPL-3.0
+Copyright (C) 2022-2026 Aykut Alparslan KOÇ
 
-### Special Thanks
+Ferrite is free software: you may redistribute it and/or modify it under the terms
+of the **GNU Affero General Public License, version 3 or later**. It is distributed
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the full text.
 
-<a href="https://jb.gg/OpenSourceSupport"><img src="https://resources.jetbrains.com/storage/products/company/brand/logos/Rider_icon.svg" width="48"><a/>
-
-[Telegram-Server]: <https://github.com/aykutalparslan/Telegram-Server/>
+`Ferrite.Transport` contains files derived from ASP.NET Core, used under the MIT
+license; see [Ferrite.Transport/LICENSE.aspnetcore](Ferrite.Transport/LICENSE.aspnetcore).

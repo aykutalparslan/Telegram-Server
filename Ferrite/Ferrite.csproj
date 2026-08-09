@@ -2,11 +2,11 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <DockerComposeProjectPath>../docker-compose.dcproj</DockerComposeProjectPath>
   </PropertyGroup>
+
 
   <ItemGroup>
     <None Remove="BouncyCastle" />
@@ -15,7 +15,6 @@
     <None Remove="DotNext.IO" />
     <None Remove="DotNext.Unsafe" />
     <None Remove="Microsoft.AspNetCore.Server.Kestrel" />
-    <None Remove="MessagePack" />
     <None Remove="LanguagePacks\" />
     <None Update="default-private.key">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
@@ -28,10 +27,9 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="DotNext" Version="4.7.4" />
-    <PackageReference Include="DotNext.IO" Version="4.7.4" />
-    <PackageReference Include="DotNext.Unsafe" Version="4.7.4" />
-    <PackageReference Include="MessagePack" Version="2.4.35" />
+    <PackageReference Include="DotNext" Version="6.3.0" />
+    <PackageReference Include="DotNext.IO" Version="6.3.0" />
+    <PackageReference Include="DotNext.Unsafe" Version="6.3.0" />
   </ItemGroup>
   <ItemGroup>
     <None Update="TL\mtproto\T4Template.hhh">
@@ -49,18 +47,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Ferrite.Crypto\Ferrite.Crypto.csproj" />
     <ProjectReference Include="..\Ferrite.Transport\Ferrite.Transport.csproj" />
-    <ProjectReference Include="..\Ferrite.TL\Ferrite.TL.csproj" />
     <ProjectReference Include="..\Ferrite.Core\Ferrite.Core.csproj" />
     <ProjectReference Include="..\Ferrite.Utils\Ferrite.Utils.csproj" />
     <ProjectReference Include="..\Ferrite.Services\Ferrite.Services.csproj" />
+    <ProjectReference Include="..\Ferrite.GroupCallMedia\Ferrite.GroupCallMedia.csproj" />
   </ItemGroup>
-  <ProjectExtensions>
-    <MonoDevelop>
-      <Properties>
-        <Policies>
-          <StandardHeader IncludeInNewFiles="True" Text="&#xA; Copyright ${Year}  ${CopyrightHolder}&#xA;&#xA;   Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);&#xA;   you may not use this file except in compliance with the License.&#xA;   You may obtain a copy of the License at&#xA;&#xA;       http://www.apache.org/licenses/LICENSE-2.0&#xA;&#xA;   Unless required by applicable law or agreed to in writing, software&#xA;   distributed under the License is distributed on an &quot;AS IS&quot; BASIS,&#xA;   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.&#xA;   See the License for the specific language governing permissions and&#xA;   limitations under the License." />
-        </Policies>
-      </Properties>
-    </MonoDevelop>
-  </ProjectExtensions>
 </Project>

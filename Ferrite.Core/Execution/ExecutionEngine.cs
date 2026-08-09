@@ -1,29 +1,17 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using System.Collections.Immutable;
 using Autofac;
 using Autofac.Features.Indexed;
+using Ferrite.Core.Execution.Functions.BaseLayer;
 using Ferrite.Core.Execution.Functions;
+using Ferrite.Crypto;
+using Ferrite.Data.Repositories;
 using Ferrite.Services;
+using Ferrite.Core.Execution;
+using Ferrite.Core.RequestChain;
 using Ferrite.TL;
-using Ferrite.TL.slim;
-using Ferrite.TL.slim.mtproto;
+using Ferrite.TL.mtproto;
 using Ferrite.Utils;
 
 namespace Ferrite.Core.Execution;
@@ -31,43 +19,67 @@ namespace Ferrite.Core.Execution;
 public class ExecutionEngine : IExecutionEngine
 {
     private readonly IIndex<FunctionKey, ITLFunction> _functions;
+    private readonly IIndex<FunctionKey, ITLStreamingFunction> _streamingFunctions;
+    private readonly IIndex<FunctionKey, ITLFileFunction> _fileFunctions;
     private readonly IMTProtoService _mtproto;
     private readonly IAuthService _auth;
+    private readonly IRandomGenerator _random;
     private readonly ILogger _log;
-    private readonly SortedSet<int> _tempMethods = new();
-    private readonly SortedSet<int> _unauthorizedMethods = new();
+    private readonly IWriteBatchAccessor? _writeBatches;
+    private readonly IAccountSettingsRepository? _accountSettings;
+    private readonly TimeProvider _time;
+    private readonly AsyncLocal<int> _writeScopeDepth = new();
 
-    public ExecutionEngine(IIndex<FunctionKey, ITLFunction> functions, 
-        IMTProtoService mtproto, IAuthService auth, ILogger log)
+    public ExecutionEngine(IIndex<FunctionKey, ITLFunction> functions,
+        IIndex<FunctionKey, ITLStreamingFunction> streamingFunctions,
+        IIndex<FunctionKey, ITLFileFunction> fileFunctions,
+        IMTProtoService mtproto, IAuthService auth, IRandomGenerator random, ILogger log,
+        IWriteBatchAccessor? writeBatches = null,
+        IAccountSettingsRepository? accountSettings = null,
+        TimeProvider? timeProvider = null)
     {
         _functions = functions;
+        _streamingFunctions = streamingFunctions;
+        _fileFunctions = fileFunctions;
         _mtproto = mtproto;
         _auth = auth;
+        _random = random;
         _log = log;
-        AddUnauthorizedMethods();
-        AddTempMethods();
+        _writeBatches = writeBatches;
+        _accountSettings = accountSettings;
+        _time = timeProvider ?? TimeProvider.System;
     }
-    
+
     public async ValueTask<TLBytes?> Invoke(TLBytes rpc, TLExecutionContext ctx, int layer = IExecutionEngine.DefaultLayer)
     {
-        var keyStatus = await _mtproto.GetKeyStatus(ctx.CurrentAuthKeyId);
-        if (ctx.CurrentAuthKeyId != 0 && 
-            keyStatus == KeyStatus.TempUnbound &&
-            !IsTempKeyAllowed(rpc.Constructor))
+        if (_writeBatches == null || _writeScopeDepth.Value != 0)
         {
-            return RpcError.Builder()
-                .ErrorCode(401)
-                .ErrorMessage("AUTH_KEY_PERM_EMPTY"u8)
-                .Build().TLBytes;
+            return await InvokeCore(rpc, ctx, layer);
         }
-        if (RequiresAuthorization(rpc.Constructor) && 
-            !await _auth.IsAuthorized(ctx.CurrentAuthKeyId))
+
+        _writeScopeDepth.Value++;
+        try
         {
-            return RpcError.Builder()
-                .ErrorCode(401)
-                .ErrorMessage("AUTH_KEY_UNREGISTERED"u8)
-                .Build().TLBytes;
+            using IWriteBatchScope scope = _writeBatches.BeginScope();
+            return await InvokeCore(rpc, ctx, layer);
         }
+        finally
+        {
+            _writeScopeDepth.Value--;
+        }
+    }
+
+    private async ValueTask<TLBytes?> InvokeCore(TLBytes rpc, TLExecutionContext ctx, int layer)
+    {
+        if (rpc.Constructor == Constructors.mtproto_GzipPacked)
+        {
+            using var unpacked = GzipPackedHelper.Unpack(rpc);
+            return await InvokeCore(unpacked, ctx, layer);
+        }
+
+        var authError = await GetAuthError(rpc.Constructor, ctx);
+        if (authError != null) return authError;
+
         try
         {
             var found = _functions.TryGetValue(new FunctionKey(layer, rpc.Constructor), out var func);
@@ -87,6 +99,232 @@ public class ExecutionEngine : IExecutionEngine
         }
     }
 
+    public async ValueTask<TLBytes?> Invoke(ITLStreamingObject rpc, TLExecutionContext ctx,
+        int layer = IExecutionEngine.DefaultLayer)
+    {
+        if (_writeBatches == null || _writeScopeDepth.Value != 0)
+        {
+            return await InvokeStreamingCore(rpc, ctx, layer);
+        }
+
+        _writeScopeDepth.Value++;
+        try
+        {
+            using IWriteBatchScope scope = _writeBatches.BeginScope();
+            return await InvokeStreamingCore(rpc, ctx, layer);
+        }
+        finally
+        {
+            _writeScopeDepth.Value--;
+        }
+    }
+
+    private async ValueTask<TLBytes?> InvokeStreamingCore(ITLStreamingObject rpc,
+        TLExecutionContext ctx, int layer)
+    {
+        var authError = await GetAuthError(rpc.Constructor, ctx);
+        if (authError != null) return authError;
+
+        try
+        {
+            var found = _streamingFunctions.TryGetValue(new FunctionKey(layer, rpc.Constructor), out var func);
+            if (!found)
+            {
+                _log.Error($"#{rpc.Constructor.ToString("x")} is not found for layer {layer}");
+                var err = RpcErrorGenerator.GenerateError(500, "INTERNAL_SERVER_ERROR"u8);
+                return RpcResultGenerator.Generate(err, ctx.MessageId);
+            }
+            return await func!.Process(rpc, ctx);
+        }
+        catch (Exception e)
+        {
+            _log.Error(e, $"#{rpc.Constructor.ToString("x")} for layer {layer} cannot be processed: {e.Message}");
+            var err = RpcErrorGenerator.GenerateError(500, "INTERNAL_SERVER_ERROR"u8);
+            return RpcResultGenerator.Generate(err, ctx.MessageId);
+        }
+    }
+
+    public async ValueTask<FileResult> InvokeFile(TLBytes rpc, TLExecutionContext ctx,
+        int layer = IExecutionEngine.DefaultLayer)
+    {
+        if (_writeBatches == null || _writeScopeDepth.Value != 0)
+        {
+            return await InvokeFileCore(rpc, ctx, layer);
+        }
+
+        _writeScopeDepth.Value++;
+        try
+        {
+            using IWriteBatchScope scope = _writeBatches.BeginScope();
+            return await InvokeFileCore(rpc, ctx, layer);
+        }
+        finally
+        {
+            _writeScopeDepth.Value--;
+        }
+    }
+
+    private async ValueTask<FileResult> InvokeFileCore(TLBytes rpc, TLExecutionContext ctx,
+        int layer)
+    {
+        if (rpc.Constructor == Constructors.mtproto_GzipPacked)
+        {
+            using var unpacked = GzipPackedHelper.Unpack(rpc);
+            return await InvokeFileCore(unpacked, ctx, layer);
+        }
+
+        var authError = await GetAuthError(rpc.Constructor, ctx);
+        if (authError != null) return new FileResult(null, authError);
+
+        try
+        {
+            if (rpc.Constructor == Constructors.baseLayer_InvokeWithLayer)
+            {
+                using var query = RequestUnwrapper.InvokeWithLayerQuery(rpc, out int requestedLayer);
+                return await InvokeFileCore(query, ctx, requestedLayer);
+            }
+            if (rpc.Constructor == Constructors.baseLayer_InitConnection)
+            {
+                using var info = InitConnectionFunc.CreateAppInfo(rpc, ctx, _random);
+                await _auth.SaveAppInfo(info);
+                using var query = RequestUnwrapper.InitConnectionQuery(rpc);
+                return await InvokeFileCore(query, ctx, layer);
+            }
+            if (rpc.Constructor == Constructors.baseLayer_InvokeAfterMsg)
+            {
+                using var query = RequestUnwrapper.InvokeAfterMsgQuery(rpc);
+                return await InvokeFileCore(query, ctx, layer);
+            }
+            if (rpc.Constructor == Constructors.baseLayer_InvokeAfterMsgs)
+            {
+                using var query = RequestUnwrapper.InvokeAfterMsgsQuery(rpc);
+                return await InvokeFileCore(query, ctx, layer);
+            }
+            if (rpc.Constructor == Constructors.baseLayer_InvokeWithoutUpdates)
+            {
+                using var query = RequestUnwrapper.InvokeWithoutUpdatesQuery(rpc);
+                return await InvokeFileCore(query, ctx, layer);
+            }
+            if (rpc.Constructor == Constructors.baseLayer_InvokeWithMessagesRange)
+            {
+                using var query = RequestUnwrapper.InvokeWithMessagesRangeQuery(rpc);
+                return await InvokeFileCore(query, ctx, layer);
+            }
+            if (rpc.Constructor == Constructors.baseLayer_InvokeWithTakeout)
+            {
+                using var query = RequestUnwrapper.InvokeWithTakeoutQuery(rpc,
+                    out long takeoutId);
+                if (!await IsValidTakeoutAsync(takeoutId, ctx.CurrentAuthKeyId))
+                {
+                    return new FileResult(null, RpcErrorGenerator.GenerateError(
+                        400, "TAKEOUT_INVALID"u8));
+                }
+                return await InvokeFileCore(query, ctx, layer);
+            }
+            if (rpc.Constructor == Constructors.baseLayer_InvokeWithGooglePlayIntegrityPrefix)
+            {
+                using var query = RequestUnwrapper.InvokeWithGooglePlayIntegrityQuery(rpc);
+                return await InvokeFileCore(query, ctx, layer);
+            }
+            if (rpc.Constructor == Constructors.baseLayer_InvokeWithApnsSecretPrefix)
+            {
+                using var query = RequestUnwrapper.InvokeWithApnsSecretQuery(rpc);
+                return await InvokeFileCore(query, ctx, layer);
+            }
+            if (rpc.Constructor == Constructors.baseLayer_InvokeWithReCaptchaPrefix)
+            {
+                using var query = RequestUnwrapper.InvokeWithReCaptchaQuery(rpc);
+                return await InvokeFileCore(query, ctx, layer);
+            }
+            if (!_fileFunctions.TryGetValue(new FunctionKey(layer, rpc.Constructor), out var func))
+            {
+                _log.Error($"#{rpc.Constructor.ToString("x")} is not found for layer {layer}");
+                return new FileResult(null, RpcErrorGenerator.GenerateError(500, "INTERNAL_SERVER_ERROR"u8));
+            }
+            return await func!.Process(rpc, ctx);
+        }
+        catch (Exception e)
+        {
+            _log.Error(e, $"#{rpc.Constructor.ToString("x")} for layer {layer} cannot be processed: {e.Message}");
+            return new FileResult(null, RpcErrorGenerator.GenerateError(500, "INTERNAL_SERVER_ERROR"u8));
+        }
+    }
+
+    public bool IsFileRequest(TLBytes rpc)
+    {
+        try
+        {
+            return IsFileRequestCore(rpc);
+        }
+        catch
+        {
+            // Malformed wrappers belong to the normal invocation path, which
+            // already owns its error logging and response behavior.
+            return false;
+        }
+    }
+
+    private static bool IsFileRequestCore(TLBytes rpc)
+    {
+        if (rpc.Constructor == Constructors.baseLayer_GetFile) return true;
+        if (rpc.Constructor == Constructors.mtproto_GzipPacked)
+        {
+            using var unpacked = GzipPackedHelper.Unpack(rpc);
+            return IsFileRequestCore(unpacked);
+        }
+        if (rpc.Constructor == Constructors.baseLayer_InvokeWithLayer)
+        {
+            using var query = RequestUnwrapper.InvokeWithLayerQuery(rpc, out _);
+            return IsFileRequestCore(query);
+        }
+        if (rpc.Constructor == Constructors.baseLayer_InitConnection)
+        {
+            using var query = RequestUnwrapper.InitConnectionQuery(rpc);
+            return IsFileRequestCore(query);
+        }
+        if (rpc.Constructor == Constructors.baseLayer_InvokeAfterMsg)
+        {
+            using var query = RequestUnwrapper.InvokeAfterMsgQuery(rpc);
+            return IsFileRequestCore(query);
+        }
+        if (rpc.Constructor == Constructors.baseLayer_InvokeAfterMsgs)
+        {
+            using var query = RequestUnwrapper.InvokeAfterMsgsQuery(rpc);
+            return IsFileRequestCore(query);
+        }
+        if (rpc.Constructor == Constructors.baseLayer_InvokeWithoutUpdates)
+        {
+            using var query = RequestUnwrapper.InvokeWithoutUpdatesQuery(rpc);
+            return IsFileRequestCore(query);
+        }
+        if (rpc.Constructor == Constructors.baseLayer_InvokeWithMessagesRange)
+        {
+            using var query = RequestUnwrapper.InvokeWithMessagesRangeQuery(rpc);
+            return IsFileRequestCore(query);
+        }
+        if (rpc.Constructor == Constructors.baseLayer_InvokeWithTakeout)
+        {
+            using var query = RequestUnwrapper.InvokeWithTakeoutQuery(rpc, out _);
+            return IsFileRequestCore(query);
+        }
+        if (rpc.Constructor == Constructors.baseLayer_InvokeWithGooglePlayIntegrityPrefix)
+        {
+            using var query = RequestUnwrapper.InvokeWithGooglePlayIntegrityQuery(rpc);
+            return IsFileRequestCore(query);
+        }
+        if (rpc.Constructor == Constructors.baseLayer_InvokeWithApnsSecretPrefix)
+        {
+            using var query = RequestUnwrapper.InvokeWithApnsSecretQuery(rpc);
+            return IsFileRequestCore(query);
+        }
+        if (rpc.Constructor == Constructors.baseLayer_InvokeWithReCaptchaPrefix)
+        {
+            using var query = RequestUnwrapper.InvokeWithReCaptchaQuery(rpc);
+            return IsFileRequestCore(query);
+        }
+        return false;
+    }
+
     public bool IsImplemented(int constructor, int layer = IExecutionEngine.DefaultLayer)
     {
         try
@@ -102,57 +340,48 @@ public class ExecutionEngine : IExecutionEngine
         return false;
     }
 
+    private async ValueTask<bool> IsValidTakeoutAsync(long id, long authKeyId)
+    {
+        if (_accountSettings is null) return false;
+        using TL.baseLayer.dto.TLTakeoutSessionState? session =
+            await _accountSettings.GetTakeoutSessionAsync(id);
+        return session is not null &&
+               session.Value.AsTakeoutSessionState().AuthKeyId == authKeyId &&
+               session.Value.AsTakeoutSessionState().ExpiresAt >
+               _time.GetUtcNow().ToUnixTimeSeconds();
+    }
+
+    private async ValueTask<TLBytes?> GetAuthError(int constructor, TLExecutionContext ctx)
+    {
+        var keyStatus = await _mtproto.GetKeyStatus(ctx.CurrentAuthKeyId);
+        if (ctx.CurrentAuthKeyId != 0 &&
+            keyStatus == KeyStatus.TempUnbound &&
+            !IsTempKeyAllowed(constructor))
+        {
+            return RpcError.Builder()
+                .ErrorCode(401)
+                .ErrorMessage("AUTH_KEY_PERM_EMPTY"u8)
+                .Build().TLBytes;
+        }
+        if (RequiresAuthorization(constructor) &&
+            !await _auth.IsAuthorized(ctx.CurrentAuthKeyId))
+        {
+            return RpcError.Builder()
+                .ErrorCode(401)
+                .ErrorMessage("AUTH_KEY_UNREGISTERED"u8)
+                .Build().TLBytes;
+        }
+
+        return null;
+    }
+
     private bool RequiresAuthorization(int constructor)
     {
-        return !_unauthorizedMethods.Contains(constructor);
+        return !AuthPolicy.UnauthorizedMethods.Contains(constructor);
     }
     
     private bool IsTempKeyAllowed(int constructor)
     {
-        return _tempMethods.Contains(constructor);
-    }
-    
-    private void AddUnauthorizedMethods()
-    {
-        _unauthorizedMethods.Add(-1502141361);//auth.sendCode
-        _unauthorizedMethods.Add(1056025023);//auth.resendCode
-        _unauthorizedMethods.Add(unchecked((int)0x1f040578));//auth.cancelCode
-        _unauthorizedMethods.Add(1418342645);//account.getPassword
-        _unauthorizedMethods.Add(-779399914);//auth.checkPassword
-        _unauthorizedMethods.Add(-2131827673);//auth.signUp
-        _unauthorizedMethods.Add(-1126886015);//auth.signIn
-        _unauthorizedMethods.Add(-1923962543);//auth.signIn
-        _unauthorizedMethods.Add(-1518699091);//auth.importAuthorization
-        _unauthorizedMethods.Add(-990308245);//help.getConfig
-        _unauthorizedMethods.Add(531836966);//help.getNearestDC
-        _unauthorizedMethods.Add(1378703997);//help.getAppUpdate
-        _unauthorizedMethods.Add(1375900482);//help.getCDNConfig
-        _unauthorizedMethods.Add(1935116200);//help.getCountriesList
-        _unauthorizedMethods.Add(-219008246);//langpack.getLangPack
-        _unauthorizedMethods.Add(unchecked((int)0x9ab5c58e));//langpack.getLangPackL67
-        _unauthorizedMethods.Add(-269862909);//langpack.getStrings
-        _unauthorizedMethods.Add(-845657435);//langpack.getDifference
-        _unauthorizedMethods.Add(1120311183);//langpack.getLanguages
-        _unauthorizedMethods.Add(-2146445955);//langpack.getLanguagesL67
-        _unauthorizedMethods.Add(1784243458);//langpack.getLanguage
-        _unauthorizedMethods.Add(-1043505495);//InitConnection
-        _unauthorizedMethods.Add(-841733627);//auth.bindTempAuthKey
-        _unauthorizedMethods.Add(-1188971260);//get_future_salts
-        _unauthorizedMethods.Add(unchecked((int)0xbe7e8ef1));//req_pq_multi
-        _unauthorizedMethods.Add(unchecked((int)0xd712e4be));//req_dh_params
-        _unauthorizedMethods.Add(unchecked((int)0xf5045f1f));//set_client_dh_params
-        _unauthorizedMethods.Add(unchecked((int)0x7abe77ec));//ping
-        _unauthorizedMethods.Add(unchecked((int)0xf3427b8c));//ping_delay_disconnect
-        _unauthorizedMethods.Add(-414113498);//destroy_session
-        _unauthorizedMethods.Add(1491380032);//rpc_drop_answer
-        _unauthorizedMethods.Add(1658238041);//msgs_ack
-        _unauthorizedMethods.Add(2018609336);//initConnection
-        _unauthorizedMethods.Add(unchecked((int)0xda9b0d0d));//invokeWithLayer
-    }
-    private void AddTempMethods()
-    {
-        _tempMethods.Add(-990308245);//help.getConfig
-        _tempMethods.Add(531836966);//help.getNearestDC
-        _tempMethods.Add(-841733627);//auth.bindTempAuthKey
+        return AuthPolicy.TempKeyAllowedMethods.Contains(constructor);
     }
 }

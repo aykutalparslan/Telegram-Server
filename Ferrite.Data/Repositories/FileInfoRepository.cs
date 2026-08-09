@@ -1,23 +1,7 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.TL.slim.baseLayer.dto;
-using MessagePack;
+using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Data.Repositories;
 
@@ -28,8 +12,10 @@ public class FileInfoRepository : IFileInfoRepository
     private readonly IKVStore _storeReferences;
     private readonly IKVStore _storeFileParts;
     private readonly IKVStore _storeBigFileParts;
+    private readonly IKVStore _storeUploadStates;
     public FileInfoRepository(IKVStore storeFiles, IKVStore storeBigFiles,
-        IKVStore storeReferences,IKVStore storeFileParts, IKVStore storeBigFileParts)
+        IKVStore storeReferences,IKVStore storeFileParts, IKVStore storeBigFileParts,
+        IKVStore storeUploadStates)
     {
         _storeFiles = storeFiles;
         _storeFiles.SetSchema(new TableDefinition("ferrite", "files",
@@ -53,6 +39,11 @@ public class FileInfoRepository : IFileInfoRepository
             new KeyDefinition("pk",
                 new DataColumn { Name = "file_id", Type = DataType.Long },
                 new DataColumn { Name = "file_part", Type = DataType.Int })));
+        _storeUploadStates = storeUploadStates;
+        _storeUploadStates.SetSchema(new TableDefinition("ferrite", "file_upload_states",
+            new KeyDefinition("pk",
+                new DataColumn { Name = "file_id", Type = DataType.Long },
+                new DataColumn { Name = "is_big", Type = DataType.Int })));
     }
 
     public TLUploadedFileInfo? GetFileInfo(long fileId)
@@ -93,6 +84,20 @@ public class FileInfoRepository : IFileInfoRepository
         return _storeBigFileParts.Put(partBytes, part.AsFilePart().FileId, part.AsFilePart().PartNum);
     }
 
+    public TLFilePart? GetFilePart(long fileId, int partNum)
+    {
+        var partBytes = _storeFileParts.Get(fileId, partNum);
+        if (partBytes == null) return null;
+        return new TLFilePart(partBytes, 0, partBytes.Length);
+    }
+
+    public TLFilePart? GetBigFilePart(long fileId, int partNum)
+    {
+        var partBytes = _storeBigFileParts.Get(fileId, partNum);
+        if (partBytes == null) return null;
+        return new TLFilePart(partBytes, 0, partBytes.Length);
+    }
+
     public IReadOnlyCollection<TLFilePart> GetFileParts(long fileId)
     {
         List<TLFilePart> parts = new();
@@ -123,6 +128,20 @@ public class FileInfoRepository : IFileInfoRepository
         }
 
         return parts;
+    }
+
+    public bool PutUploadState(TLUploadPartState state)
+    {
+        var stateBytes = state.AsSpan().ToArray();
+        var uploadState = state.AsUploadPartState();
+        return _storeUploadStates.Put(stateBytes, uploadState.FileId, uploadState.IsBig ? 1 : 0);
+    }
+
+    public TLUploadPartState? GetUploadState(long fileId, bool isBigFile)
+    {
+        var stateBytes = _storeUploadStates.Get(fileId, isBigFile ? 1 : 0);
+        if (stateBytes == null) return null;
+        return new TLUploadPartState(stateBytes, 0, stateBytes.Length);
     }
 
     public bool PutFileReference(TLFileReference reference)

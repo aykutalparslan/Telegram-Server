@@ -1,131 +1,123 @@
-﻿/*
- *   Project Ferrite is an Implementation Telegram Server API
- *   Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
- *
- *   This program is free software: you can redistribute it and/or modify
- *   it under the terms of the GNU Affero General Public License as published by
- *   the Free Software Foundation, either version 3 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU Affero General Public License for more details.
- *
- *   You should have received a copy of the GNU Affero General Public License
- *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using System;
 using System.Buffers;
 using System.Collections;
+using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using DotNext.Buffers;
-using DotNext.IO;
+using Ferrite.Utils;
 
 namespace Ferrite.TL;
 
-public class Vector<T> : ITLObject, ICollection<T>
-    where T : notnull, ITLObject
+public ref struct Vector
 {
-    private SparseBufferWriter<byte> writer =
-        new SparseBufferWriter<byte>(UnmanagedMemoryPool<byte>.Shared);
-    private ITLObjectFactory factory;
-    private List<T> list;
-    private bool serialized = false;
+    public const int ConstructorId = unchecked((int)0x1cb5c415);
 
-    public Vector(ITLObjectFactory objectFactory)
+    private Span<byte> _buff;
+    private int _position;
+    private int _offset;
+    public Vector()
     {
-        factory = objectFactory;
-        list = new List<T>();
+        _buff = new byte[512];
+        SetConstructor(ConstructorId);
+        SetCount(0);
+        _position = 8;
+        _offset = 8;
+    }
+    public Vector(Span<byte> buffer)
+    {
+        if (MemoryMarshal.Read<int>(buffer) != ConstructorId)
+        {
+            throw new InvalidOperationException();
+        }
+        _offset = Math.Min(ReadSize(buffer, 0), buffer.Length);
+        _buff = buffer[.._offset];
+        _position = 8;
+    }
+    public readonly int Constructor => MemoryMarshal.Read<int>(_buff);
+    private void SetConstructor(int constructor)
+    {
+        MemoryMarshal.Write(_buff[..4], ref constructor);
+    }
+    public ReadOnlySpan<byte> ToReadOnlySpan() => _buff[.._offset];
+    public readonly int Count => MemoryMarshal.Read<int>(_buff.Slice(4, 4));
+    public readonly int Length => _offset;
+    private void SetCount(int count)
+    {
+        MemoryMarshal.Write(_buff.Slice(4, 4), ref count);
     }
 
-    public T this[int index] { get => list[index]; }
-
-    public ReadOnlySequence<byte> TLBytes
+    public static Span<byte> Read(Span<byte> data, int offset)
     {
-        get
+        if (MemoryMarshal.Read<int>(data[..4]) != ConstructorId)
         {
-            if (serialized)
+            throw new InvalidOperationException();
+        }
+        int count = MemoryMarshal.Read<int>(data.Slice(offset + 4, 4));
+        int len = 8;
+        for (int i = 0; i < count; i++)
+        {
+            var sizeReader = ObjectReader.GetObjectSizeReader(
+                MemoryMarshal.Read<int>(data.Slice(offset + len, 4)));
+            if (sizeReader != null) len += sizeReader.Invoke(data, len);
+        }
+        return data.Slice(offset, len);
+    }
+
+    public static int ReadSize(Span<byte> data, int offset)
+    {
+        if (MemoryMarshal.Read<int>(data[offset..]) != ConstructorId)
+        {
+            throw new InvalidOperationException();
+        }
+        int count = MemoryMarshal.Read<int>(data.Slice(offset + 4, 4));
+        int len = 8;
+        for (int i = 0; i < count; i++)
+        {
+            var sizeReader = ObjectReader.GetObjectSizeReader(
+                MemoryMarshal.Read<int>(data.Slice(offset + len, 4)));
+            if (sizeReader != null) len += sizeReader.Invoke(data, offset + len);
+        }
+        return len;
+    }
+
+    public void AppendTLObject(ReadOnlySpan<byte> value)
+    {
+        if (value.Length + _offset > _buff.Length)
+        {
+            int newLength = _buff.Length * 2;
+            while (value.Length + _offset > newLength)
             {
-                return writer.ToReadOnlySequence();
+                newLength *= 2;
             }
-            writer.Clear();
-            writer.WriteInt32(Constructor, true);
-            writer.WriteInt32(list.Count, true);
-
-            foreach (var item in list)
-            {
-                var tbytes = item.TLBytes;
-                writer.Write(tbytes, true);
-            }
-
-
-            return writer.ToReadOnlySequence();
+            var tmp = new byte[newLength];
+            _buff.CopyTo(tmp);
+            _buff = tmp;
         }
+        value.CopyTo(_buff[_offset..]);
+        MemoryMarshal.Cast<byte, int>(_buff)[1]++;
+        _offset += value.Length;
     }
-
-    public void Parse(ref SequenceReader buff)
+    public Span<byte> ReadTLObject()
     {
-        int size = buff.ReadInt32(true);
-        for (int i = 0; i < size; i++)
+        if (_position == _offset)
         {
-            list.Add((T)factory.Read(buff.ReadInt32(true), ref buff));
+            throw new EndOfStreamException();
         }
-    }
-
-    public void WriteTo(Span<byte> buff)
-    {
-        SpanWriter<byte> spanWriter = new SpanWriter<byte>(buff);
-        foreach (var item in TLBytes)
+        ObjectReaderDelegate? reader = ObjectReader.GetObjectReader(
+            MemoryMarshal.Read<int>(_buff.Slice(_position, 4)));
+        if (reader == null)
         {
-            spanWriter.Write(item.Span);
+            throw new NotSupportedException();
         }
+
+        var result = reader.Invoke(_buff, _position);
+        _position += result.Length;
+        return result;
     }
-
-    public int Constructor => unchecked((int)0x1cb5c415);
-
-    public int Count => list.Count;
-
-    public bool IsReadOnly => false;
-
-    public void Add(T item)
+    public void Reset()
     {
-        serialized = false;
-        list.Add(item);
-    }
-
-    public void Clear()
-    {
-        serialized = false;
-        list.Clear();
-    }
-
-    public bool Contains(T item)
-    {
-        return list.Contains(item);
-    }
-
-    public void CopyTo(T[] array, int arrayIndex)
-    {
-        list.CopyTo(array, arrayIndex);
-    }
-
-    public IEnumerator<T> GetEnumerator()
-    {
-        return list.GetEnumerator();
-    }
-
-    public bool Remove(T item)
-    {
-        serialized = false;
-        return list.Remove(item);
-    }
-
-    IEnumerator IEnumerable.GetEnumerator()
-    {
-        return list.AsEnumerable<T>().GetEnumerator();
+        _position = 8;
     }
 }
-
-

@@ -1,24 +1,11 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Security.Cryptography;
+using Ferrite.TL;
+using Ferrite.TL.baseLayer.dto;
+using Ferrite.TL.mtproto;
 using Ferrite.Utils;
-using MessagePack;
 
 namespace Ferrite.Data.Repositories;
 
@@ -42,34 +29,42 @@ public class ServerSaltRepository : IServerSaltRepository
     public ServerSaltRepository(IVolatileKVStore store, IVolatileKVStore validityStore)
     {
         _store = store;
-        store.SetSchema(new TableDefinition("ferrite", "server_salts",
+        store.SetSchema(new TableDefinition("ferrite", "server_salts_tl1",
             new KeyDefinition("pk",
                 new DataColumn { Name = "auth_key_id", Type = DataType.Long })));
         _validityStore = validityStore;
-        _validityStore.SetSchema(new TableDefinition("ferrite", "server_salt_validity",
+        _validityStore.SetSchema(new TableDefinition("ferrite", "server_salt_validity_tl1",
             new KeyDefinition("pk",
                 new DataColumn { Name = "auth_key_id", Type = DataType.Long },
                 new DataColumn { Name = "server_salt", Type = DataType.Long })));
     }
-    public bool PutServerSalt(long authKeyId, ServerSaltDTO salt, int TTL)
+    public bool PutServerSalt(long authKeyId, TLFutureSalt salt, int TTL)
     {
-        var saltBytes = MessagePackSerializer.Serialize(salt);
+        var value = salt.AsFutureSalt();
+        var saltBytes = salt.AsSpan().ToArray();
         var expire = TimeSpan.FromSeconds(TTL);
         _store.ListAdd(DateTimeOffset.Now.AddSeconds(TTL).ToUnixTimeMilliseconds(),
-            saltBytes);
-        _validityStore.Put(saltBytes, expire, authKeyId, salt.Salt);
+            saltBytes, expire, authKeyId);
+        using var validity = ServerSaltValidity.Builder()
+            .ValidUntil(value.ValidUntil)
+            .Build();
+        _validityStore.Put(validity.ToReadOnlySpan().ToArray(), expire,
+            authKeyId, value.Salt);
         return true;
     }
 
-    public IReadOnlyCollection<ServerSaltDTO> GetServerSalts(long authKeyId, int count)
+    public IReadOnlyCollection<TLFutureSalt> GetServerSalts(long authKeyId, int count)
     {
         count = Math.Min(count, 64);
-        List<ServerSaltDTO> salts = new();
+        List<TLFutureSalt> salts = new();
         var existing = _store.ListGet(authKeyId);
         foreach (var b in existing)
         {
-            var salt = MessagePackSerializer.Deserialize<ServerSaltDTO>(b);
-            if (salt.ValidSince + 3600 >= DateTimeOffset.Now.AddHours(1).ToUnixTimeSeconds())
+            var bytes = new TLBytes(b, 0, b.Length);
+            if (bytes.Constructor != Constructors.mtproto_FutureSalt)
+                throw new InvalidDataException("Server-salt codec/version mismatch.");
+            var salt = (TLFutureSalt)bytes;
+            if (salt.AsFutureSalt().ValidUntil >= DateTimeOffset.Now.ToUnixTimeSeconds())
             {
                 salts.Add(salt);
             }
@@ -81,7 +76,7 @@ public class ServerSaltRepository : IServerSaltRepository
 
         if (salts.Count > count)
         {
-            salts = (from s in salts orderby s.ValidSince select s).Take(count).ToList();
+            salts = salts.OrderBy(s => s.AsFutureSalt().ValidSince).Take(count).ToList();
         }
         else if (salts.Count == 0)
         {
@@ -91,28 +86,42 @@ public class ServerSaltRepository : IServerSaltRepository
             {
                 RandomNumberGenerator.Fill(randomBytes);
                 long salt = BitConverter.ToInt64(randomBytes);
-                ServerSaltDTO s = new ServerSaltDTO(salt, validSince);
+                var built = FutureSalt.Builder()
+                    .ValidSince(validSince)
+                    .ValidUntil(validSince + 1800)
+                    .Salt(salt)
+                    .Build();
+                TLFutureSalt s = built;
                 validSince += 1800;
                 salts.Add(s);
-                var saltBytes = MessagePackSerializer.Serialize(s);
-                _store.ListAdd((long)(validSince + 1800) * 1000, saltBytes);
+                var saltBytes = s.AsSpan().ToArray();
                 int ttl = validSince - (int)DateTimeOffset.Now.ToUnixTimeSeconds() + 1800;
-                _validityStore.Put(saltBytes,
-                    TimeSpan.FromSeconds(ttl),
+                var expire = TimeSpan.FromSeconds(ttl);
+                _store.ListAdd((long)(validSince + 1800) * 1000, saltBytes,
+                    expire, authKeyId);
+                using var validity = ServerSaltValidity.Builder()
+                    .ValidUntil(validSince + 1800)
+                    .Build();
+                _validityStore.Put(validity.ToReadOnlySpan().ToArray(), expire,
                     authKeyId, salt);
             }
         }
         return salts;
     }
 
-    public ValueTask<IReadOnlyCollection<ServerSaltDTO>> GetServerSaltsAsync(long authKeyId, int count)
+    public ValueTask<IReadOnlyCollection<TLFutureSalt>> GetServerSaltsAsync(long authKeyId, int count)
     {
-        return new ValueTask<IReadOnlyCollection<ServerSaltDTO>>(GetServerSalts(authKeyId, count));
+        return new ValueTask<IReadOnlyCollection<TLFutureSalt>>(GetServerSalts(authKeyId, count));
     }
 
     public long GetServerSaltValidity(long authKeyId, long serverSalt)
     {
-        return BitConverter.ToInt64(_validityStore.Get(authKeyId,serverSalt));
+        byte[]? bytes = _validityStore.Get(authKeyId, serverSalt);
+        if (bytes is not { Length: > 0 }) return 0;
+        var value = new TLBytes(bytes, 0, bytes.Length);
+        if (value.Constructor != Constructors.baseLayer_ServerSaltValidity)
+            throw new InvalidDataException("Server-salt validity codec/version mismatch.");
+        return ((TLServerSaltValidity)value).AsServerSaltValidity().ValidUntil;
     }
 
     public ValueTask<long> GetServerSaltValidityAsync(long authKeyId, long serverSalt)

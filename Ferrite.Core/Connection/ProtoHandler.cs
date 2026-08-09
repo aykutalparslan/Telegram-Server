@@ -1,20 +1,5 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Buffers;
 using DotNext.Buffers;
@@ -25,8 +10,8 @@ using Ferrite.Core.RequestChain;
 using Ferrite.Crypto;
 using Ferrite.Data;
 using Ferrite.Services;
+using Ferrite.Core.Execution;
 using Ferrite.TL;
-using Ferrite.TL.slim;
 using Ferrite.Utils;
 
 namespace Ferrite.Core.Connection;
@@ -93,7 +78,7 @@ public class ProtoHandler : IProtoHandler
         {
             throw new ArgumentOutOfRangeException();
         }
-        SequenceReader reader = IAsyncBinaryReader.Create(bytes);
+        SequenceReader reader = new SequenceReader(bytes);
         long messageId = reader.ReadInt64(true);
         int messageDataLength = reader.ReadInt32(true);
         if (messageDataLength > reader.RemainingSequence.Length)
@@ -101,7 +86,7 @@ public class ProtoHandler : IProtoHandler
             throw new MTProtoSecurityException("Inconsistent messageDataLength.");
         }
 
-        var messageData = UnmanagedMemoryAllocator.Allocate<byte>(messageDataLength);
+        var messageData = UnmanagedMemory.Allocate<byte>(messageDataLength);
         reader.Read(messageData.Span);
         var data = new TLBytes(messageData, 0, messageDataLength);
         return new ProtoMessage
@@ -120,15 +105,16 @@ public class ProtoHandler : IProtoHandler
         _writer.Clear();
         if (Session != null)
         {
-            _writer.WriteInt64(Session.ServerSalt.Salt, true);
+            _writer.WriteInt64(Session.ServerSalt, true);
             _writer.WriteInt64(message.SessionId, true);
-            _writer.WriteInt64(
-                message.MessageType == MTProtoMessageType.Pong
-                    ? message.MessageId
-                    : Session.NextMessageId(message.IsResponse), true);
-            _writer.WriteInt32(Session.GenerateSeqNo(message.IsContentRelated), true);
+            long messageId = Session.NextMessageId(message.IsResponse);
+            int sequenceNo = Session.GenerateSeqNo(message.IsContentRelated);
+            _writer.WriteInt64(messageId, true);
+            _writer.WriteInt32(sequenceNo, true);
             _writer.WriteInt32(message.Data.Length, true);
             _writer.Write(message.Data);
+            Session.RecordSentMessage(messageId, sequenceNo, message.Data.Length,
+                message.IsContentRelated, message.IsResponse ? message.MessageId : 0);
             int paddingLength = _random.GetNext(12, 512);
             while ((message.Data.Length + paddingLength) % 16 != 0)
             {
@@ -217,7 +203,8 @@ public class ProtoHandler : IProtoHandler
         if (data.Length < 0) throw new IOException();
         _log.Debug($"=>Stream data length is {data.Length}.");
         var resultHeader = GenerateResultHeader(message, data, out var pad);
-        var cryptographicHeader = GenerateCryptographicHeader(resultHeader, data, pad);
+        var cryptographicHeader = GenerateCryptographicHeader(
+            resultHeader, data, pad, message.ReqMsgId);
         var (paddingLength, paddingBytes) = GeneratePadding(resultHeader, data, pad);
         var (streamLength, messageKey) = GenerateMessageKey(cryptographicHeader, resultHeader, data, pad, paddingBytes);
         var (aesKey, aesIV) = GenerateAesKeyAndIV(messageKey);
@@ -257,30 +244,42 @@ public class ProtoHandler : IProtoHandler
     private static async Task WriteStreamToPipe(IFileOwner message, MTProtoPipe pipe, byte[] cryptographicHeader,
         byte[] resultHeader, int pad, int paddingLength, byte[] paddingBytes)
     {
-        await pipe.WriteAsync(cryptographicHeader);
-        await pipe.WriteAsync(resultHeader);
-        var dataStream = await message.GetFileStream();
-        int remaining = (int)dataStream.Length;
-        ;
-        var buffer = new byte[1024];
-        while (remaining > 0)
+        try
         {
-            var read = await dataStream.ReadAsync(buffer.AsMemory(0, Math.Min(remaining, 1024)));
-            await pipe.WriteAsync(new ReadOnlySequence<byte>(buffer, 0, read));
-            remaining -= read;
-        }
+            await pipe.WriteAsync(cryptographicHeader);
+            await pipe.WriteAsync(resultHeader);
+            await using var dataStream = await message.GetFileStream();
+            int remaining = checked((int)dataStream.Length);
+            var buffer = new byte[1024];
+            while (remaining > 0)
+            {
+                int read = await dataStream.ReadAsync(
+                    buffer.AsMemory(0, Math.Min(remaining, buffer.Length)));
+                if (read == 0)
+                {
+                    throw new EndOfStreamException(
+                        $"File stream ended with {remaining} bytes remaining");
+                }
+                await pipe.WriteAsync(new ReadOnlySequence<byte>(buffer, 0, read));
+                remaining -= read;
+            }
 
-        if (pad > 0)
+            if (pad > 0)
+            {
+                await pipe.WriteAsync(new byte[pad]);
+            }
+
+            if (paddingLength > 0)
+            {
+                await pipe.WriteAsync(paddingBytes);
+            }
+        }
+        finally
         {
-            await pipe.WriteAsync(new byte[pad]);
+            // The socket reader must never wait forever when remote storage
+            // faults or returns a short part.
+            await pipe.CompleteAsync();
         }
-
-        if (paddingLength > 0)
-        {
-            await pipe.WriteAsync(paddingBytes);
-        }
-
-        await pipe.CompleteAsync();
     }
 
     private ValueTuple<byte[], byte[]> GenerateAesKeyAndIV(byte[] messageKey)
@@ -318,15 +317,21 @@ public class ProtoHandler : IProtoHandler
         return (paddingLength, paddingBytes);
     }
 
-    private byte[] GenerateCryptographicHeader(byte[] resultHeader, Stream data, int pad)
+    private byte[] GenerateCryptographicHeader(byte[] resultHeader, Stream data, int pad,
+        long responseToMessageId)
     {
         _writer.Clear();
         if (Session != null)
         {
-            _writer.WriteInt64(Session.ServerSalt.Salt, true);
+            long messageId = Session.NextMessageId(true);
+            int sequenceNo = Session.GenerateSeqNo(true);
+            int bodyLength = resultHeader.Length + (int)data.Length + pad;
+            _writer.WriteInt64(Session.ServerSalt, true);
             _writer.WriteInt64(Session.SessionId, true);
-            _writer.WriteInt64(Session.NextMessageId(true), true);
-            _writer.WriteInt32(Session.GenerateSeqNo(true), true);
+            _writer.WriteInt64(messageId, true);
+            _writer.WriteInt32(sequenceNo, true);
+            Session.RecordSentMessage(messageId, sequenceNo, bodyLength,
+                contentRelated: true, responseToMessageId);
         }
 
         _writer.WriteInt32(resultHeader.Length + (int)data.Length + pad, true);

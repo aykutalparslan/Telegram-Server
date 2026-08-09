@@ -1,20 +1,5 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using StackExchange.Redis;
 
@@ -33,7 +18,9 @@ public class RedisUpdatesContext : IUpdatesContext
         _redis = redis;
         _authKeyId = authKeyId;
         _userId = userId;
-        _counter = new RedisCounter(redis, $"seq:updates:{userId}");
+        // Updates `seq` is per-session state; see FasterUpdatesContext.
+        _counter = new RedisCounter(redis,
+            authKeyId != null ? $"seq:updates:auth:{authKeyId}" : $"seq:updates:{userId}");
         _commonMessageBox = new RedisMessageBox(redis, userId);
         _secondaryMessageBox = authKeyId != null ? new RedisSecretMessageBox(redis, (long)authKeyId) : null;
     }
@@ -77,6 +64,11 @@ public class RedisUpdatesContext : IUpdatesContext
         return await _commonMessageBox.IncrementPts();
     }
 
+    public async ValueTask<int> IncrementPts(int count)
+    {
+        return await _commonMessageBox.IncrementPts(count);
+    }
+
     public async ValueTask<int> Qts()
     {
         return _secondaryMessageBox != null ? await _secondaryMessageBox.Qts() : 0;
@@ -94,11 +86,42 @@ public class RedisUpdatesContext : IUpdatesContext
 
     public async Task<int> IncrementSeq()
     {
-        int seq = (int)await _counter.IncrementAndGet();
-        if (seq == 0)
+        return (int)await _counter.IncrementAndGet();
+    }
+
+    public async ValueTask BeginPtsPublication()
+    {
+        IDatabase db = _redis.GetDatabase();
+        RedisKey key = $"updates:pending-publish:{_userId}";
+        await db.StringIncrementAsync(key);
+        await db.KeyExpireAsync(key, TimeSpan.FromSeconds(30));
+    }
+
+    public async ValueTask CompletePtsPublication()
+    {
+        IDatabase db = _redis.GetDatabase();
+        RedisKey key = $"updates:pending-publish:{_userId}";
+        long remaining = await db.StringDecrementAsync(key);
+        if (remaining <= 0)
         {
-            seq = (int)await _counter.IncrementAndGet();
+            await db.KeyDeleteAsync(key);
         }
-        return seq;
+    }
+
+    public async ValueTask WaitForPtsPublications()
+    {
+        IDatabase db = _redis.GetDatabase();
+        RedisKey key = $"updates:pending-publish:{_userId}";
+        while ((long)await db.StringGetAsync(key) > 0)
+        {
+            await Task.Delay(5);
+        }
+    }
+
+    public async ValueTask<int> PendingPtsPublications()
+    {
+        RedisValue value = await _redis.GetDatabase().StringGetAsync(
+            $"updates:pending-publish:{_userId}");
+        return value.HasValue ? (int)(long)value : 0;
     }
 }

@@ -1,24 +1,9 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.TL.slim;
-using Ferrite.TL.slim.baseLayer;
-using Ferrite.TL.slim.baseLayer.dto;
+using Ferrite.TL;
+using Ferrite.TL.baseLayer;
+using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Data.Repositories;
 
@@ -34,7 +19,7 @@ public class ContactsRepository : IContactsRepository
                 new DataColumn { Name = "user_id", Type = DataType.Long },
                 new DataColumn { Name = "contact_user_id", Type = DataType.Long })));
         _storeMutual = storeMutual;
-        _storeMutual.SetSchema(new TableDefinition("ferrite", "contacts_mutual",
+        _storeMutual.SetSchema(new TableDefinition("ferrite", "contacts_mutual_tl1",
             new KeyDefinition("pk",
                 new DataColumn { Name = "user_id", Type = DataType.Long },
                 new DataColumn { Name = "contact_user_id", Type = DataType.Long })));
@@ -42,7 +27,12 @@ public class ContactsRepository : IContactsRepository
     public TLImportedContact PutContact(long userId, long contactUserId, TLContactInfo contact)
     {
         _store.Put(contact.AsSpan().ToArray(), userId, contactUserId);
-        _storeMutual.Put(BitConverter.GetBytes(userId), contactUserId, userId);
+        if (contact.AsContactInfo().UserId > 0)
+        {
+            using var owner = ContactOwnerReference.Builder().UserId(userId).Build();
+            _storeMutual.Put(owner.ToReadOnlySpan().ToArray(), contactUserId, userId);
+        }
+
         var c = contact.AsContactInfo();
         return ImportedContact.Builder()
             .ClientId(c.ClientId)
@@ -50,13 +40,58 @@ public class ContactsRepository : IContactsRepository
             .Build();
     }
 
+    public bool PutSavedContact(long userId, TLContactInfo contact)
+    {
+        var contactInfo = contact.AsContactInfo();
+        return _store.Put(contact.AsSpan().ToArray(), userId, SavedContactKey(contactInfo.Phone));
+    }
+
+    public bool HasContact(long userId, long contactUserId)
+    {
+        return _store.Get(userId, contactUserId) != null;
+    }
+
     public bool DeleteContact(long userId, long contactUserId)
     {
-        return _store.Delete(userId, contactUserId);
+        bool deleted = _store.Delete(userId, contactUserId);
+        _storeMutual.Delete(contactUserId, userId);
+        return deleted;
+    }
+
+    public bool DeleteSavedContact(long userId, string phone)
+    {
+        return _store.Delete(userId, SavedContactKey(phone));
+    }
+
+    public bool DeleteSavedContacts(long userId)
+    {
+        var deleted = true;
+        var iter = _store.Iterate(userId);
+        foreach (var savedBytes in iter)
+        {
+            var contactInfo = new TLContactInfo(savedBytes, 0, savedBytes.Length)
+                .AsContactInfo();
+            if (contactInfo.UserId <= 0)
+            {
+                deleted &= _store.Delete(userId, SavedContactKey(contactInfo.Phone));
+            }
+        }
+
+        return deleted;
     }
 
     public bool DeleteContacts(long userId)
     {
+        foreach (var contactBytes in _store.Iterate(userId))
+        {
+            var contact = new TLContactInfo(contactBytes, 0, contactBytes.Length)
+                .AsContactInfo();
+            if (contact.UserId > 0)
+            {
+                _storeMutual.Delete(contact.UserId, userId);
+            }
+        }
+
         return _store.Delete(userId);
     }
 
@@ -87,11 +122,16 @@ public class ContactsRepository : IContactsRepository
         var mutualIterator = _storeMutual.Iterate(userId);
         foreach (var c in mutualIterator)
         {
-            mutualContacts.Add(BitConverter.ToInt64(c));
+            mutualContacts.Add(ReadContactOwner(c));
         }
         foreach (var savedBytes in contactsIterator)
         {
             var contact = new TLContactInfo(savedBytes, 0, savedBytes.Length).AsContactInfo();
+            if (contact.UserId <= 0)
+            {
+                continue;
+            }
+
             var mutual = mutualContacts.Contains(contact.UserId);
             contacts.Add(Contact.Builder()
                 .UserId(contact.UserId)
@@ -100,5 +140,44 @@ public class ContactsRepository : IContactsRepository
         }
 
         return contacts;
+    }
+
+    public IReadOnlyList<long> GetContactOwners(long contactUserId)
+    {
+        List<long> owners = new();
+        foreach (var ownerBytes in _storeMutual.Iterate(contactUserId))
+        {
+            owners.Add(ReadContactOwner(ownerBytes));
+        }
+
+        return owners;
+    }
+
+    private static long SavedContactKey(ReadOnlySpan<byte> phone)
+    {
+        const ulong offset = 14695981039346656037;
+        const ulong prime = 1099511628211;
+
+        var hash = offset;
+        foreach (var b in phone)
+        {
+            hash ^= b;
+            hash *= prime;
+        }
+
+        return -1 - (long)(hash & 0x7fffffffffffffffUL);
+    }
+
+    private static long SavedContactKey(string phone)
+    {
+        return SavedContactKey(System.Text.Encoding.UTF8.GetBytes(phone));
+    }
+
+    private static long ReadContactOwner(byte[] bytes)
+    {
+        var value = new TLBytes(bytes, 0, bytes.Length);
+        if (value.Constructor != Constructors.baseLayer_ContactOwnerReference)
+            throw new InvalidDataException("Contact-owner codec/version mismatch.");
+        return ((TLContactOwnerReference)value).AsContactOwnerReference().UserId;
     }
 }

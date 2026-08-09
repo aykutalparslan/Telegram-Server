@@ -1,20 +1,5 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using Ferrite.Data.Search;
 
@@ -25,7 +10,19 @@ public interface ISearchEngine
     public ValueTask<bool> IndexUser(Search.UserSearchModel user);
     public ValueTask<bool> DeleteUser(long userId);
     public ValueTask<List<UserSearchModel>> SearchUser(string q, int limit);
+    public ValueTask<bool> IndexChat(Search.ChatSearchModel chat);
+    public ValueTask<bool> DeleteChat(long chatId);
+    public ValueTask<List<ChatSearchModel>> SearchChats(string q, int limit);
     public ValueTask<bool> IndexMessage(MessageSearchModel message);
     public ValueTask<bool> DeleteMessage(string id);
     public ValueTask<List<MessageSearchModel>> SearchMessages(string q);
+
+    /// <summary>
+    /// Candidate rows for one message box, optionally narrowed to a single
+    /// conversation and/or a free-text query. Both adapters must agree on this
+    /// behavior, because search results must not depend on which one is
+    /// configured.
+    /// </summary>
+    public ValueTask<List<MessageSearchModel>> SearchMessageCandidates(
+        MessageCandidateQuery query);
 }

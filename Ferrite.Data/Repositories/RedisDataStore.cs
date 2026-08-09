@@ -1,33 +1,30 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using StackExchange.Redis;
 
 namespace Ferrite.Data.Repositories;
 
-public class RedisDataStore : IVolatileKVStore
+public class RedisDataStore : IVolatileKVStore, IDisposable
 {
     private TableDefinition? _table;
-    private readonly ConnectionMultiplexer _redis;
+    private readonly IConnectionMultiplexer _redis;
+    private readonly bool _ownsConnection;
 
     public RedisDataStore(string config)
+        : this(ConnectionMultiplexer.Connect(config), ownsConnection: true)
     {
-        _redis = ConnectionMultiplexer.Connect(config);
+    }
+
+    internal RedisDataStore(IConnectionMultiplexer redis)
+        : this(redis, ownsConnection: false)
+    {
+    }
+
+    private RedisDataStore(IConnectionMultiplexer redis, bool ownsConnection)
+    {
+        _redis = redis;
+        _ownsConnection = ownsConnection;
     }
     public void SetSchema(TableDefinition table)
     {
@@ -39,7 +36,7 @@ public class RedisDataStore : IVolatileKVStore
         IDatabase db = _redis.GetDatabase();
         var primaryKey = MemcomparableKey.Create(_table.FullName, keys);
         RedisKey key = primaryKey.ArrayValue;
-        db.StringSet(key, (RedisValue)value, ttl);
+        db.StringSet(key, (RedisValue)value, ttl.HasValue ? new Expiration(ttl.Value) : Expiration.Default);
     }
 
     public void UpdateTtl(TimeSpan? ttl = null, params object[] keys)
@@ -122,5 +119,10 @@ public class RedisDataStore : IVolatileKVStore
         var primaryKey = MemcomparableKey.Create(_table.FullName, keys);
         RedisKey key = primaryKey.ArrayValue;
         return await db.StringGetAsync(key);
+    }
+
+    public void Dispose()
+    {
+        if (_ownsConnection) _redis.Dispose();
     }
 }

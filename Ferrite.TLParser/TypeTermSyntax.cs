@@ -1,20 +1,5 @@
-// 
-// Project Ferrite is an Implementation of the Telegram Server API
-// Copyright 2022 Aykut Alparslan KOC <aykutalparslan@msn.com>
-// 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-// 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
 
@@ -57,7 +42,19 @@ public class TypeTermSyntax
         {
             return "VectorOfString";
         }
-        
+        // tde2e's `vector<...>` is a BARE vector: the reference writes only an
+        // int32 count, never the 1cb5c415 constructor. Bare vectors of boxed
+        // elements are served by VectorBare, but bare elements need their own
+        // readers because there is no per-element constructor id to dispatch on.
+        if (Identifier == "vector" && OptionalType?.Identifier == "long")
+        {
+            return "VectorBareOfLong";
+        }
+        if (Identifier == "vector" && (OptionalType?.Identifier == "string" || OptionalType?.Identifier == "bytes"))
+        {
+            return "VectorBareOfString";
+        }
+
         if (Identifier == "vector")
         {
             sb.Append("VectorBare");
@@ -74,7 +71,7 @@ public class TypeTermSyntax
         {
             sb.Append("BoxedObject");
         }
-        else if (Identifier is "int128" or "int258")
+        else if (Identifier is "int128" or "int256" or "int512")
         {
             sb.Append("ReadOnlySpan<byte>");
         }

@@ -12,6 +12,11 @@ namespace Ferrite.Transport;
 public sealed class SocketConnection : ITransportConnection
 {
     private static readonly int MinAllocBufferSize = 1024;
+    // TDLib accepts MTProto packets up to (1 << 22) + 1024 bytes. Buffered
+    // containers must fit in the receive pipe or the producer can pause while
+    // the frame decoder is waiting for the rest of the same packet.
+    private const long ReceivePauseWriterThreshold = (1 << 22) + (64 * 1024);
+    private const long ReceiveResumeWriterThreshold = ReceivePauseWriterThreshold / 2;
 
     private readonly Socket _socket;
     private readonly SocketReceiver _receiver;
@@ -63,7 +68,11 @@ public sealed class SocketConnection : ITransportConnection
 
         _receiver = new SocketReceiver(awaiterScheduler);
 
-        var pair = DuplexPipe.CreateConnectionPair(PipeOptions.Default, PipeOptions.Default);
+        PipeOptions receivePipeOptions = new(
+            pauseWriterThreshold: ReceivePauseWriterThreshold,
+            resumeWriterThreshold: ReceiveResumeWriterThreshold,
+            useSynchronizationContext: false);
+        var pair = DuplexPipe.CreateConnectionPair(receivePipeOptions, PipeOptions.Default);
 
         // Set the transport and connection id
         Transport = _originalTransport = pair.Transport;
