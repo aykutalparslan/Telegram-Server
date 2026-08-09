@@ -12,6 +12,39 @@ transfer, secret chats, and voice, video and group calls.
 Ferrite is independent software. It is not affiliated with, endorsed by, or
 connected to Telegram Messenger Inc.
 
+## Implemented API surface
+
+Ferrite classifies every function declared by its layer-214 schema. It dispatches
+**494 of 732 operations**: 490 through concrete method handlers and four through
+core request-pipeline wrappers. The other 238 methods are deliberately disabled
+and return `403 METHOD_DISABLED`; no method falls through to
+`501 METHOD_NOT_IMPLEMENTED`.
+
+| Namespace | Dispatched | Layer-214 total |
+| --- | ---: | ---: |
+| `messages` | 167 | 230 |
+| `account` | 95 | 120 |
+| `channels` | 64 | 66 |
+| `phone` | 37 | 37 |
+| `contacts` | 26 | 27 |
+| `auth` | 22 | 23 |
+| `help` | 19 | 25 |
+| Core functions and wrappers | 14 | 15 |
+| `chatlists` | 11 | 11 |
+| `stickers` | 11 | 11 |
+| `langpack` | 5 | 5 |
+| `photos` | 5 | 5 |
+| `stats` | 5 | 7 |
+| `users` | 5 | 6 |
+| `upload` | 4 | 8 |
+| `updates` | 3 | 3 |
+| `folders` | 1 | 1 |
+
+The `bots`, `payments`, `stories`, `premium`, `smsjobs`, and `fragment`
+namespaces are currently disabled. Dispatch coverage describes which RPCs have a
+server implementation; it is not a claim of complete behavioral parity with
+Telegram's production service or every client.
+
 ## Requirements
 
 - .NET SDK **10.0.100** or later (`global.json` pins the feature band)
