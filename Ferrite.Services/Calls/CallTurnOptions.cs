@@ -6,36 +6,22 @@ using System.Net.Sockets;
 
 namespace Ferrite.Services.Calls;
 
-/// <summary>
-/// External self-hosted coturn STUN/TURN configuration. Ferrite only mints
-/// short-lived REST credentials and advertises connection rows; bind and
-/// external-IP mapping, relay port ranges, denied peer networks, quotas, and
-/// bandwidth limits live in coturn's own configuration.
-/// </summary>
 public sealed record CallTurnOptions
 {
     public bool Enabled { get; init; }
 
-    /// <summary>Literal IPv4 address advertised in the row's ip field.</summary>
     public string AdvertisedIPv4 { get; init; } = "";
 
-    /// <summary>Optional literal IPv6 address for the row's ipv6 field.</summary>
     public string AdvertisedIPv6 { get; init; } = "";
 
     public int Port { get; init; } = 3478;
 
-    /// <summary>Operator realm; informational, not part of REST credentials.</summary>
     public string Realm { get; init; } = "";
 
-    /// <summary>coturn static-auth-secret. Never logged or serialized.</summary>
     public string SharedSecret { get; init; } = "";
 
     public TimeSpan CredentialTtl { get; init; } = TimeSpan.FromHours(1);
 
-    /// <summary>
-    /// Non-secret base for the two stable nonzero WebRTC connection ids
-    /// (TURN row uses the seed, STUN row uses seed + 1).
-    /// </summary>
     public long ConnectionIdSeed { get; init; } = 1_000_000;
 
     public bool TryValidate(out string error)
@@ -97,7 +83,6 @@ public sealed record CallTurnOptions
         return true;
     }
 
-    /// <summary>Diagnostics never include the shared secret.</summary>
     public override string ToString() =>
         $"CallTurnOptions(enabled:{Enabled} ipv4:{AdvertisedIPv4} " +
         $"ipv6:{AdvertisedIPv6} port:{Port} realm:{Realm} " +

@@ -1,0 +1,74 @@
+# Official upstream application inputs for Ferrite conformance builds.
+# Every client is pinned to the newest upstream commit that speaks LAYER, which
+# is the only layer Ferrite implements. A newer client announces a layer Ferrite
+# has no functions for and every request fails.
+LAYER=214
+
+ANDROID_REPOSITORY=https://github.com/DrKLO/Telegram.git
+ANDROID_COMMIT=ddc90f16be1ab952114005347e0102365ba6460b
+ANDROID_VERSION=12.0.1
+ANDROID_SOURCE_ROOT=TMessagesProj
+ANDROID_SUPPORTED_HOSTS=Darwin,Linux
+ANDROID_TOOLCHAIN=JDK_17,Android_SDK,Android_Emulator
+ANDROID_JDK_MAJOR=17
+# The exact Temurin build the pinned APK digests were produced by. A JDK the
+# host happens to carry is not interchangeable with it, so the launcher fetches
+# this one rather than asking for a path.
+ANDROID_JDK_VERSION=17.0.20+8
+ANDROID_JDK_URL_DARWIN_ARM64=https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20%2B8/OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.20_8.tar.gz
+ANDROID_JDK_SHA256_DARWIN_ARM64=524850138c742324fb21fca4ff6ef68ea25f25bf59366a864e45b4a0c45ed0df
+ANDROID_JDK_URL_DARWIN_X64=https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20%2B8/OpenJDK17U-jdk_x64_mac_hotspot_17.0.20_8.tar.gz
+ANDROID_JDK_SHA256_DARWIN_X64=3710c3131c5d7c090582b357f1310133a90bf701183d065223f1a0b90b9ed5ae
+ANDROID_JDK_URL_LINUX_ARM64=https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20%2B8/OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.20_8.tar.gz
+ANDROID_JDK_SHA256_LINUX_ARM64=d143936f473a4cb24e3b0e247d6d0775769d55ec9775c339540e753059a8d77a
+ANDROID_JDK_URL_LINUX_X64=https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20%2B8/OpenJDK17U-jdk_x64_linux_hotspot_17.0.20_8.tar.gz
+ANDROID_JDK_SHA256_LINUX_X64=be7668bc030d578b83d6d5ef9221d6d6729bbbca8cf94a7d52e16ac68b5a5a35
+ANDROID_COMPILE_SDK=35
+ANDROID_BUILD_TOOLS=35.0.0
+# The pinned NDK is the one the commit declares, and the one its committed
+# ffmpeg archives were built for. Its host toolchain is darwin-x86_64 only; on
+# current macOS the GNU binutils archiver in it aborts, so the patch series
+# points CMake at the LLVM archiver from the same NDK. That is a host-tool
+# choice: same NDK, same compiler, same generated code.
+ANDROID_NDK=21.4.7075529
+ANDROID_EMULATOR_API=35
+ANDROID_EMULATOR_TAG=google_apis_playstore
+ANDROID_EMULATOR_ABI=arm64-v8a
+ANDROID_EMULATOR_DEVICE=pixel_6
+ANDROID_PATCH_SHA256=a20221e96d59588b02f23c683a9b0f045b62e7e6eff87b854f784c5bfe68e68f
+ANDROID_APK_SHA256=7a513a150c808f565260058809bd93c22cdc10e25acc49284f1a7634bde81736
+ANDROID_PRIVATE_APK_SHA256=421a54bb17a6638896cb409b0c8d1176aeed7f30bab14564dcdcef485fc5fd74
+
+IOS_REPOSITORY=https://github.com/TelegramMessenger/Telegram-iOS.git
+IOS_COMMIT=762f99c0df24556ea5d44382882fa70ab52b6e2d
+IOS_SOURCE_ROOT=.
+IOS_SUPPORTED_HOSTS=Darwin
+IOS_TOOLCHAIN=Xcode_26.3,iOS_Simulator
+IOS_PATCH_SHA256=1a41793ee8dde7d983949062600fe4270ba25be7ea6fb089af437474eca25b57
+IOS_IPA_SHA256=05ef9f0ee48c24c3803a8787636ef0ad27cfe19f12d77540431c44e9fb8fa666
+IOS_PRIVATE_IPA_SHA256=0f7ba3c5e09dc43055739d5d499bea8f7f3fad90f00264b6155e23733d0fb4d6
+
+# Full-application layer-214 build inputs retained alongside the promoted
+# operative pin so the exact build remains independently reproducible.
+IOS_CANDIDATE_COMMIT=762f99c0df24556ea5d44382882fa70ab52b6e2d
+IOS_CANDIDATE_VERSION=12.0
+IOS_CANDIDATE_BAZEL=8.3.1
+IOS_CANDIDATE_BAZEL_SHA256=0cac3a67dc5429c68272dc6944104952e9e4cf84b29d126a5ff3fbaa59045217
+# The release asset that digest belongs to. It is an arm64 binary, so an Intel
+# macOS host still has to supply its own Bazel through FERRITE_IOS_BAZEL.
+IOS_BAZEL_URL_DARWIN_ARM64=https://github.com/bazelbuild/bazel/releases/download/8.3.1/bazel-8.3.1-darwin-arm64
+IOS_CANDIDATE_XCODE=16.2
+IOS_CANDIDATE_PATCH_SHA256=1a41793ee8dde7d983949062600fe4270ba25be7ea6fb089af437474eca25b57
+# The candidate declares Xcode 16.2 / macOS 15. On macOS 26 dyld rejects the
+# apple_support host tool because that pinned revision links it with
+# -Wl,-no_uuid; upstream apple_support dropped that flag in d77535b (Feb 2025).
+# This patch only restores the tool's LC_UUID and does not affect the compiler
+# or the produced application.
+IOS_CANDIDATE_APPLE_SUPPORT_PATCH_SHA256=1138e57271840c27fdff2ee424c7458b59d2caf0a0b507022e6a915da7c8f837
+
+# The public launcher consumes only the public provisioning patches above.
+# Harness records the private continuation digests here so a conformance build
+# can attest to the exact ordered public-then-private series without publishing
+# the private scenario-control patches in Ferrite.
+ANDROID_PRIVATE_PATCH_SHA256=810fc83a6e8701d23ff252dc8920505c4524c3dffeda4c2fb28776bdebdff0ae
+IOS_PRIVATE_PATCH_SHA256=63f87adb0a3b22a64307afb0073b9b722fa4328427afd9b6e835778a2301e4fc

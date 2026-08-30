@@ -7,8 +7,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-// Server-side URL fetching and web-page caching are deferred. Return an empty
-// media preview so clients can continue without a fabricated remote fetch.
 public sealed class GetWebPagePreviewHandler
 {
     [TLFunction(Constructors.baseLayer_GetWebPagePreview)]

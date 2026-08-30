@@ -5,13 +5,6 @@ using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Data.Repositories;
 
-/// <summary>
-/// Stores per-message reactions, the cross-copy message id mapping, and per-user
-/// reaction settings. Reaction rows are keyed by the message box that stores the
-/// reacted-to message: box type <see cref="MessageReactionBox.Common"/> uses the
-/// copy owner's user id as the box id (one row per common-box copy), and
-/// <see cref="MessageReactionBox.Channel"/> uses the channel id (single shared row).
-/// </summary>
 public static class MessageReactionBox
 {
     public const int Common = 0;
@@ -33,10 +26,6 @@ public interface IMessageReactionsRepository
     bool DeleteReactions(int boxType, long boxId, int messageId);
     bool DeleteBoxReactions(int boxType, long boxId);
 
-    /// <summary>
-    /// Records that the message copy stored under <paramref name="copy"/>'s user id
-    /// with its per-user message id belongs to the shared logical message.
-    /// </summary>
     bool PutMessageCopy(TLMessageCopyInfo copy);
     ValueTask<IReadOnlyCollection<TLMessageCopyInfo>> GetMessageCopiesAsync(long logicalId);
     ValueTask<TLMessageCopyInfo?> GetCopyByOwnerMessageAsync(long userId, int messageId);

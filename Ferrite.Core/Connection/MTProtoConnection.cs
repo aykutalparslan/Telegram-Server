@@ -9,8 +9,7 @@ using DotNext.Buffers;
 using DotNext.IO;
 using DotNext.IO.Pipelines;
 using Ferrite.Core.RequestChain;
-using Ferrite.Data;
-using Ferrite.Services;
+using Ferrite.Services.Sessions;
 using Ferrite.Core.Execution;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -80,7 +79,7 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
         }
         return ValueTask.CompletedTask;
     }
-    public ValueTask SendAsync(Services.MTProtoMessage message)
+    public ValueTask SendAsync(Services.Transport.MTProtoMessage message)
     {
         _outgoing.Writer.TryWrite(message);
         return ValueTask.CompletedTask;
@@ -149,9 +148,9 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
                 }
                 else if (msg.MessageType == MTProtoMessageType.QuickAck)
                 {
-                    var quickAck = _protoTransport.GenerateQuickAck(msg.QuickAck, 
+                    var quickAck = _protoTransport.GenerateQuickAck(msg.QuickAck,
                         _protoTransport.TransportType);
-                    WriteFrame(quickAck);
+                    WriteQuickAck(quickAck);
                 }
                 else if (_session.AuthKeyId == 0)
                 {
@@ -301,6 +300,7 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
                 _session.AuthKeyId == 0)
             {
                 await SendTransportError(404);
+                return;
             }
         }
 
@@ -326,7 +326,6 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
         var context = GenerateExecutionContext(message.Headers);
         _ = await message.MessageData.Input.ReadInt32Async(true);
         int constructor = await message.MessageData.Input.ReadInt32Async(true);
-        // Generated readers stop before bytes; the upload task consumes the pipe.
         if (constructor == Constructors.baseLayer_SaveFilePart)
         {
             var request = await SaveFilePart.ReadAsync(message.MessageData.Input);
@@ -368,8 +367,8 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
 
             bool isContainer = message.MessageData.Constructor ==
                                Constructors.mtproto_MsgContainer;
-            if (!_session.TryValidateMessageId(message.Headers.MessageId,
-                    out var errorCode, isContainer))
+            if (!_session.TryValidateMessageId(message.Headers.SessionId,
+                    message.Headers.MessageId, out var errorCode, isContainer))
             {
                 await SendBadMsgNotification(message.Headers, errorCode);
                 message.Dispose();
@@ -385,15 +384,20 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
 
     private async ValueTask CreateNewSession(ProtoHeaders headers)
     {
-        if (_session.SessionId == 0)
+        if (_session.SessionId == headers.SessionId) return;
+        bool announce = _session.SessionId == 0;
+        if (!announce)
         {
-            var serverSalt =_session.CreateNewSession(headers.SessionId, headers.MessageId);
-            await SendNewSessionCreatedMessage(headers.MessageId, serverSalt);
+            await _sessionManager.RemoveSession(_session.AuthKeyId,
+                _session.PermAuthKeyId, _session.SessionId, this);
         }
+        var serverSalt = _session.CreateNewSession(headers.SessionId, headers.MessageId);
+        if (announce) await SendNewSessionCreatedMessage(headers.MessageId, serverSalt);
     }
 
     private TLExecutionContext GenerateExecutionContext(ProtoHeaders headers, int? quickAck = null)
     {
+        _session.TryResolvePermAuthKeyId();
         var context = new TLExecutionContext(_session.SessionData)
         {
             AuthKeyId = _session.AuthKeyId,
@@ -431,7 +435,7 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
             payload = notification.TLBytes!.Value.AsSpan().ToArray();
         }
 
-        await SendAsync(new Services.MTProtoMessage
+        await SendAsync(new Services.Transport.MTProtoMessage
         {
             Data = payload,
             IsContentRelated = false,
@@ -454,7 +458,7 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
             payload = notification.TLBytes!.Value.AsSpan().ToArray();
         }
 
-        await SendAsync(new Services.MTProtoMessage
+        await SendAsync(new Services.Transport.MTProtoMessage
         {
             Data = payload,
             IsContentRelated = false,
@@ -490,7 +494,7 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
             payload = pong.TLBytes!.Value.AsSpan().ToArray();
         }
 
-        Services.MTProtoMessage message = new Services.MTProtoMessage()
+        Services.Transport.MTProtoMessage message = new Services.Transport.MTProtoMessage()
         {
             Data = payload,
             IsContentRelated = false,
@@ -525,6 +529,16 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
         }
 
         WriteFrameBlock(header);
+    }
+    private void WriteQuickAck(ReadOnlySequence<byte> quickAck)
+    {
+        if (quickAck.Length == 0) return;
+        if (_protoTransport.WebSocketHandshakeCompleted)
+        {
+            _socketConnection.Write(
+                _protoTransport.GenerateWebSocketHeader((int)quickAck.Length));
+        }
+        WriteFrameBlock(quickAck);
     }
     internal void WriteFrameBlock(ReadOnlySequence<byte> buffer)
     {
@@ -584,7 +598,7 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
         try
         {
             await _sessionManager.RemoveSession(_session.AuthKeyId,
-                _session.SessionId);
+                _session.PermAuthKeyId, _session.SessionId, this);
         }
         catch (Exception ex)
         {

@@ -1,0 +1,1119 @@
+diff --git a/TMessagesProj/build.gradle b/TMessagesProj/build.gradle
+index a1d28146360ab82814a6d9d308bd20bf7c48b991..ff42d0d25c7e67c65415d8be27f91b2efb206bb2 100644
+--- a/TMessagesProj/build.gradle
++++ b/TMessagesProj/build.gradle
+@@ -74,7 +74,7 @@ def isWindows = String.valueOf(DefaultNativePlatform.currentOperatingSystem.toFa
+ android {
+     compileSdkVersion 35
+     buildToolsVersion '35.0.0'
+-    ndkVersion "21.4.7075529" // 26.3.11579264
++    ndkVersion "21.4.7075529"
+
+     sourceSets.main.jniLibs.srcDirs = ['./jni/']
+
+diff --git a/TMessagesProj/jni/CMakeLists.txt b/TMessagesProj/jni/CMakeLists.txt
+index aceea8998a8fd62577a9c04e32f3b78ddf5219ac..b19de175faa5e2020bee76e9c8f261dcdccb9c1c 100644
+--- a/TMessagesProj/jni/CMakeLists.txt
++++ b/TMessagesProj/jni/CMakeLists.txt
+@@ -1,5 +1,26 @@
+ cmake_minimum_required(VERSION 3.10.2)
+
++# The GNU binutils archiver shipped with this NDK does not run on current macOS
++# hosts. The LLVM archiver from the same NDK writes identical archives.
++if(EXISTS "${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-ar")
++    set(CMAKE_AR "${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-ar" CACHE FILEPATH "" FORCE)
++    set(CMAKE_C_COMPILER_AR "${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-ar" CACHE FILEPATH "" FORCE)
++    set(CMAKE_CXX_COMPILER_AR "${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-ar" CACHE FILEPATH "" FORCE)
++    set(CMAKE_RANLIB "${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-ranlib" CACHE FILEPATH "" FORCE)
++    set(CMAKE_C_COMPILER_RANLIB "${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-ranlib" CACHE FILEPATH "" FORCE)
++    set(CMAKE_CXX_COMPILER_RANLIB "${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-ranlib" CACHE FILEPATH "" FORCE)
++endif()
++
++# Absolute checkout paths otherwise reach the shipped library through __FILE__
++# diagnostics and through the debug info the linker hashes into its build id.
++# This NDK's Clang predates -ffile-prefix-map, so __FILE__ falls back to the
++# builtin base name. Clang records the resolved working directory, which a
++# prefix map keyed on CMake's own spelling of it would miss, so the compilation
++# directory is set outright.
++add_compile_options("-fdebug-prefix-map=${CMAKE_HOME_DIRECTORY}=/src"
++    "SHELL:-Xclang -fdebug-compilation-dir -Xclang /build"
++    -Wno-builtin-macro-redefined -D__FILE__=__FILE_NAME__)
++
+ set(CMAKE_CXX_FLAGS "-std=c++14 -DANDROID -g")
+ set(CMAKE_C_FLAGS "-w -std=c11 -DANDROID -D_LARGEFILE_SOURCE=1 -g")
+ set(CMAKE_ASM_FLAGS "${CFLAGS} -x assembler-with-cpp")
+@@ -353,6 +374,11 @@ add_library(breakpad STATIC
+         third_party/breakpad/src/common/linux/safe_readlink.cc)
+ set_target_properties(breakpad PROPERTIES ANDROID_ARM_MODE arm)
+ set_property(SOURCE third_party/breakpad/src/common/android/breakpad_getcontext.S PROPERTY LANGUAGE C)
++# This source assembles instead of compiling, and the assembler takes the
++# compilation directory only from its own option. Targets built with
++# -fno-integrated-as cannot carry it, so it stays on the one source that needs it.
++set_property(SOURCE third_party/breakpad/src/common/android/breakpad_getcontext.S
++        APPEND PROPERTY COMPILE_OPTIONS -Wa,-fdebug-compilation-dir,/build)
+ target_include_directories(breakpad PUBLIC
+         third_party/breakpad/src/common/android/include
+         third_party/breakpad/src)
+diff --git a/TMessagesProj/jni/tgnet/ConnectionsManager.cpp b/TMessagesProj/jni/tgnet/ConnectionsManager.cpp
+index f543d9f7bcd71ae4e80f396d1dd2c0e00e689aa0..215b94ab22c8d9a520999d112c4d90a5f2fabf8b 100644
+--- a/TMessagesProj/jni/tgnet/ConnectionsManager.cpp
++++ b/TMessagesProj/jni/tgnet/ConnectionsManager.cpp
+@@ -13,6 +13,7 @@
+ #include <chrono>
+ #include <algorithm>
+ #include <fcntl.h>
++#include <fstream>
+ #include <memory.h>
+ #include <openssl/rand.h>
+ #include <zlib.h>
+@@ -1806,8 +1807,64 @@ uint8_t ConnectionsManager::getIpStratagy() {
+     return ipStrategy;
+ }
+
++bool ConnectionsManager::readConformanceEndpoint(std::string &host, uint32_t &port) {
++    static const char *fileName = "ferrite-conformance.properties";
++    std::string candidates[2] = {currentConfigPath + fileName,
++                                 currentConfigPath + "../" + fileName};
++    for (const std::string &candidate : candidates) {
++        std::ifstream stream(candidate);
++        if (!stream.is_open()) {
++            continue;
++        }
++        std::string line;
++        std::string readHost;
++        uint32_t readPort = 0;
++        while (std::getline(stream, line)) {
++            size_t separator = line.find('=');
++            if (separator == std::string::npos) {
++                continue;
++            }
++            std::string key = line.substr(0, separator);
++            std::string value = line.substr(separator + 1);
++            while (!value.empty() && (value.back() == '\r' || value.back() == '\n' || value.back() == ' ')) {
++                value.pop_back();
++            }
++            if (key == "ferrite.host") {
++                readHost = value;
++            } else if (key == "ferrite.port") {
++                readPort = (uint32_t) std::strtoul(value.c_str(), nullptr, 10);
++            }
++        }
++        if (!readHost.empty() && readPort > 0 && readPort <= 65535) {
++            host = readHost;
++            port = readPort;
++            return true;
++        }
++    }
++    return false;
++}
++
+ void ConnectionsManager::initDatacenters() {
+     Datacenter *datacenter;
++    std::string conformanceHost;
++    uint32_t conformancePort = 0;
++    if (readConformanceEndpoint(conformanceHost, conformancePort)) {
++        testBackend = true;
++        for (uint32_t dcId = 1; dcId <= 3; dcId++) {
++            auto existing = datacenters.find(dcId);
++            if (existing == datacenters.end()) {
++                datacenter = new Datacenter(instanceNum, dcId);
++                datacenter->addAddressAndPort(conformanceHost, conformancePort, 0, "");
++                datacenters[dcId] = datacenter;
++            } else {
++                std::vector<TcpAddress> addresses;
++                addresses.emplace_back(conformanceHost, conformancePort, 0, "");
++                existing->second->replaceAddresses(addresses, 0);
++                existing->second->resetAddressAndPortNum();
++            }
++        }
++        return;
++    }
+     if (!testBackend) {
+         if (datacenters.find(1) == datacenters.end()) {
+             datacenter = new Datacenter(instanceNum, 1);
+diff --git a/TMessagesProj/jni/tgnet/ConnectionsManager.h b/TMessagesProj/jni/tgnet/ConnectionsManager.h
+index 3214a53a7514461942745a28d9afb1bb894e17a2..4b9110090cdbfcf62842aaf1b159de2e4157f19c 100644
+--- a/TMessagesProj/jni/tgnet/ConnectionsManager.h
++++ b/TMessagesProj/jni/tgnet/ConnectionsManager.h
+@@ -90,6 +90,7 @@ private:
+     static void *ThreadProc(void *data);
+
+     void initDatacenters();
++    bool readConformanceEndpoint(std::string &host, uint32_t &port);
+     void loadConfig();
+     void saveConfig();
+     void saveConfigInternal(NativeByteBuffer *buffer);
+diff --git a/TMessagesProj/jni/tgnet/Handshake.cpp b/TMessagesProj/jni/tgnet/Handshake.cpp
+index a51f2b446d7b5d4dfc40c5e3565ac484eeecf7e1..5b54ab74d927b21113e35ca43c199b3350982176 100644
+--- a/TMessagesProj/jni/tgnet/Handshake.cpp
++++ b/TMessagesProj/jni/tgnet/Handshake.cpp
+@@ -365,14 +365,14 @@ void Handshake::processHandshakeResponse_resPQ(TLObject *message, int64_t messag
+             if (serverPublicKeys.empty()) {
+                 if (ConnectionsManager::getInstance(currentDatacenter->instanceNum).testBackend) {
+                     serverPublicKeys.emplace_back("-----BEGIN RSA PUBLIC KEY-----\n"
+-                                                  "MIIBCgKCAQEAyMEdY1aR+sCR3ZSJrtztKTKqigvO/vBfqACJLZtS7QMgCGXJ6XIR\n"
+-                                                  "yy7mx66W0/sOFa7/1mAZtEoIokDP3ShoqF4fVNb6XeqgQfaUHd8wJpDWHcR2OFwv\n"
+-                                                  "plUUI1PLTktZ9uW2WE23b+ixNwJjJGwBDJPQEQFBE+vfmH0JP503wr5INS1poWg/\n"
+-                                                  "j25sIWeYPHYeOrFp/eXaqhISP6G+q2IeTaWTXpwZj4LzXq5YOpk4bYEQ6mvRq7D1\n"
+-                                                  "aHWfYmlEGepfaYR8Q0YqvvhYtMte3ITnuSJs171+GDqpdKcSwHnd6FudwGO4pcCO\n"
+-                                                  "j4WcDuXc2CTHgH8gFTNhp/Y8/SpDOhvn9QIDAQAB\n"
++                                                  "MIIBCgKCAQEAt1YElR7/5enRYr788g210K6QZzUAmaithnSzmQsKb+XL5KhQHrJw\n"
++                                                  "VNMINO17SkB6i4fxG7ydDyFDbLA0Ls6jQZ0mX33Gl8vYWsczPbkbqzs9N6GkOo10\n"
++                                                  "dDVoGObvSHRSwT9zkDixGiq/3b+WPhFcpdJ4OY+5ElD89+fXYgUIhskjYoI8P/PJ\n"
++                                                  "LCf6GLfneJ00N+wDVxAiwOaD6dxvj8kiUDHSwdTXWQ56Nc/Il121fIGbEmho+ShA\n"
++                                                  "fzwQPynnEsA0EyTsqtYHle+KowMhnQYpcvK/iv290NXwRjB4jWtH7tNT/PgB5tud\n"
++                                                  "1LJ9Ta3FusvnDE35w97G6q+yXltErSpM/QIDAQAB\n"
+                                                   "-----END RSA PUBLIC KEY-----");
+-                    serverPublicKeysFingerprints.push_back(0xb25898df208d2603);
++                    serverPublicKeysFingerprints.push_back(0xb0de7be520ec5879);
+                 } else {
+                     serverPublicKeys.emplace_back("-----BEGIN RSA PUBLIC KEY-----\n"
+                                                   "MIIBCgKCAQEA6LszBcC1LGzyr992NzE0ieY+BSaOW622Aa9Bd4ZHLl+TuFQ4lo4g\n"
+diff --git a/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceBridge.java b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceBridge.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..6061f6f800c55542899ce72fffd59b4c3a6f66a2
+--- /dev/null
++++ b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceBridge.java
+@@ -0,0 +1,157 @@
++package org.telegram.conformance;
++
++import org.json.JSONArray;
++import org.json.JSONObject;
++import org.telegram.messenger.ContactsController;
++import org.telegram.messenger.MessagesController;
++import org.telegram.messenger.UserConfig;
++import org.telegram.tgnet.ConnectionsManager;
++import org.telegram.tgnet.TLRPC;
++
++import java.io.BufferedReader;
++import java.io.BufferedWriter;
++import java.io.InputStreamReader;
++import java.io.OutputStreamWriter;
++import java.net.InetAddress;
++import java.net.ServerSocket;
++import java.net.Socket;
++import java.nio.charset.StandardCharsets;
++import java.util.Map;
++
++/** Loopback-only provisioning status and verification-code endpoint. */
++public final class ConformanceBridge {
++
++    private static final int ACCOUNT = ConformanceProvisioner.ACCOUNT;
++    private static Thread thread;
++
++    private ConformanceBridge() {
++    }
++
++    public static synchronized void start() {
++        if (thread != null) {
++            return;
++        }
++        thread = new Thread(ConformanceBridge::serve, "ferrite-provisioning-bridge");
++        thread.setDaemon(true);
++        thread.start();
++    }
++
++    private static void serve() {
++        ConformanceConfig config = ConformanceConfig.get();
++        try (ServerSocket server = new ServerSocket(
++                config.bridgePort, 16, InetAddress.getByName("127.0.0.1"))) {
++            ConformanceLog.info("provisioning bridge listening on 127.0.0.1:"
++                    + config.bridgePort);
++            while (!Thread.currentThread().isInterrupted()) {
++                Socket socket = server.accept();
++                Thread client = new Thread(
++                        () -> handle(socket, config), "ferrite-provisioning-command");
++                client.setDaemon(true);
++                client.start();
++            }
++        } catch (Throwable error) {
++            ConformanceLog.error("provisioning bridge stopped", error);
++        }
++    }
++
++    private static void handle(Socket socket, ConformanceConfig config) {
++        try (Socket open = socket;
++             BufferedReader reader = new BufferedReader(
++                     new InputStreamReader(open.getInputStream(), StandardCharsets.UTF_8));
++             BufferedWriter writer = new BufferedWriter(
++                     new OutputStreamWriter(open.getOutputStream(), StandardCharsets.UTF_8))) {
++            String line;
++            while ((line = reader.readLine()) != null) {
++                JSONObject response;
++                try {
++                    JSONObject request = new JSONObject(line);
++                    if (!config.runToken.equals(request.optString("run_token"))) {
++                        throw new IllegalStateException("run token rejected");
++                    }
++                    response = dispatch(request, config);
++                    response.put("ok", true);
++                } catch (Throwable error) {
++                    response = new JSONObject();
++                    response.put("ok", false);
++                    response.put("error", String.valueOf(error));
++                }
++                response.put("run_token", config.runToken);
++                writer.write(response.toString());
++                writer.write("\n");
++                writer.flush();
++            }
++        } catch (Throwable error) {
++            ConformanceLog.error("provisioning bridge connection failed", error);
++        }
++    }
++
++    private static JSONObject dispatch(JSONObject request, ConformanceConfig config)
++            throws Exception {
++        String type = request.getString("type");
++        switch (type) {
++            case "status":
++                return status(config);
++            case "deliver-code":
++                return deliverCode(request);
++            default:
++                throw new IllegalArgumentException(
++                        "unknown provisioning command: " + type);
++        }
++    }
++
++    private static JSONObject status(ConformanceConfig config) throws Exception {
++        JSONObject value = new JSONObject();
++        value.put("instance_id", config.instanceId);
++        value.put("phone", config.phone);
++        value.put("provisioning", ConformanceProvisioner.state().name());
++        JSONArray history = new JSONArray();
++        for (ConformanceProvisioner.State observed : ConformanceProvisioner.stateHistory()) {
++            history.put(observed.name());
++        }
++        value.put("provisioning_history", history);
++        String failure = ConformanceProvisioner.failure();
++        if (failure != null) {
++            value.put("provisioning_failure", failure);
++        }
++        value.put("user_id", ConformanceProvisioner.userId());
++        value.put("login_page", ConformanceLogin.currentPage());
++        value.put("layer", TLRPC.LAYER);
++        ConnectionsManager manager = ConnectionsManager.getInstance(ACCOUNT);
++        value.put("connection_state", manager.getConnectionState());
++        value.put("datacenter_id", manager.getCurrentDatacenterId());
++        value.put("server_time", manager.getCurrentTime());
++        value.put("client_activated", UserConfig.getInstance(ACCOUNT).isClientActivated());
++
++        JSONObject peers = new JSONObject();
++        for (Map.Entry<String, Long> entry : ConformanceProvisioner.peerUserIds().entrySet()) {
++            peers.put(entry.getKey(), entry.getValue());
++        }
++        value.put("peer_user_ids", peers);
++
++        JSONArray contacts = new JSONArray();
++        for (TLRPC.TL_contact contact : ContactsController.getInstance(ACCOUNT).contacts) {
++            TLRPC.User user = MessagesController.getInstance(ACCOUNT).getUser(contact.user_id);
++            JSONObject entry = new JSONObject();
++            entry.put("user_id", contact.user_id);
++            entry.put("phone", user == null ? JSONObject.NULL : user.phone);
++            contacts.put(entry);
++        }
++        value.put("contacts", contacts);
++        return value;
++    }
++
++    private static JSONObject deliverCode(JSONObject request) throws Exception {
++        String code = request.getString("code");
++        if (ConformanceProvisioner.state() != ConformanceProvisioner.State.AWAITING_CODE) {
++            throw new IllegalStateException(
++                    "the instance is not waiting for a verification code (state "
++                            + ConformanceProvisioner.state() + ")");
++        }
++        if (!ConformanceProvisioner.deliverCode(code)) {
++            throw new IllegalStateException("a verification code is already queued");
++        }
++        JSONObject value = new JSONObject();
++        value.put("delivered", true);
++        return value;
++    }
++}
+diff --git a/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceConfig.java b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceConfig.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..b2cc709673ee85c2effdcc2cf43edc4a1405b1f5
+--- /dev/null
++++ b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceConfig.java
+@@ -0,0 +1,124 @@
++package org.telegram.conformance;
++
++import android.content.Context;
++
++import java.io.File;
++import java.io.FileInputStream;
++import java.io.FileOutputStream;
++import java.io.InputStream;
++import java.io.OutputStream;
++import java.util.ArrayList;
++import java.util.Collections;
++import java.util.List;
++import java.util.Properties;
++
++/**
++ * Launch configuration for a Ferrite conformance instance.
++ *
++ * The launcher writes {@code ferrite-conformance.properties} into the instance's
++ * external files directory. {@link #install(Context)} copies it into the internal
++ * files directory before any networking starts, so tgnet reads the same file from
++ * its own config path and the application layer reads it from here.
++ */
++public final class ConformanceConfig {
++
++    public static final String FILE_NAME = "ferrite-conformance.properties";
++
++    private static ConformanceConfig instance;
++    private static boolean installed;
++
++    public final String host;
++    public final int port;
++    public final int apiId;
++    public final String apiHash;
++    public final String instanceId;
++    public final String phone;
++    public final String firstName;
++    public final String lastName;
++    public final String verificationCode;
++    public final List<String> peers;
++    public final int bridgePort;
++    public final String runToken;
++
++    private ConformanceConfig(Properties properties) {
++        host = required(properties, "ferrite.host");
++        port = requiredInt(properties, "ferrite.port");
++        apiId = requiredInt(properties, "ferrite.api_id");
++        apiHash = required(properties, "ferrite.api_hash");
++        instanceId = required(properties, "instance.id");
++        phone = required(properties, "instance.phone");
++        firstName = properties.getProperty("instance.first_name", instanceId);
++        lastName = properties.getProperty("instance.last_name", "");
++        String code = properties.getProperty("auth.code", "").trim();
++        verificationCode = code.isEmpty() ? null : code;
++        bridgePort = requiredInt(properties, "bridge.port");
++        runToken = required(properties, "bridge.token");
++        List<String> parsed = new ArrayList<>();
++        for (String value : properties.getProperty("instance.peers", "").split(",")) {
++            String trimmed = value.trim();
++            if (!trimmed.isEmpty()) {
++                parsed.add(trimmed);
++            }
++        }
++        peers = Collections.unmodifiableList(parsed);
++    }
++
++    private static String required(Properties properties, String key) {
++        String value = properties.getProperty(key);
++        if (value == null || value.trim().isEmpty()) {
++            throw new IllegalStateException("ferrite conformance config is missing " + key);
++        }
++        return value.trim();
++    }
++
++    private static int requiredInt(Properties properties, String key) {
++        return Integer.parseInt(required(properties, key));
++    }
++
++    /**
++     * Copies the launcher's configuration into the internal files directory and
++     * parses it. A missing file leaves the application on its stock code paths.
++     */
++    public static synchronized void install(Context context) {
++        if (installed) {
++            return;
++        }
++        installed = true;
++        try {
++            File internal = new File(context.getFilesDir(), FILE_NAME);
++            File external = new File(context.getExternalFilesDir(null), FILE_NAME);
++            if (external.isFile()) {
++                copy(external, internal);
++            }
++            if (!internal.isFile()) {
++                return;
++            }
++            Properties properties = new Properties();
++            try (InputStream stream = new FileInputStream(internal)) {
++                properties.load(stream);
++            }
++            instance = new ConformanceConfig(properties);
++        } catch (Throwable error) {
++            throw new IllegalStateException("ferrite conformance config is unusable", error);
++        }
++    }
++
++    private static void copy(File from, File to) throws Exception {
++        try (InputStream source = new FileInputStream(from);
++             OutputStream target = new FileOutputStream(to)) {
++            byte[] buffer = new byte[8192];
++            int read;
++            while ((read = source.read(buffer)) > 0) {
++                target.write(buffer, 0, read);
++            }
++        }
++    }
++
++    public static synchronized ConformanceConfig get() {
++        return instance;
++    }
++
++    public static synchronized boolean isEnabled() {
++        return instance != null;
++    }
++}
+diff --git a/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceLog.java b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceLog.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..ab3b921a6aea3324a7808d9a1552bd9293393d97
+--- /dev/null
++++ b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceLog.java
+@@ -0,0 +1,20 @@
++package org.telegram.conformance;
++
++import android.util.Log;
++
++/** Tags conformance output so the launcher can slice it out of logcat. */
++public final class ConformanceLog {
++
++    public static final String TAG = "FerriteConformance";
++
++    private ConformanceLog() {
++    }
++
++    public static void info(String message) {
++        Log.i(TAG, message);
++    }
++
++    public static void error(String message, Throwable error) {
++        Log.e(TAG, message, error);
++    }
++}
+diff --git a/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceLogin.java b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceLogin.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..a3e73534293ba226be09f7e041f699adbd563860
+--- /dev/null
++++ b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceLogin.java
+@@ -0,0 +1,142 @@
++package org.telegram.conformance;
++
++import org.telegram.messenger.UserConfig;
++import org.telegram.tgnet.TLRPC;
++import org.telegram.ui.ActionBar.BaseFragment;
++import org.telegram.ui.LaunchActivity;
++import org.telegram.ui.LoginActivity;
++
++/**
++ * Drives the application's own login screens with the input a user would type.
++ * Nothing here builds a request, reads a response or writes account state; the
++ * only witness of success is the application's own {@link UserConfig}.
++ */
++final class ConformanceLogin {
++
++    private static final long POLL_MS = 250L;
++
++    private static volatile LoginActivity fragment;
++
++    private ConformanceLogin() {
++    }
++
++    /**
++     * Adopts the login fragment the application restored, or presents one the
++     * way the intro screen's own button does.
++     */
++    static void present(long timeoutMs) throws InterruptedException {
++        LaunchActivity activity = awaitLauncher(timeoutMs);
++        final LoginActivity[] slot = new LoginActivity[1];
++        ConformanceProvisioner.runOnUiThreadAndWait(() -> {
++            for (BaseFragment presented : activity.getActionBarLayout().getFragmentStack()) {
++                if (presented instanceof LoginActivity) {
++                    slot[0] = (LoginActivity) presented;
++                    return;
++                }
++            }
++            LoginActivity login = new LoginActivity();
++            activity.presentFragment(login, true, false);
++            slot[0] = login;
++        });
++        fragment = slot[0];
++    }
++
++    static void submitPhone(String digits) throws InterruptedException {
++        LoginActivity login = current();
++        ConformanceProvisioner.runOnUiThreadAndWait(
++                () -> login.ferriteConformanceSubmitPhone(digits));
++    }
++
++    static void submitCode(String code) throws InterruptedException {
++        LoginActivity login = current();
++        ConformanceProvisioner.runOnUiThreadAndWait(() -> login.ferriteConformanceSubmitCode(code));
++    }
++
++    static void submitName(String firstName, String lastName) throws InterruptedException {
++        LoginActivity login = current();
++        ConformanceProvisioner.runOnUiThreadAndWait(
++                () -> login.ferriteConformanceSubmitName(firstName, lastName));
++    }
++
++    static boolean awaitPhonePage(long timeoutMs) throws InterruptedException {
++        return await(timeoutMs, () -> current().ferriteConformanceOnPhonePage());
++    }
++
++    static boolean awaitCodePage(long timeoutMs) throws InterruptedException {
++        return await(timeoutMs, () -> current().ferriteConformanceOnCodePage());
++    }
++
++    /**
++     * The register page appears only for a number Ferrite has no user for, and
++     * the sign-in path leaves it unvisited, so this returns as soon as either the
++     * page arrives or the application reports itself signed in.
++     */
++    static boolean awaitRegisterPageOrAuthorized(long timeoutMs) throws InterruptedException {
++        return await(timeoutMs,
++                () -> isAuthorized() || current().ferriteConformanceOnRegisterPage());
++    }
++
++    static boolean awaitAuthorized(long timeoutMs) throws InterruptedException {
++        return await(timeoutMs, ConformanceLogin::isAuthorized);
++    }
++
++    /** The application's own witness that it is signed in. */
++    static boolean isAuthorized() {
++        UserConfig config = UserConfig.getInstance(ConformanceProvisioner.ACCOUNT);
++        return config.isClientActivated() && config.getCurrentUser() != null;
++    }
++
++    static TLRPC.User currentUser() {
++        return UserConfig.getInstance(ConformanceProvisioner.ACCOUNT).getCurrentUser();
++    }
++
++    static int currentPage() {
++        LoginActivity login = fragment;
++        return login == null ? -1 : login.ferriteConformanceCurrentView();
++    }
++
++    private static LoginActivity current() {
++        LoginActivity login = fragment;
++        if (login == null) {
++            throw new IllegalStateException("the login fragment has not been presented");
++        }
++        return login;
++    }
++
++    private interface Condition {
++        boolean met();
++    }
++
++    /** Page and account state belong to the main thread, so they are read there. */
++    private static boolean await(long timeoutMs, Condition condition) throws InterruptedException {
++        long deadline = System.currentTimeMillis() + timeoutMs;
++        while (System.currentTimeMillis() < deadline) {
++            final boolean[] met = new boolean[1];
++            ConformanceProvisioner.runOnUiThreadAndWait(() -> met[0] = condition.met());
++            if (met[0]) {
++                return true;
++            }
++            Thread.sleep(POLL_MS);
++        }
++        return false;
++    }
++
++    private static LaunchActivity awaitLauncher(long timeoutMs) throws InterruptedException {
++        long deadline = System.currentTimeMillis() + timeoutMs;
++        while (System.currentTimeMillis() < deadline) {
++            final LaunchActivity[] slot = new LaunchActivity[1];
++            ConformanceProvisioner.runOnUiThreadAndWait(() -> {
++                LaunchActivity activity = LaunchActivity.instance;
++                if (activity != null && !activity.isFinishing()
++                        && !activity.getActionBarLayout().getFragmentStack().isEmpty()) {
++                    slot[0] = activity;
++                }
++            });
++            if (slot[0] != null) {
++                return slot[0];
++            }
++            Thread.sleep(POLL_MS);
++        }
++        throw new IllegalStateException("the application's launcher never presented a screen");
++    }
++}
+diff --git a/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceProvisioner.java b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceProvisioner.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..e952e544045f46400fa7f8931e30fd65b84cbf92
+--- /dev/null
++++ b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceProvisioner.java
+@@ -0,0 +1,298 @@
++package org.telegram.conformance;
++
++import org.telegram.messenger.AndroidUtilities;
++import org.telegram.messenger.ContactsController;
++import org.telegram.messenger.MessagesController;
++import org.telegram.messenger.UserConfig;
++import org.telegram.tgnet.TLObject;
++import org.telegram.tgnet.TLRPC;
++
++import java.util.ArrayList;
++import java.util.LinkedHashMap;
++import java.util.Map;
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.TimeUnit;
++
++/**
++ * Signs the instance in with its assigned phone number and puts every peer
++ * instance of the same run into its contact list. Both are driven through the
++ * application's own login screens and contact sync; this class supplies input
++ * and reads the application's own state back.
++ */
++public final class ConformanceProvisioner {
++
++    public static final int ACCOUNT = 0;
++
++    private static final long REQUEST_TIMEOUT_MS = 60_000L;
++    private static final long CONTACT_TIMEOUT_MS = 480_000L;
++    private static final long CODE_TIMEOUT_MS = 180_000L;
++    private static final long LAUNCHER_TIMEOUT_MS = 120_000L;
++    private static final long PAGE_TIMEOUT_MS = 60_000L;
++
++    public enum State {
++        PENDING,
++        AUTHORIZING,
++        AWAITING_CODE,
++        IMPORTING_CONTACTS,
++        READY,
++        FAILED
++    }
++
++    private static final java.util.concurrent.BlockingQueue<String> deliveredCodes =
++            new java.util.concurrent.ArrayBlockingQueue<>(1);
++    private static volatile State state = State.PENDING;
++    private static final java.util.List<State> stateHistory = new ArrayList<>();
++    private static volatile String failure;
++    private static volatile long userId;
++    private static final Map<String, Long> peerUserIds = new LinkedHashMap<>();
++
++    private ConformanceProvisioner() {
++    }
++
++    static {
++        stateHistory.add(State.PENDING);
++    }
++
++    public static State state() {
++        return state;
++    }
++
++    public static synchronized java.util.List<State> stateHistory() {
++        return new ArrayList<>(stateHistory);
++    }
++
++    private static synchronized void setState(State value) {
++        state = value;
++        if (stateHistory.isEmpty() || stateHistory.get(stateHistory.size() - 1) != value) {
++            stateHistory.add(value);
++        }
++    }
++
++    public static String failure() {
++        return failure;
++    }
++
++    public static long userId() {
++        return userId;
++    }
++
++    public static synchronized Map<String, Long> peerUserIds() {
++        return new LinkedHashMap<>(peerUserIds);
++    }
++
++    public static void start() {
++        Thread thread = new Thread(ConformanceProvisioner::run, "ferrite-conformance-provisioner");
++        thread.setDaemon(true);
++        thread.start();
++    }
++
++    private static void run() {
++        ConformanceConfig config = ConformanceConfig.get();
++        try {
++            setState(State.AUTHORIZING);
++            TLRPC.User user = authorize(config);
++            userId = user.id;
++            ConformanceLog.info("authorized as " + user.id + " (" + config.phone + ")");
++            setState(State.IMPORTING_CONTACTS);
++            importPeers(config);
++            setState(State.READY);
++            ConformanceLog.info("provisioned with " + peerUserIds.size() + " peer contacts");
++        } catch (Throwable error) {
++            failure = error.toString();
++            setState(State.FAILED);
++            ConformanceLog.error("provisioning failed", error);
++        }
++    }
++
++    /**
++     * Signs in by driving the application's own login screens. Every request on
++     * the wire is built and sent by the application, and the only success witness
++     * is the {@link UserConfig} its own {@code onAuthSuccess} writes.
++     */
++    private static TLRPC.User authorize(ConformanceConfig config) throws Exception {
++        UserConfig userConfig = UserConfig.getInstance(ACCOUNT);
++        TLRPC.User existing = userConfig.getCurrentUser();
++        if (userConfig.isClientActivated() && existing != null
++                && samePhone(existing.phone, config.phone)) {
++            return existing;
++        }
++
++        ConformanceLogin.present(LAUNCHER_TIMEOUT_MS);
++        if (!ConformanceLogin.awaitPhonePage(PAGE_TIMEOUT_MS)) {
++            throw new IllegalStateException("the login flow never reached its phone page; it is on "
++                    + ConformanceLogin.currentPage());
++        }
++        ConformanceLogin.submitPhone(config.phone.replace("+", ""));
++
++        if (!ConformanceLogin.awaitCodePage(PAGE_TIMEOUT_MS)) {
++            throw new IllegalStateException("the login flow never reached a code page; it is on "
++                    + ConformanceLogin.currentPage());
++        }
++        ConformanceLogin.submitCode(verificationCode(config));
++
++        if (!ConformanceLogin.awaitRegisterPageOrAuthorized(PAGE_TIMEOUT_MS)) {
++            throw new IllegalStateException(
++                    "the login flow neither signed in nor offered registration; it is on "
++                            + ConformanceLogin.currentPage());
++        }
++        if (!ConformanceLogin.isAuthorized()) {
++            ConformanceLogin.submitName(config.firstName, config.lastName);
++        }
++        if (!ConformanceLogin.awaitAuthorized(REQUEST_TIMEOUT_MS)) {
++            throw new IllegalStateException("the application never reported itself signed in");
++        }
++
++        TLRPC.User user = ConformanceLogin.currentUser();
++        if (!samePhone(user.phone, config.phone)) {
++            throw new IllegalStateException("the application signed in as " + user.phone
++                    + " instead of " + config.phone);
++        }
++        return user;
++    }
++
++    /**
++     * A deployment that issues a random code has to hand it to the instance the
++     * same way an SMS would. A configured code is used as-is, so a deployment
++     * with a fixed development code needs no channel at all.
++     */
++    private static String verificationCode(ConformanceConfig config) throws InterruptedException {
++        if (config.verificationCode != null) {
++            return config.verificationCode;
++        }
++        deliveredCodes.clear();
++        setState(State.AWAITING_CODE);
++        String code = deliveredCodes.poll(CODE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
++        if (code == null) {
++            throw new IllegalStateException(
++                    "no verification code was delivered to the instance");
++        }
++        setState(State.AUTHORIZING);
++        return code;
++    }
++
++    public static boolean deliverCode(String code) {
++        return deliveredCodes.offer(code);
++    }
++
++    /**
++     * The peers are already in the device's own phone book, so the application
++     * imports them with its own contact sync. Nothing here builds
++     * {@code contacts.importContacts} or writes a user into the app's storage.
++     *
++     * Peers of the same run sign in independently, and one of them may still be
++     * booting a device on the other platform, so the application's own import is
++     * repeated until Ferrite resolves every one of them. Both waits share the one
++     * budget, which stays under the launcher's own, so the instance reports why it
++     * gave up before the launcher stops waiting for it.
++     */
++    private static void importPeers(ConformanceConfig config) throws Exception {
++        if (config.peers.isEmpty()) {
++            return;
++        }
++        long deadline = System.currentTimeMillis() + CONTACT_TIMEOUT_MS;
++        forceImportContacts();
++        awaitContacts(config, deadline);
++        awaitLocalContacts(config, deadline);
++    }
++
++    private static void forceImportContacts() {
++        ContactsController.getInstance(ACCOUNT).forceImportContacts();
++    }
++
++    private static void awaitContacts(ConformanceConfig config, long deadline) throws Exception {
++        while (System.currentTimeMillis() < deadline) {
++            Map<String, Long> resolved = serverContacts(config);
++            if (resolved.size() == config.peers.size()) {
++                synchronized (ConformanceProvisioner.class) {
++                    peerUserIds.clear();
++                    peerUserIds.putAll(resolved);
++                }
++                return;
++            }
++            Thread.sleep(2000L);
++            forceImportContacts();
++        }
++        throw new IllegalStateException("peer contacts never appeared in contacts.getContacts");
++    }
++
++    /**
++     * Waits until the application's own contact list holds every peer, so the
++     * witness is the client's state and not only the server's answer.
++     */
++    private static void awaitLocalContacts(ConformanceConfig config, long deadline) throws Exception {
++        while (System.currentTimeMillis() < deadline) {
++            if (localContactPhones().size() >= config.peers.size()) {
++                return;
++            }
++            runOnUiThreadAndWait(() ->
++                    ContactsController.getInstance(ACCOUNT).loadContacts(false, 0));
++            Thread.sleep(2000L);
++        }
++        throw new IllegalStateException(
++                "peer contacts never reached the application's own contact list; observed "
++                        + localContactPhones());
++    }
++
++    private static java.util.List<String> localContactPhones() {
++        java.util.List<String> phones = new ArrayList<>();
++        for (TLRPC.TL_contact contact : ContactsController.getInstance(ACCOUNT).contacts) {
++            TLRPC.User user = MessagesController.getInstance(ACCOUNT).getUser(contact.user_id);
++            if (user != null && user.phone != null) {
++                phones.add(user.phone);
++            }
++        }
++        return phones;
++    }
++
++    /**
++     * Reads the contact list back from Ferrite rather than from local state, so
++     * the witness is the server's view of this instance's contacts.
++     */
++    private static Map<String, Long> serverContacts(ConformanceConfig config) throws Exception {
++        TLRPC.TL_contacts_getContacts request = new TLRPC.TL_contacts_getContacts();
++        request.hash = 0;
++        TLObject response = ConformanceRpc.invoke(
++                ACCOUNT, request, ConformanceRpc.AUTHORIZED_FLAGS, REQUEST_TIMEOUT_MS);
++        Map<String, Long> resolved = new LinkedHashMap<>();
++        if (!(response instanceof TLRPC.TL_contacts_contacts)) {
++            return resolved;
++        }
++        TLRPC.TL_contacts_contacts contacts = (TLRPC.TL_contacts_contacts) response;
++        for (TLRPC.User user : contacts.users) {
++            for (String peer : config.peers) {
++                if (samePhone(user.phone, peer)) {
++                    resolved.put(peer, user.id);
++                }
++            }
++        }
++        return resolved;
++    }
++
++    static boolean samePhone(String left, String right) {
++        return left != null && right != null
++                && left.replace("+", "").equals(right.replace("+", ""));
++    }
++
++    static void runOnUiThreadAndWait(Runnable action) throws InterruptedException {
++        final CountDownLatch latch = new CountDownLatch(1);
++        final Throwable[] slot = new Throwable[1];
++        AndroidUtilities.runOnUIThread(() -> {
++            try {
++                action.run();
++            } catch (Throwable error) {
++                slot[0] = error;
++            } finally {
++                latch.countDown();
++            }
++        });
++        if (!latch.await(REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
++            throw new IllegalStateException("ferrite conformance main-thread step timed out");
++        }
++        if (slot[0] != null) {
++            // The cause is named here because the bridge reports toString(): a
++            // bare wrapper says only that something on the main thread failed.
++            throw new IllegalStateException(
++                    "ferrite conformance main-thread step failed: " + slot[0], slot[0]);
++        }
++    }
++}
+diff --git a/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceRpc.java b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceRpc.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..ecfdfef1e3742e7e066dd985dd77828ebebd8484
+--- /dev/null
++++ b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceRpc.java
+@@ -0,0 +1,52 @@
++package org.telegram.conformance;
++
++import org.telegram.tgnet.ConnectionsManager;
++import org.telegram.tgnet.TLObject;
++import org.telegram.tgnet.TLRPC;
++
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.TimeUnit;
++
++/** Blocking wrapper over the application's own production request path. */
++public final class ConformanceRpc {
++
++    public static final int UNAUTHORIZED_FLAGS =
++            ConnectionsManager.RequestFlagEnableUnauthorized
++                    | ConnectionsManager.RequestFlagFailOnServerErrors
++                    | ConnectionsManager.RequestFlagWithoutLogin;
++
++    public static final int AUTHORIZED_FLAGS = ConnectionsManager.RequestFlagFailOnServerErrors;
++
++    public static final class RpcError extends Exception {
++        public final int code;
++        public final String text;
++
++        RpcError(TLRPC.TL_error error) {
++            super(error.code + ": " + error.text);
++            code = error.code;
++            text = error.text;
++        }
++    }
++
++    private ConformanceRpc() {
++    }
++
++    public static TLObject invoke(int account, TLObject request, int flags, long timeoutMs)
++            throws RpcError, InterruptedException {
++        final Object[] slot = new Object[2];
++        final CountDownLatch latch = new CountDownLatch(1);
++        ConnectionsManager.getInstance(account).sendRequest(request, (response, error) -> {
++            slot[0] = response;
++            slot[1] = error;
++            latch.countDown();
++        }, flags);
++        if (!latch.await(timeoutMs, TimeUnit.MILLISECONDS)) {
++            throw new IllegalStateException(
++                    "ferrite conformance request timed out: " + request.getClass().getSimpleName());
++        }
++        if (slot[1] != null) {
++            throw new RpcError((TLRPC.TL_error) slot[1]);
++        }
++        return (TLObject) slot[0];
++    }
++}
+diff --git a/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceRuntime.java b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceRuntime.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..28727a1da4552f7ec64bf38bf4115797af9c6a5e
+--- /dev/null
++++ b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceRuntime.java
+@@ -0,0 +1,19 @@
++package org.telegram.conformance;
++
++/** Starts the conformance bridge and provisioning once the application is up. */
++public final class ConformanceRuntime {
++
++    private static boolean started;
++
++    private ConformanceRuntime() {
++    }
++
++    public static synchronized void start() {
++        if (started || !ConformanceConfig.isEnabled()) {
++            return;
++        }
++        started = true;
++        ConformanceBridge.start();
++        ConformanceProvisioner.start();
++    }
++}
+diff --git a/TMessagesProj/src/main/java/org/telegram/messenger/ApplicationLoader.java b/TMessagesProj/src/main/java/org/telegram/messenger/ApplicationLoader.java
+index 8951a4039f2863d0d66c01ee66c5710c14b87c6a..07a53e2c18a82ee20d7fc3dc1f05f16a0a8575cb 100644
+--- a/TMessagesProj/src/main/java/org/telegram/messenger/ApplicationLoader.java
++++ b/TMessagesProj/src/main/java/org/telegram/messenger/ApplicationLoader.java
+@@ -279,6 +279,7 @@ public class ApplicationLoader extends Application {
+             DownloadController.getInstance(a);
+         }
+         BillingController.getInstance().startConnection();
++        org.telegram.conformance.ConformanceRuntime.start();
+     }
+
+     public ApplicationLoader() {
+@@ -325,6 +326,12 @@ public class ApplicationLoader extends Application {
+             applicationContext = getApplicationContext();
+         }
+
++        org.telegram.conformance.ConformanceConfig.install(applicationContext);
++        if (org.telegram.conformance.ConformanceConfig.isEnabled()) {
++            BuildVars.APP_ID = org.telegram.conformance.ConformanceConfig.get().apiId;
++            BuildVars.APP_HASH = org.telegram.conformance.ConformanceConfig.get().apiHash;
++        }
++
+         NativeLoader.initNativeLibs(ApplicationLoader.applicationContext);
+         try {
+             ConnectionsManager.native_setJava(false);
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/LoginActivity.java b/TMessagesProj/src/main/java/org/telegram/ui/LoginActivity.java
+index c84d1613e543448b19e412993b6414fa828b34fc..ea2d12f4d574235b3cce8abfa6c75511e50b281b 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/LoginActivity.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/LoginActivity.java
+@@ -1728,6 +1728,64 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
+         needFinishActivity(afterSignup, res.setup_password_required, res.otherwise_relogin_days);
+     }
+
++    /* Ferrite conformance: supplies the input a user would type and hands control
++       straight back to the login flow. These build no request and apply no result;
++       confirmedNumber pre-answers a device-local dialog the way the stored
++       askAboutContacts preference pre-answers another one. */
++    public int ferriteConformanceCurrentView() {
++        return currentViewNum;
++    }
++
++    public boolean ferriteConformanceOnPhonePage() {
++        return currentViewNum == VIEW_PHONE_INPUT && views[VIEW_PHONE_INPUT] != null;
++    }
++
++    public boolean ferriteConformanceOnCodePage() {
++        return views[currentViewNum] instanceof LoginActivitySmsView;
++    }
++
++    public boolean ferriteConformanceOnRegisterPage() {
++        return currentViewNum == VIEW_REGISTER && views[VIEW_REGISTER] != null;
++    }
++
++    /* The whole number goes into the country field, which is what a paste does:
++       the field's own watcher splits the country code off and moves the rest into
++       the phone field, so nothing outside the application decides where it ends. */
++    public void ferriteConformanceSubmitPhone(String digits) {
++        PhoneView view = (PhoneView) views[VIEW_PHONE_INPUT];
++        // The screen may already hold the device's own SIM number, which a user
++        // would type over rather than append to.
++        view.phoneField.setText("");
++        view.codeField.setText(digits);
++        String entered = PhoneFormat.stripExceptNumbers(
++                "" + view.codeField.getText() + view.phoneField.getText());
++        if (!entered.equals(digits)) {
++            throw new IllegalStateException(
++                    "the login screen holds " + entered + " instead of " + digits);
++        }
++        view.confirmedNumber = true;
++        view.onNextPressed(null);
++    }
++
++    public void ferriteConformanceSubmitCode(String code) {
++        SlideView page = views[currentViewNum];
++        if (!(page instanceof LoginActivitySmsView)) {
++            throw new IllegalStateException("login page " + currentViewNum + " ("
++                    + (page == null ? "null" : page.getClass().getSimpleName())
++                    + ") takes no verification code");
++        }
++        LoginActivitySmsView view = (LoginActivitySmsView) page;
++        view.codeFieldContainer.setCode(code);
++        view.onNextPressed(null);
++    }
++
++    public void ferriteConformanceSubmitName(String firstName, String lastName) {
++        LoginActivityRegisterView view = (LoginActivityRegisterView) views[VIEW_REGISTER];
++        view.firstNameField.setText(firstName);
++        view.lastNameField.setText(lastName);
++        view.onNextPressed(null);
++    }
++
+     private void fillNextCodeParams(Bundle params, TL_account.sentEmailCode res) {
+         params.putString("emailPattern", res.email_pattern);
+         params.putInt("length", res.length);

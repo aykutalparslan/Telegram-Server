@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -10,16 +9,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// How many participants of a group are online right now. Pinned TDLib does not
-/// call this from a request: it fires on the online-member-count timeout for a
-/// chat the user currently has open (`DialogParticipantManager.cpp:64`).
-///
-/// The count is computed at request time from durable user status rather than
-/// cached, so it can never report a stale figure, and it counts only ACTIVE
-/// participants -- a banned or departed member is not online in this chat even
-/// if that account is online elsewhere.
-/// </summary>
 public sealed class GetOnlinesHandler
 {
     private readonly IChatParticipantsRepository _chatParticipantsRepository;
@@ -75,7 +64,6 @@ public sealed class GetOnlinesHandler
         }
         else
         {
-            // A private chat has no member list to count.
             return (TLChatOnlines)RpcErrorGenerator.GenerateError(400, "PEER_ID_INVALID"u8);
         }
 

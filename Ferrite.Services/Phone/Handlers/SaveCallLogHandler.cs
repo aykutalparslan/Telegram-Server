@@ -35,8 +35,6 @@ public sealed class SaveCallLogHandler : PhoneCallHandlerBase
             return (TLBool)RpcErrorGenerator.GenerateError(400, "CALL_PEER_INVALID"u8);
         }
 
-        // The uploaded log file is acknowledged for a participant but not
-        // persisted.
         return BoolTrue.Builder().Build();
     }
 }

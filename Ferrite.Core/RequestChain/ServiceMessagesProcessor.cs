@@ -4,7 +4,6 @@
 using System;
 using System.Buffers;
 using Ferrite.Core.Connection;
-using Ferrite.Services;
 using Ferrite.Core.Execution;
 using Ferrite.TL;
 
@@ -26,7 +25,7 @@ public class ServiceMessagesProcessor : ILinkedHandler
         {
             if (ctx.QuickAck != null)
             {
-                Services.MTProtoMessage message = new Services.MTProtoMessage()
+                Services.Transport.MTProtoMessage message = new Services.Transport.MTProtoMessage()
                 {
                     QuickAck = (int)ctx.QuickAck,
                     MessageType = MTProtoMessageType.QuickAck,
@@ -90,11 +89,6 @@ public class ServiceMessagesProcessor : ILinkedHandler
 
         if (input.Constructor == Constructors.mtproto_MsgResendReq)
         {
-            // Ferrite's sent-message registry keeps only METADATA (no payload bytes),
-            // so it cannot re-transmit the requested messages. Detailed-info
-            // notifications would prompt clients such as TDLib to request the
-            // answer msg_id again, which can loop without payload retention.
-            // Answer with msgs_state_info exactly as if this were a msgs_state_req.
             if (sender is IMTProtoConnection resendConnection &&
                 sender is IMTProtoSessionOwner resendOwner)
             {
@@ -109,8 +103,6 @@ public class ServiceMessagesProcessor : ILinkedHandler
 
         if (input.Constructor == Constructors.mtproto_MsgsAllInfo)
         {
-            // Voluntary status report about the messages Ferrite has sent: mark the
-            // ones the client says it received/acknowledged in the sent registry.
             if (sender is IMTProtoSessionOwner allInfoOwner)
             {
                 var allInfo = new TL.mtproto.MsgsAllInfo(input.AsSpan());
@@ -123,21 +115,12 @@ public class ServiceMessagesProcessor : ILinkedHandler
 
         if (input.Constructor == Constructors.mtproto_MsgsStateInfo)
         {
-            // Informational response to a msgs_state_req. Ferrite never issues
-            // msgs_state_req, so there is nothing to reconcile -- consume it.
             input.Dispose();
             return;
         }
 
         if (input.Constructor == Constructors.mtproto_HttpWait)
         {
-            // http_wait (max_delay/wait_after/max_wait) governs how long the server
-            // may hold queued updates before flushing them to the client on the HTTP
-            // long-poll transport. Ferrite serves clients over TCP, where responses
-            // are written as soon as they are produced and there is no held queue to
-            // flush, so the request is intentionally a no-op. It is consumed here --
-            // never forwarded to the authorization gate / request processor -- because
-            // it is an MTProto transport service message, not an API call.
             input.Dispose();
             return;
         }
@@ -146,9 +129,6 @@ public class ServiceMessagesProcessor : ILinkedHandler
         else input.Dispose();
     }
 
-    // msgs_state_info / msgs_all_info status byte values (one per msg_id). These
-    // are the MTProto wire codes and are distinct from the registry's internal
-    // MTProtoMessageStatus flags.
     private const byte MessageStatusNothingKnown = 1;
     private const byte MessageStatusReceivedAndProcessed = 4;
     private const byte MessageStatusAlreadyAcknowledged = 8;
@@ -171,14 +151,9 @@ public class ServiceMessagesProcessor : ILinkedHandler
     {
         if (!session.TryGetSentMessage(msgId, out var sent))
         {
-            // Nothing is known about this id: msgs_state_req asks about the
-            // requester's own outgoing (server-incoming) messages, which Ferrite
-            // does not track, and a forgotten outgoing id resolves here too.
             return MessageStatusNothingKnown;
         }
 
-        // A message Ferrite sent and still remembers: from the server's side it has
-        // been fully processed, which is also an implicit receipt acknowledgment.
         int status = MessageStatusReceivedAndProcessed;
         if (!sent.ContentRelated)
         {
@@ -208,13 +183,10 @@ public class ServiceMessagesProcessor : ILinkedHandler
         await SendServiceMessage(connection, payload, reqMsgId, sessionId);
     }
 
-    // Sends a top-level MTProto service message (NOT rpc_result-wrapped) on the
-    // current connection; the normal send path envelopes it with a fresh server
-    // msg_id. Used for the synchronous service responses Ferrite emits in-band.
     private static async ValueTask SendServiceMessage(IMTProtoConnection connection,
         byte[] payload, long responseToMessageId, long sessionId)
     {
-        var message = new Services.MTProtoMessage
+        var message = new Services.Transport.MTProtoMessage
         {
             Data = payload,
             IsContentRelated = false,
@@ -248,9 +220,6 @@ public class ServiceMessagesProcessor : ILinkedHandler
         byte[] payload;
         if (session.TryGetSentMessage(reqMsgId, out var sent))
         {
-            // The answer is still tracked for this session: acknowledge receipt of
-            // the original query and transmit the dropped answer's coordinates so
-            // the client can reconcile its outgoing/incoming queues.
             using var dropped = TL.mtproto.RpcAnswerDropped.Builder()
                 .MsgId(sent.MessageId)
                 .SeqNo(sent.SequenceNo)
@@ -260,11 +229,6 @@ public class ServiceMessagesProcessor : ILinkedHandler
         }
         else
         {
-            // Ferrite answers RPC queries synchronously and keeps no
-            // req_msg_id -> answer map once the response is sent, so a drop request
-            // for an id we no longer track means the server remembers nothing about
-            // it. rpc_answer_dropped_running (cancelled mid-processing) is therefore
-            // never reachable on this server.
             using var unknown = TL.mtproto.RpcAnswerUnknown.Builder().Build();
             payload = unknown.TLBytes!.Value.AsSpan().ToArray();
         }

@@ -2,8 +2,8 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Scheduling;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.messages;
@@ -90,13 +90,6 @@ public sealed class SendMediaHandler
         {
             if (queued)
             {
-                // A poll's canonical state is keyed by the identity of the message
-                // that carries it, and a queue entry has no such identity yet: its
-                // scheduled id is unique only within one dialog. Creating the poll
-                // now would key it to a row that is about to be replaced, so the
-                // combination is refused at its feature boundary rather than stored
-                // against an id that will not exist. 403 keeps it out of the pinned
-                // client's 500-retry path.
                 return Error(new ErrorMessage(403, "METHOD_DISABLED"));
             }
 
@@ -112,8 +105,6 @@ public sealed class SendMediaHandler
             PollStore.PollSnapshot created = await _polls.CreateAsync(input,
                 _polls.UnixNow());
             poll = created;
-            // Nobody has voted yet, so the sender's own baseline results carry
-            // only the (zero) total: `min` hides a breakdown that does not exist.
             mediaBytes = PollStore.BuildMedia(created,
                 Array.Empty<PollStore.VoteSnapshot>(), userId, _polls.UnixNow());
         }
@@ -152,20 +143,10 @@ public sealed class SendMediaHandler
         {
             return await _sender.BuildChannelResultAsync(authKeyId, sent);
         }
-        // TDLib's SendMediaQuery accepts a full Updates result and requires the
-        // random-id mapping plus the newly persisted message. Reuse the album
-        // fanout for the one-item case so private/basic-group media sends have the
-        // same update and peer hydration semantics as sendMultiMedia.
         return await _sender.BuildAlbumResultAsync(authKeyId, userId, target,
             new[] { sent });
     }
 
-    /// <summary>
-    /// Stores the poll definition against the identity the send just produced.
-    /// A common-box poll is keyed by the logical message rather than by any one
-    /// owner's copy, so every participant votes in the same poll; only the
-    /// sender's own copy exists at this point, which is what the locator reads.
-    /// </summary>
     private async Task<bool> PersistPollAsync(PollStore.PollSnapshot poll,
         long userId, MediaSentBatch sent)
     {

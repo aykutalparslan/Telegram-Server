@@ -10,13 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Reports the reaction one user left on one message, the route pinned TDLib
-/// takes through `ReportReactionQuery` (`MessageReaction.cpp:324`). The client
-/// only requires "know" access to the reacting peer, so the report is accepted
-/// even after the reaction itself was retracted: the moderator judges what the
-/// reporter saw, not what the message currently holds.
-/// </summary>
 public sealed class ReportReactionHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -33,6 +26,49 @@ public sealed class ReportReactionHandler
         _unitOfWork = unitOfWork;
         _moderation = moderation;
         _messages = messages;
+    }
+
+    [TLFunction(Constructors.layer214_MessagesReportReaction)]
+    public async Task<TLBool> HandleLayer214(long authKeyId, TLBytes q)
+    {
+        using var current = ToCurrentReportReactionRequest(q);
+        return await Handle(authKeyId, current);
+    }
+
+    private static TLBytes ToCurrentReportReactionRequest(TLBytes q)
+    {
+        var sent = new TL.layer214.messages.MessagesReportReaction(q.AsSpan());
+        using TLInputPeer reactor = InputPeerFromInputUser(sent.Get_UserIdView());
+        using var current = ReportReaction.Builder()
+            .Peer(sent.Peer)
+            .Id(sent.Id)
+            .ReactionPeer(reactor.AsSpan())
+            .Build();
+        return current.TLBytes!.Value;
+    }
+
+    private static TLInputPeer InputPeerFromInputUser(InputUserView user)
+    {
+        if (user.Is(out InputUserSelf _))
+        {
+            return new InputPeerSelf();
+        }
+        if (user.Is(out InputUser known))
+        {
+            return InputPeerUser.Builder()
+                .UserId(known.UserId)
+                .AccessHash(known.AccessHash)
+                .Build();
+        }
+        if (user.Is(out InputUserFromMessage fromMessage))
+        {
+            return InputPeerUserFromMessage.Builder()
+                .Peer(fromMessage.Peer)
+                .MsgId(fromMessage.MsgId)
+                .UserId(fromMessage.UserId)
+                .Build();
+        }
+        return new InputPeerEmpty();
     }
 
     [TLFunction(Constructors.baseLayer_ReportReaction)]
@@ -60,8 +96,6 @@ public sealed class ReportReactionHandler
         {
             return Error("PEER_ID_INVALID");
         }
-        // A reaction is always chosen by a user in Ferrite, and reporting your
-        // own reaction is not a report.
         if (!reactorResolved || reactor.Type != TLPeer.PeerType.PeerUser ||
             reactor.Id == userId)
         {

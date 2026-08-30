@@ -7,7 +7,7 @@ namespace Ferrite.Services.Handlers.AccountMethods;
 
 public sealed class ClearRecentEmojiStatusesHandler : EmojiCatalogueHandlerBase
 {
-    public ClearRecentEmojiStatusesHandler(StickerStore stickers,
+    public ClearRecentEmojiStatusesHandler(EmojiCatalogStore stickers,
         ProfileStore profiles) : base(stickers, profiles) { }
 
     [TLFunction(Constructors.baseLayer_ClearRecentEmojiStatuses)]

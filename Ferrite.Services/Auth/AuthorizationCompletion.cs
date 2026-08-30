@@ -9,24 +9,15 @@ using Ferrite.TL.baseLayer.auth;
 using Ferrite.TL.baseLayer.dto;
 using TLAuthorization = Ferrite.TL.baseLayer.auth.TLAuthorization;
 
-namespace Ferrite.Services;
+namespace Ferrite.Services.Auth;
 
 public interface IAuthorizationCompletion
 {
-    /// <summary>
-    /// Resolves either a pending or completed authorization. The caller owns the
-    /// returned value and must dispose it.
-    /// </summary>
     ValueTask<TLAuthInfo?> ResolveAsync(long authKeyId);
 
     ValueTask<bool> CreateOrUpdatePendingAsync(long authKeyId, long userId,
         string phone, int apiLayer = -1);
 
-    /// <summary>
-    /// Completes a pending authorization and returns an owned auth.authorization.
-    /// A null result means the authorization or user was missing, or persistence
-    /// failed.
-    /// </summary>
     ValueTask<TLAuthorization?> CompleteAsync(long authKeyId);
 }
 

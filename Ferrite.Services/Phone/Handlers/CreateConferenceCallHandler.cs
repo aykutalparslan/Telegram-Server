@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.Services.Calls.E2E;
@@ -14,13 +13,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.createConferenceCall. Creates the peerless call row an E2E conference
-/// lives in and, when flags.3 is set, joins the creator with the zero block in
-/// the same request. The media room is allocated before the row is committed and
-/// released again when the commit does not win, so a persisted conference always
-/// has a room and a lost race never leaks one.
-/// </summary>
 public sealed class CreateConferenceCallHandler : ConferenceCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -52,8 +44,6 @@ public sealed class CreateConferenceCallHandler : ConferenceCallHandlerBase
         bool muted = request.Muted;
         bool videoStopped = request.VideoStopped;
         int randomId = request.RandomId;
-        // join, public_key, block and params all share flags.3: a create that
-        // does not join carries none of them.
         byte[] publicKey = join ? request.PublicKey.ToArray() : Array.Empty<byte>();
         byte[] block = join ? request.Block.ToArray() : Array.Empty<byte>();
         byte[] paramsJson = join
@@ -98,9 +88,6 @@ public sealed class CreateConferenceCallHandler : ConferenceCallHandlerBase
             case GroupCallCreateStatus.Created:
                 break;
             case GroupCallCreateStatus.Idempotent:
-                // The same (creator, random_id) already created this conference.
-                // Replay its updateGroupCall only: no second room and no second
-                // join, because the client's first attempt already got both.
                 await ReleaseRoomAsync(callId);
                 using (TLDto.TLGroupCallState existing = created.Call!.Value)
                 {
@@ -129,29 +116,18 @@ public sealed class CreateConferenceCallHandler : ConferenceCallHandlerBase
             videoStopped);
         if (outcome.Error != null)
         {
-            // The zero block did not validate, so the conference never really
-            // started: tear the room down and leave a discarded row behind rather
-            // than a call nobody can ever join.
             await DiscardUnjoinableAsync(callId, now);
             return Error(outcome.Error);
         }
 
         Log.Debug($"📞 createConferenceCall call:{callId} creator:{userId} " +
                   $"random:{randomId} join:true");
-        // A create keeps the join's container order unchanged. TDLib does not need
-        // updateGroupCall to lead in order to learn the new call id: it scans the
-        // whole container for one before processing any of it
-        // (UpdatesManager::get_update_new_group_call_id). Leading with it would
-        // instead consume the pending connection params before the chain updates
-        // are buffered, and the conference would never become encrypted.
         return BuildUnsequencedConferenceResult(userId, outcome.Updates);
     }
 
     private static byte[] ReadParamsJson(DataJSONView view) =>
         view.Is(out DataJSON json) ? json.Data.ToArray() : Array.Empty<byte>();
 
-    // peer_type -1 and creator_user_id in the peer_id column are how a peerless
-    // row is indexed; see the dto.groupCallState comment in baseLayer.tl.
     private static TLDto.TLGroupCallState BuildConferenceRow(long callId, long accessHash,
         long creatorUserId, int randomId, int now) =>
         TLDto.GroupCallState.Builder()

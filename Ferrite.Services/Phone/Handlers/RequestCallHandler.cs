@@ -4,6 +4,7 @@
 using Ferrite.Crypto;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
+using Ferrite.Services.Calls;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.phone;
@@ -15,18 +16,20 @@ namespace Ferrite.Services.Phone.Handlers;
 public sealed class RequestCallHandler : PhoneCallHandlerBase
 {
     private readonly IUserRepository _userRepository;
+    private readonly UserSerializer _userSerializer;
 
     private const int GaHashLength = 32;
 
     private readonly PrivacyEvaluator _privacy;
     private readonly CallRegistryOptions _options;
 
-    public RequestCallHandler(IUnitOfWork unitOfWork, IBlockedPeersRepository blockedPeersRepository, IAuthorizationRepository authorizationRepository, IUserRepository userRepository, ICallRegistry registry,
+    public RequestCallHandler(IUnitOfWork unitOfWork, IBlockedPeersRepository blockedPeersRepository, IAuthorizationRepository authorizationRepository, IUserRepository userRepository, UserSerializer userSerializer, ICallRegistry registry,
         IUpdatesService updates, IMTProtoTime time, PrivacyEvaluator privacy,
         CallRegistryOptions options)
         : base(unitOfWork, blockedPeersRepository, authorizationRepository, userRepository, registry, updates, time)
     {
         _userRepository = userRepository;
+        _userSerializer = userSerializer;
 
         _privacy = privacy;
         _options = options;
@@ -108,10 +111,8 @@ public sealed class RequestCallHandler : PhoneCallHandlerBase
             case CallRegistryStatus.Ok:
                 break;
             case CallRegistryStatus.Duplicate:
-                // Idempotent retry: return the existing waiting call without a
-                // second fan-out.
-                return BuildResult(BuildWaiting(result.Call!), callerUserId,
-                    targetUserId);
+                return BuildResult(callerUserId, BuildWaiting(result.Call!), callerUserId,
+                    targetUserId, _userSerializer);
             case CallRegistryStatus.DedupConflict:
                 return Error(400, "RANDOM_ID_DUPLICATE"u8);
             case CallRegistryStatus.QuotaExceeded:
@@ -123,10 +124,10 @@ public sealed class RequestCallHandler : PhoneCallHandlerBase
         }
 
         CallSnapshot call = result.Call!;
-        // Push phoneCallRequested to every callee device exactly once.
         await PushCallUpdate(targetUserId, BuildRequested(call),
             UpdateDeliveryScope.All);
-        return BuildResult(BuildWaiting(call), callerUserId, targetUserId);
+        return BuildResult(callerUserId, BuildWaiting(call), callerUserId, targetUserId,
+            _userSerializer);
     }
 
     private bool ValidateProtocol(CallProtocol protocol, out PhoneResult error)
@@ -167,7 +168,6 @@ public sealed class RequestCallHandler : PhoneCallHandlerBase
             return false;
         }
 
-        // If the caller supplied an access hash it must match the stored one.
         if (targetAccessHash is long accessHash &&
             (!target.Flags[0] || target.AccessHash != accessHash))
         {

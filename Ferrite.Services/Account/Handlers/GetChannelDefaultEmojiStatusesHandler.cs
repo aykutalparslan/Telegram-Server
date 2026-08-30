@@ -8,7 +8,7 @@ namespace Ferrite.Services.Handlers.AccountMethods;
 
 public sealed class GetChannelDefaultEmojiStatusesHandler : EmojiCatalogueHandlerBase
 {
-    public GetChannelDefaultEmojiStatusesHandler(StickerStore stickers,
+    public GetChannelDefaultEmojiStatusesHandler(EmojiCatalogStore stickers,
         ProfileStore profiles) : base(stickers, profiles) { }
 
     [TLFunction(Constructors.baseLayer_GetChannelDefaultEmojiStatuses)]

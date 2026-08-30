@@ -1,0 +1,214 @@
+#!/bin/sh
+set -eu
+
+MODE=build
+case "${1:-}" in
+  --metadata-only)
+    MODE=metadata
+    shift
+    ;;
+  "")
+    ;;
+  *)
+    echo "usage: $0 [--metadata-only]" >&2
+    exit 2
+    ;;
+esac
+[ "$#" -eq 0 ] || {
+  echo "usage: $0 [--metadata-only]" >&2
+  exit 2
+}
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PUBLIC_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
+PIN="$PUBLIC_ROOT/interop/upstream-clients/PIN"
+PATCH="$PUBLIC_ROOT/interop/upstream-clients/patches/android/0001-ferrite-conformance.patch"
+PRIVATE_PATCH=${FERRITE_ANDROID_PRIVATE_PATCH:-}
+
+die() {
+  echo "build-android: $*" >&2
+  exit 1
+}
+
+for command in awk git python3 rg shasum; do
+  command -v "$command" >/dev/null 2>&1 || die "required command is missing: $command"
+done
+[ -f "$PIN" ] || die "PIN is missing"
+. "$PIN"
+
+: "${LAYER:?missing LAYER}"
+: "${ANDROID_REPOSITORY:?missing ANDROID_REPOSITORY}"
+: "${ANDROID_COMMIT:?missing ANDROID_COMMIT}"
+: "${ANDROID_VERSION:?missing ANDROID_VERSION}"
+: "${ANDROID_PATCH_SHA256:?missing ANDROID_PATCH_SHA256}"
+: "${ANDROID_JDK_MAJOR:?missing ANDROID_JDK_MAJOR}"
+: "${ANDROID_COMPILE_SDK:?missing ANDROID_COMPILE_SDK}"
+: "${ANDROID_BUILD_TOOLS:?missing ANDROID_BUILD_TOOLS}"
+: "${ANDROID_NDK:?missing ANDROID_NDK}"
+: "${ANDROID_APK_SHA256:?missing ANDROID_APK_SHA256}"
+
+[ "$LAYER" = "214" ] || die "Android layer is $LAYER, expected 214"
+printf '%s\n' "$ANDROID_COMMIT" | rg -q '^[0-9a-f]{40}$' || \
+  die "ANDROID_COMMIT is not a lowercase Git object id"
+printf '%s\n' "$ANDROID_PATCH_SHA256" | rg -q '^[0-9a-f]{64}$' || \
+  die "ANDROID_PATCH_SHA256 is not a lowercase SHA-256 digest"
+printf '%s\n' "$ANDROID_APK_SHA256" | rg -q '^[0-9a-f]{64}$' || \
+  die "ANDROID_APK_SHA256 is not a lowercase SHA-256 digest"
+[ -f "$PATCH" ] || die "Android patch is missing"
+actual_patch=$(shasum -a 256 "$PATCH" | awk '{print $1}')
+[ "$actual_patch" = "$ANDROID_PATCH_SHA256" ] || \
+  die "Android patch digest is $actual_patch, expected $ANDROID_PATCH_SHA256"
+expected_apk=$ANDROID_APK_SHA256
+artifact_name=Telegram.apk
+private_patch_digest=
+if [ -n "$PRIVATE_PATCH" ]; then
+  : "${ANDROID_PRIVATE_PATCH_SHA256:?missing ANDROID_PRIVATE_PATCH_SHA256}"
+  : "${ANDROID_PRIVATE_APK_SHA256:?missing ANDROID_PRIVATE_APK_SHA256}"
+  [ -f "$PRIVATE_PATCH" ] || die "private Android patch is missing: $PRIVATE_PATCH"
+  private_patch_digest=$(shasum -a 256 "$PRIVATE_PATCH" | awk '{print $1}')
+  [ "$private_patch_digest" = "$ANDROID_PRIVATE_PATCH_SHA256" ] || \
+    die "private Android patch digest is $private_patch_digest, expected $ANDROID_PRIVATE_PATCH_SHA256"
+  expected_apk=$ANDROID_PRIVATE_APK_SHA256
+  artifact_name=Telegram-private.apk
+fi
+
+if [ "$MODE" = "metadata" ]; then
+  echo "Android metadata OK: layer=$LAYER commit=$ANDROID_COMMIT patch=$actual_patch"
+  exit 0
+fi
+
+host=$(uname -s)
+case ",${ANDROID_SUPPORTED_HOSTS}," in
+  *",$host,"*) ;;
+  *) die "unsupported host $host; supported hosts: $ANDROID_SUPPORTED_HOSTS" ;;
+esac
+
+# A JDK the host happens to carry is not the one the pinned APK digest was
+# produced by, so the pinned build is fetched unless the caller names another.
+JAVA_ROOT=$("$SCRIPT_DIR/provision-jdk")
+[ -n "$JAVA_ROOT" ] || die "could not provision a JDK $ANDROID_JDK_MAJOR home"
+JAVA_BIN="$JAVA_ROOT/bin/java"
+[ -x "$JAVA_BIN" ] || die "JDK java is not executable: $JAVA_BIN"
+"$JAVA_BIN" -version 2>&1 | rg -q "version \"$ANDROID_JDK_MAJOR(?:[.]|\")" || \
+  die "JDK $ANDROID_JDK_MAJOR is required"
+
+SDK=${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}
+if [ -z "$SDK" ]; then
+  case "$host" in
+    Darwin) SDK="$HOME/Library/Android/sdk" ;;
+    Linux) SDK="$HOME/Android/Sdk" ;;
+  esac
+fi
+[ -d "$SDK" ] || die "Android SDK is missing: $SDK"
+PLATFORM="$SDK/platforms/android-$ANDROID_COMPILE_SDK"
+TOOLS="$SDK/build-tools/$ANDROID_BUILD_TOOLS"
+NDK="$SDK/ndk/$ANDROID_NDK"
+[ -d "$PLATFORM" ] || die "Android platform $ANDROID_COMPILE_SDK is missing"
+[ -x "$TOOLS/aapt" ] || die "Android build-tools $ANDROID_BUILD_TOOLS are missing"
+[ -f "$NDK/source.properties" ] || die "Android NDK $ANDROID_NDK is missing"
+rg -q "^Pkg[.]Revision = $ANDROID_NDK$" "$NDK/source.properties" || \
+  die "Android NDK metadata does not report $ANDROID_NDK"
+
+SOURCE=${FERRITE_ANDROID_SOURCE_ROOT:-"$PUBLIC_ROOT/interop/upstream-clients/work/android/source"}
+ARTIFACTS=${FERRITE_ANDROID_ARTIFACTS:-"$PUBLIC_ROOT/.ferrite/upstream-apps/artifacts/android"}
+mkdir -p "$(dirname -- "$SOURCE")" "$ARTIFACTS"
+
+if [ ! -d "$SOURCE/.git" ]; then
+  git clone --no-checkout "$ANDROID_REPOSITORY" "$SOURCE"
+  git -C "$SOURCE" fetch origin "$ANDROID_COMMIT"
+  git -C "$SOURCE" switch --detach "$ANDROID_COMMIT"
+fi
+current=$(git -C "$SOURCE" rev-parse HEAD 2>/dev/null || true)
+if [ "$current" != "$ANDROID_COMMIT" ]; then
+  [ -z "$(git -C "$SOURCE" status --short)" ] || \
+    die "source checkout has unrelated changes: $SOURCE"
+  git -C "$SOURCE" fetch origin "$ANDROID_COMMIT"
+  git -C "$SOURCE" switch --detach "$ANDROID_COMMIT"
+fi
+
+if [ -n "$PRIVATE_PATCH" ] && \
+   git -C "$SOURCE" apply --reverse --check "$PRIVATE_PATCH" 2>/dev/null; then
+  : # The checkout already carries the complete public + private series.
+elif [ -z "$PRIVATE_PATCH" ] && \
+   git -C "$SOURCE" apply --reverse --check "$PATCH" 2>/dev/null; then
+  : # The checkout already carries the public provisioning patch.
+else
+  # A series the checkout already carries cannot be reversed by the patches
+  # that replaced it, so the paths this series owns are restored first.
+  # Anything else the checkout carries is not this script's to discard.
+  series_paths=$(mktemp)
+  checkout_paths=$(mktemp)
+  trap 'rm -f "$series_paths" "$checkout_paths"' EXIT
+  git -C "$SOURCE" apply --numstat "$PATCH" ${PRIVATE_PATCH:+"$PRIVATE_PATCH"} \
+    | cut -f3 | sort -u > "$series_paths"
+  # Bazel leaves its convenience symlinks in the source root. They are build
+  # output, not a change to the source.
+  git -C "$SOURCE" status --porcelain --untracked-files=all \
+    --ignore-submodules=all | awk '{ print $2 }' | sort -u \
+    | while IFS= read -r entry; do
+        [ -L "$SOURCE/$entry" ] || printf '%s\n' "$entry"
+      done > "$checkout_paths"
+  [ -z "$(comm -23 "$checkout_paths" "$series_paths")" ] || \
+    die "source checkout has unrelated changes: $SOURCE"
+  git -C "$SOURCE" status --porcelain --untracked-files=all \
+    --ignore-submodules=all | awk '$1 == "??" { print $2 }' \
+    | while IFS= read -r stale; do
+        [ -L "$SOURCE/$stale" ] || rm -f "$SOURCE/$stale"
+      done
+  git -C "$SOURCE" checkout --force -- .
+  git -C "$SOURCE" apply --check "$PATCH" 2>/dev/null || \
+    die "public provisioning patch does not apply to the pinned checkout"
+  git -C "$SOURCE" apply "$PATCH"
+  if [ -n "$PRIVATE_PATCH" ]; then
+    git -C "$SOURCE" apply --check "$PRIVATE_PATCH" 2>/dev/null || \
+      die "private Android patch does not apply after the public patch"
+    git -C "$SOURCE" apply "$PRIVATE_PATCH"
+  fi
+  rm -f "$series_paths" "$checkout_paths"
+  trap - EXIT
+fi
+
+rg -q 'public static final int LAYER = 214;' \
+  "$SOURCE/TMessagesProj/src/main/java/org/telegram/tgnet/TLRPC.java" || \
+  die "full Android application does not announce layer 214"
+
+python3 - "$SOURCE/local.properties" "$SDK" "$NDK" <<'PY'
+import sys
+
+path, sdk, ndk = sys.argv[1:]
+escape = lambda value: value.replace("\\", "\\\\").replace(" ", "\\ ")
+with open(path, "w", encoding="utf-8") as stream:
+    stream.write(f"sdk.dir={escape(sdk)}\n")
+    stream.write(f"ndk.dir={escape(ndk)}\n")
+PY
+
+# Gradle carries dexing state across runs in the module build directories,
+# and reusing it changes the bytes it packages, so the pinned digest only
+# holds for a build that starts from no earlier output.
+rm -rf "$SOURCE"/*/build "$SOURCE"/*/.cxx
+
+[ -x "$SOURCE/gradlew" ] || die "upstream Gradle wrapper is not executable"
+(
+  cd "$SOURCE"
+  JAVA_HOME="$JAVA_ROOT" \
+  ANDROID_HOME="$SDK" \
+  ANDROID_SDK_ROOT="$SDK" \
+  ANDROID_NDK_HOME="$NDK" \
+  ./gradlew --no-daemon --stacktrace \
+    :TMessagesProj_App:assembleAfatDebug \
+    -Pandroid.injected.build.abi=arm64-v8a
+)
+
+APK="$SOURCE/TMessagesProj_App/build/intermediates/apk/afat/debug/app.apk"
+[ -f "$APK" ] || die "Gradle produced no conformance APK"
+actual_apk=$(shasum -a 256 "$APK" | awk '{print $1}')
+[ "$actual_apk" = "$expected_apk" ] || \
+  die "APK digest is $actual_apk, expected $expected_apk"
+badging=$("$TOOLS/aapt" dump badging "$APK")
+printf '%s\n' "$badging" | \
+  rg -q "^package: name='org[.]telegram[.]messenger[.]beta'.*versionName='$ANDROID_VERSION'" || \
+  die "APK package/version does not match org.telegram.messenger.beta $ANDROID_VERSION"
+printf '%s\n' "$badging" | rg -q "targetSdkVersion:'$ANDROID_COMPILE_SDK'" || \
+  die "APK target SDK does not match $ANDROID_COMPILE_SDK"
+cp "$APK" "$ARTIFACTS/$artifact_name"
+echo "$ARTIFACTS/$artifact_name"

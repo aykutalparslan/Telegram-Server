@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -39,6 +38,27 @@ public sealed class CreateChatHandler : MessagesHandlerBase
         _messageRepository = messageRepository;
 
         _settings = settings;
+    }
+
+    [TLFunction(Constructors.layer150_MessagesCreateChat)]
+    public async Task<TLInvitedUsers> HandleLayer150(long authKeyId, TLBytes q)
+    {
+        using var current = ToCurrentCreateChatRequest(q);
+        return await Handle(authKeyId, current);
+    }
+
+    private static TLBytes ToCurrentCreateChatRequest(TLBytes q)
+    {
+        var sent = new TL.layer150.messages.MessagesCreateChat(q.AsSpan());
+        var builder = CreateChat.Builder()
+            .Users(sent.Users)
+            .Title(sent.Title);
+        if (sent.Flags[0])
+        {
+            builder = builder.TtlPeriod(sent.TtlPeriod);
+        }
+        var current = builder.Build();
+        return current.TLBytes!.Value;
     }
 
     [TLFunction(Constructors.baseLayer_CreateChat)]
@@ -89,9 +109,6 @@ public sealed class CreateChatHandler : MessagesHandlerBase
 
             long chatId = await _ids.NextChatIdAsync();
             int date = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
-            // The creating client carries its own default auto-delete period in the
-            // request, which is how a new chat inherits it; the account-wide default
-            // never rewrites a conversation that already exists.
             if (requestedTtlPeriod > 0)
             {
                 _settings.Put(ChatSettingsScope.ForChat(chatId),
@@ -101,8 +118,6 @@ public sealed class CreateChatHandler : MessagesHandlerBase
             byte[] chatBytes;
             {
                 using var chatPhoto = ChatPhotoEmpty.Builder().Build();
-                // See CreateChannelHandler: an omitted default_banned_rights
-                // reads to the pinned client as permitting nothing.
                 byte[] defaultBannedRights =
                     ChatRights.BuildUnrestrictedDefaultBannedRights();
                 using TLChat chatToStore = Chat.Builder()
@@ -141,7 +156,6 @@ public sealed class CreateChatHandler : MessagesHandlerBase
                 _chatParticipantsRepository.PutParticipant(participantInfo);
             }
 
-            // Newly created groups already have a default permanent invite link.
             using (TLChatInviteInfo defaultInvite =
                    ChatInvites.CreateDefaultPermanentInvite(chatId, creatorUserId, date))
             {
@@ -208,9 +222,6 @@ public sealed class CreateChatHandler : MessagesHandlerBase
                     byte[] updateBytes = updateNewMessage.AsSpan().ToArray();
                     if (participantId == creatorUserId)
                     {
-                        // TDLib requires the createChat result updates to pair the
-                        // single new service message with an updateMessageID carrying
-                        // a nonzero random_id.
                         long randomId;
                         do
                         {
@@ -233,8 +244,6 @@ public sealed class CreateChatHandler : MessagesHandlerBase
                 participantUpdateBytes = updateChatParticipants.AsSpan().ToArray();
                 resultUpdateBytes.Add(participantUpdateBytes);
 
-                // Every update below hydrates the just-created chat and its service
-                // message from storage. Publish only after the whole snapshot is durable.
                 await _unitOfWork.SaveAsync();
                 foreach ((long participantId, byte[] updateBytes) in liveMessageUpdates)
                 {
@@ -264,10 +273,10 @@ public sealed class CreateChatHandler : MessagesHandlerBase
             }
 
             var userVector = new Vector();
-            AppendUsers(ref userVector, participantIds.Concat(missingInviteeIds));
+            AppendUsers(creatorUserId, ref userVector, participantIds.Concat(missingInviteeIds));
             var chatVector = new Vector();
             chatVector.AppendTLObject(chatBytes);
-            using TLUpdates updates = Updates.Builder()
+            using TLUpdates updates = Ferrite.TL.baseLayer.Updates.Builder()
                 .UpdatesProperty(resultUpdates)
                 .Users(userVector)
                 .Chats(chatVector)

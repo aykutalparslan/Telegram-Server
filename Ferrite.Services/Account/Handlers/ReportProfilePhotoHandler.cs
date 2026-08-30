@@ -10,18 +10,6 @@ using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Handlers.AccountMethods;
 
-/// <summary>
-/// Records a report against the photo of a dialog. Pinned TDLib refuses the call
-/// unless the file really is a full chat photo of the addressed dialog
-/// (`DialogManager::report_dialog_photo`), so the server validates the same fact.
-///
-/// The addressed dialog is NOT limited to a user. `report_dialog_photo` gates on
-/// `can_report_dialog` (`DialogManager.cpp:2602`), which admits a bot user or any
-/// channel the caller did not create, so `td_api::reportChatPhoto` on a
-/// supergroup arrives here as an `inputPeerChannel`. A user's photo is validated
-/// against their stored profile photos and a chat's against the photo id its own
-/// row carries, which is where Ferrite keeps it.
-/// </summary>
 public sealed class ReportProfilePhotoHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -65,8 +53,6 @@ public sealed class ReportProfilePhotoHandler
         string? reason = ReportReasonToken(request.Get_ReasonView());
         string comment = Encoding.UTF8.GetString(request.Message);
 
-        // Reporting your own photo is meaningless, exactly as pinned TDLib's
-        // can_report_user rules out the caller's own dialog.
         if (!peerResolved ||
             (peer.Type == TLPeer.PeerType.PeerUser && peer.Id == userId))
         {
@@ -99,11 +85,6 @@ public sealed class ReportProfilePhotoHandler
         return BoolTrue.Builder().Build();
     }
 
-    /// <summary>
-    /// Whether the reported photo is really the addressed dialog's photo. A user
-    /// carries a history of profile photos, while a chat or channel carries
-    /// exactly one on its own row, so the two are looked up differently.
-    /// </summary>
     private async ValueTask<bool> PhotoBelongsToPeerAsync(DialogPeerKey peer,
         long photoId)
     {
@@ -126,11 +107,6 @@ public sealed class ReportProfilePhotoHandler
         return photo.Is(out ChatPhoto current) && current.PhotoId == photoId;
     }
 
-    /// <summary>
-    /// The stored `option` of a profile-photo report is the reason's stable
-    /// token, so one immutable row carries the same shape as an interactive
-    /// message report without a second reason encoding.
-    /// </summary>
     private static string? ReportReasonToken(ReportReasonView reason) =>
         reason.Type switch
         {

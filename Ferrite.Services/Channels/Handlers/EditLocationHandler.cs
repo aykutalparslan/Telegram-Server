@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -14,17 +13,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Sets or clears a supergroup's geographic location. The stored
-/// `ChannelLocation` lives in the durable administration row and `has_geo` on
-/// the compact channel row, because pinned TDLib reads the flag off the
-/// compact row and the value out of `channelFull`.
-///
-/// `inputGeoPoint` and `geoPoint` do NOT share a field order --
-/// `inputGeoPoint#48222faf` is `lat` then `long` and `geoPoint#b2a2f663` is
-/// `long` then `lat` -- so the conversion goes through the generated builder by
-/// name rather than by position.
-/// </summary>
 public sealed class EditLocationHandler : ChannelPropertyHandlerBase
 {
     private readonly IChannelAdminRepository _channelAdminRepository;
@@ -58,7 +46,6 @@ public sealed class EditLocationHandler : ChannelPropertyHandlerBase
             return ErrorBool(Encoding.UTF8.GetBytes(error));
         }
 
-        // Only a supergroup can be location-based; a broadcast has no locality.
         if (!ReadChannelFacts(channelBytes).Megagroup)
         {
             return ErrorBool("MEGAGROUP_REQUIRED"u8);
@@ -110,8 +97,6 @@ public sealed class EditLocationHandler : ChannelPropertyHandlerBase
         return new BoolTrue();
     }
 
-    // `channelLocationEmpty` for a channel that has none: the admin-log action's
-    // prev/new fields are not flag-gated, so absence needs a real value.
     private static byte[] OrEmptyLocation(ReadOnlySpan<byte> location)
     {
         if (location.Length > 0)
@@ -123,8 +108,6 @@ public sealed class EditLocationHandler : ChannelPropertyHandlerBase
         return empty.AsSpan().ToArray();
     }
 
-    // The access hash of a geoPoint gates upload.getWebFile map previews, which
-    // this deployment does not serve, so no token is issued for one.
     private static byte[]? BuildGeoPoint(InputGeoPointView view)
     {
         if (!view.Is(out InputGeoPoint point))

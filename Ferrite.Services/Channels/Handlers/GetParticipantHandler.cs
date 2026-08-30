@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -79,7 +78,7 @@ public sealed class GetParticipantHandler : ChannelsHandlerBase
         var chatVector = new Vector();
         chatVector.AppendTLObject(channel.Value.AsSpan());
         var userVector = new Vector();
-        AppendUser(ref userVector, participantId.Value);
+        AppendUser(currentUserId, ref userVector, participantId.Value);
 
         _log.Debug($"📣 GetParticipant channel:{channelId.Value} participant:{participantId.Value}");
 

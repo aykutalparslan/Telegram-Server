@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using Ferrite.Data.Repositories;
-using Ferrite.Services;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer.dto;
 

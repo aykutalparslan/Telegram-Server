@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -13,17 +12,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.toggleGroupCallSettings. join_muted and the invite rotation are
-/// CALL-ONLY settings behind the manage-call gate: neither consumes a
-/// participants version (a version step with no matching participants update
-/// would make every pinned client resync its list), and the result is
-/// viewer-correct updateGroupCall on both channels. join_muted only affects rows
-/// written by FUTURE joins; nobody already in the call is muted retroactively.
-/// reset_invite_hash rotates the call's invite generation, which invalidates
-/// every outstanding invite link at once. A request that changes nothing answers
-/// GROUPCALL_NOT_MODIFIED, which pinned TDLib maps back to success.
-/// </summary>
 public sealed class ToggleGroupCallSettingsHandler : GroupCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -103,8 +91,6 @@ public sealed class ToggleGroupCallSettingsHandler : GroupCallHandlerBase
 
             if (latest == null)
             {
-                // Neither half changed anything; pinned TDLib treats this exact
-                // error as success.
                 return Error(GroupCallErrors.GroupCallNotModified);
             }
 

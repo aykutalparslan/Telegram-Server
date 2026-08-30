@@ -6,10 +6,6 @@ using Ferrite.TL;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Ferrite has no legacy server-notification-id queue. Acknowledging received
-/// message ids is therefore a deliberately empty, read-only operation.
-/// </summary>
 public sealed class ReceivedMessagesHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;

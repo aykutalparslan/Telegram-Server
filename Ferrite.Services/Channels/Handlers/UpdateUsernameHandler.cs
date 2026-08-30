@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -37,7 +36,6 @@ public sealed class UpdateUsernameHandler : ChannelsHandlerBase
         long? channelId = ResolveInputChannelId(request.Get_ChannelView());
         string username = Encoding.UTF8.GetString(request.Username);
 
-        // Only the creator may change a channel's public address.
         var (currentUserId, channelBytes, error) =
             await PrepareChannelMutationCore(authKeyId, channelId, creatorOnly: true);
         if (error != null)
@@ -50,7 +48,6 @@ public sealed class UpdateUsernameHandler : ChannelsHandlerBase
         {
             return ErrorBool("USERNAME_NOT_MODIFIED"u8);
         }
-        // An empty username clears the address and makes the channel private again.
         if (username.Length > 0 && !UsernameRegex.IsMatch(username))
         {
             return ErrorBool("USERNAME_INVALID"u8);
@@ -85,7 +82,6 @@ public sealed class UpdateUsernameHandler : ChannelsHandlerBase
 
         await _unitOfWork.SaveAsync();
 
-        // Public channels are globally searchable; clearing the username delists them.
         string title;
         {
             using var stored = new TLChat(updatedChannelBytes, 0, updatedChannelBytes.Length);

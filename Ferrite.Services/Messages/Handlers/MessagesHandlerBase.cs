@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -78,9 +77,6 @@ public abstract class MessagesHandlerBase
         _dialogs = dialogs;
     }
 
-    // messages.editChatAbout accepts a channel peer as well as a basic-chat peer.
-    // Channels persist about in chat_full like basic groups, but membership/rights
-    // live in the channel participants store and there is no service message.
     protected async ValueTask<TLBool> EditChannelAbout(long authKeyId, long channelId, byte[] about)
     {
         var auth = await _authorizationRepository.GetAuthorizationAsync(authKeyId);
@@ -117,12 +113,6 @@ public abstract class MessagesHandlerBase
         _log.Debug($"📣 EditChatAbout(channel) user:{currentUserId} channel:{channelId}");
         return BoolTrue.Builder().Build();
     }
-
-    // Basic groups have no granular admin rights; only the creator toggles the
-    // all-or-nothing admin flag (channels/supergroups use channels.editAdmin).
-
-
-
 
     protected async Task<TLUpdates> EditChatDefaultBannedRightsForChat(long authKeyId,
         long chatId, byte[] rightsBytes)
@@ -192,7 +182,6 @@ public abstract class MessagesHandlerBase
             channelBytes = channel.Value.AsSpan().ToArray();
         }
 
-        // Changing default member restrictions requires the ban_users admin right.
         var participant = await _chatParticipantsRepository
             .GetParticipantAsync(channelId, currentUserId);
         if (participant == null || !IsActiveParticipant(participant.Value))
@@ -212,7 +201,6 @@ public abstract class MessagesHandlerBase
             _chatRows.UpdateStoredChannelDefaultBannedRights(channelBytes, rightsBytes);
         await _unitOfWork.SaveAsync();
 
-        // Channels carry no version; the update's version field stays 0.
         byte[] updateBytes;
         using (TLPeer channelPeer = new PeerChannel(channelId))
         using (TLUpdate update = UpdateChatDefaultBannedRights.Builder()
@@ -237,8 +225,6 @@ public abstract class MessagesHandlerBase
             updatedChannelBytes, updateBytes);
     }
 
-    // Updates(updateChatDefaultBannedRights) carrying the updated chat/channel row so
-    // the caller applies the new rights without a refetch.
     protected async Task<TLUpdates> BuildDefaultBannedRightsResult(long authKeyId,
         long actorUserId, byte[] chatBytes, byte[] updateBytes)
     {
@@ -248,11 +234,11 @@ public abstract class MessagesHandlerBase
         var resultUpdates = new Vector();
         resultUpdates.AppendTLObject(updateBytes);
         var userVector = new Vector();
-        AppendUsers(ref userVector, new[] { actorUserId });
+        AppendUsers(actorUserId, ref userVector, new[] { actorUserId });
         var chatVector = new Vector();
         chatVector.AppendTLObject(chatBytes);
 
-        return Updates.Builder()
+        return Ferrite.TL.baseLayer.Updates.Builder()
             .UpdatesProperty(resultUpdates)
             .Users(userVector)
             .Chats(chatVector)
@@ -261,14 +247,6 @@ public abstract class MessagesHandlerBase
             .Build();
     }
 
-
-
-
-
-
-
-    // Copies the newest `fwdLimit` (capped) messages of the chat from the inviter's
-    // box into the new member's box with the member's own ids and pts, oldest first.
     protected async Task CopyRecentChatHistory(long sourceUserId, long targetUserId,
         long chatId, int fwdLimit)
     {
@@ -285,8 +263,6 @@ public abstract class MessagesHandlerBase
         {
             using var savedMessage = s;
             var message = savedMessage.AsSavedMessage().Get_OriginalMessage();
-            // Only regular messages are forwarded history; copied service messages
-            // (chat create/edit rows) would replay one-off events to the new member.
             if (message.Type != TLMessage.MessageType.Message ||
                 !MessageStore.TryReadStoredMessageInfo(message, out var info) ||
                 info.PeerType != TLPeer.PeerType.PeerChat ||
@@ -317,14 +293,14 @@ public abstract class MessagesHandlerBase
         }
     }
 
-    protected TLInvitedUsers BuildPrivacyBlockedInvitedUsers(long targetUserId,
+    protected TLInvitedUsers BuildPrivacyBlockedInvitedUsers(long viewerUserId, long targetUserId,
         byte[] chatBytes, int date)
     {
         var userVector = new Vector();
-        AppendUsers(ref userVector, new[] { targetUserId });
+        AppendUsers(viewerUserId, ref userVector, new[] { targetUserId });
         var chatVector = new Vector();
         chatVector.AppendTLObject(chatBytes);
-        using TLUpdates updates = Updates.Builder()
+        using TLUpdates updates = Ferrite.TL.baseLayer.Updates.Builder()
             .UpdatesProperty(new Vector())
             .Users(userVector)
             .Chats(chatVector)
@@ -346,28 +322,6 @@ public abstract class MessagesHandlerBase
             .Build();
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    // Joining a basic group by link mirrors addChatUser, with the join recorded as a
-    // messageActionChatJoinedByLink from the joiner crediting the link's creator.
     protected async Task<TLUpdates> ImportBasicChatInvite(long authKeyId, long joinerUserId,
         long chatId, long inviterAdminId, byte[] chatBytes, int date)
     {
@@ -423,8 +377,6 @@ public abstract class MessagesHandlerBase
         }
     }
 
-    // Joining a channel by link mirrors channels.joinChannel; megagroups record a
-    // messageActionChatJoinedByLink in the channel box and push it to members.
     protected async Task<TLUpdates> ImportChannelInvite(long authKeyId, long joinerUserId,
         long channelId, long inviterAdminId, byte[] channelBytes, int date)
     {
@@ -510,11 +462,11 @@ public abstract class MessagesHandlerBase
         }
 
         var userVector = new Vector();
-        AppendUsers(ref userVector, new[] { joinerUserId, inviterAdminId });
+        AppendUsers(joinerUserId, ref userVector, new[] { joinerUserId, inviterAdminId });
         var chatVector = new Vector();
         chatVector.AppendTLObject(updatedChannelBytes);
 
-        return Updates.Builder()
+        return Ferrite.TL.baseLayer.Updates.Builder()
             .UpdatesProperty(resultUpdates)
             .Users(userVector)
             .Chats(chatVector)
@@ -529,9 +481,6 @@ public abstract class MessagesHandlerBase
     protected sealed record StoredImporter(long UserId, int Date, string Link,
         string? About = null, bool Requested = false);
 
-    // Resolves an invite-management peer (basic chat or channel), requiring the
-    // caller to be an active participant holding invite-admin rights: creator or an
-    // admin with invite_users in channels, creator/admin in basic groups.
     protected async Task<(InviteAdminContext? Context, string? Error)> PrepareInviteAdmin(
         long authKeyId, bool isChannel, long chatId)
     {
@@ -768,7 +717,7 @@ public abstract class MessagesHandlerBase
         }
 
         await _unitOfWork.SaveAsync();
-        return await _fanout.CompleteBasicGroupServiceResultAsync(participantIds,
+        return await _fanout.CompleteBasicGroupServiceResultAsync(actorUserId, participantIds,
             liveUpdates, resultUpdateBytes, chatBytes, sharedUpdateBytes, date);
     }
 
@@ -832,10 +781,6 @@ public abstract class MessagesHandlerBase
                role != (int)ChatParticipantRole.Left;
     }
 
-    // The version accompanies the compact chat row's Version: TDLib drops
-    // updateChatParticipants whose version is below its current one, so the
-    // participant-list version must be monotonic, not the participant count.
-    // Whether the user is the creator or an admin among the (active) participant rows.
     protected static bool IsBasicChatAdmin(
         IReadOnlyCollection<TLChatParticipantInfo> participantInfos, long userId)
     {
@@ -885,12 +830,12 @@ public abstract class MessagesHandlerBase
             .Build();
     }
 
-    protected void AppendUsers(ref Vector userVector, IEnumerable<long> userIds)
+    protected void AppendUsers(long viewerUserId, ref Vector userVector, IEnumerable<long> userIds)
     {
         var seen = new HashSet<long>();
         foreach (long userId in userIds)
         {
-            AppendUser(ref userVector, seen, userId);
+            AppendUser(viewerUserId, ref userVector, seen, userId);
         }
     }
 
@@ -907,8 +852,6 @@ public abstract class MessagesHandlerBase
 
         return true;
     }
-
-
 
     protected async Task<TLUpdates> SendBasicGroupMessage(long authKeyId, TLBytes q,
         long userId, long chatId, Func<Task>? afterCommit = null)
@@ -938,10 +881,6 @@ public abstract class MessagesHandlerBase
             .Build();
     }
 
-    // Channel/supergroup posts write a single row into the per-channel box (channel
-    // message id + channel pts). Broadcast channels require post rights (creator/admin);
-    // megagroups require active membership. Every other active member receives
-    // updateNewChannelMessage; the sender applies it from the returned Updates.
     protected async Task<TLUpdates> SendChannelMessage(long authKeyId, TLBytes q,
         long userId, long channelId, Func<Task>? afterCommit = null)
     {
@@ -963,10 +902,6 @@ public abstract class MessagesHandlerBase
         return await _fanout.BuildChannelSentResultAsync(authKeyId, sent);
     }
 
-    // Channel pin/unpin writes the pinned flag on the shared channel row, tracks the
-    // latest pinned id in chat_full, advances the CHANNEL pts by one, and pushes
-    // updatePinnedChannelMessages to the other active members. Creator/admin only;
-    // the granular pin admin right is a refinement.
     protected async Task<TLUpdates> UpdatePinnedChannelMessage(long authKeyId, long userId,
         long channelId, int messageId, bool pin)
     {
@@ -1029,11 +964,11 @@ public abstract class MessagesHandlerBase
             updatesVector.AppendTLObject(update.AsSpan());
         }
         var userVector = new Vector();
-        AppendUsers(ref userVector, new[] { userId });
+        AppendUsers(userId, ref userVector, new[] { userId });
         var chatVector = new Vector();
         chatVector.AppendTLObject(channelBytes);
 
-        return Updates.Builder()
+        return Ferrite.TL.baseLayer.Updates.Builder()
             .UpdatesProperty(updatesVector)
             .Users(userVector)
             .Chats(chatVector)
@@ -1042,10 +977,6 @@ public abstract class MessagesHandlerBase
             .Build();
     }
 
-    // Unpins every pinned post in the shared channel box, clears the chat_full pinned
-    // id, advances the channel pts by the unpin count, and pushes one
-    // updatePinnedChannelMessages to the other active members; the caller applies the
-    // returned affectedHistory pts (mirroring channels.deleteMessages).
     protected async Task<TLAffectedHistory> UnpinAllChannelMessages(long userId, long channelId)
     {
         var (_, _, participantBytes, contextError) =
@@ -1117,10 +1048,6 @@ public abstract class MessagesHandlerBase
             .Build();
     }
 
-    // Channel-peer interaction gate shared by the pin and typing paths: the channel must
-    // exist and the caller must be an active member. Rights on top of membership (pin's
-    // pin right, broadcast typing's post right) are checked by the caller against the
-    // returned participant row bytes.
     protected async Task<(byte[] ChannelBytes, bool Broadcast, byte[] ParticipantBytes, string? Error)>
         GetChannelInteractionContext(long userId, long channelId)
     {
@@ -1144,7 +1071,6 @@ public abstract class MessagesHandlerBase
             participantBytes, null);
     }
 
-    // Synchronous builder so the ref-struct VectorOfInt never crosses an await.
     protected static TLUpdate BuildPinnedChannelMessagesUpdate(long channelId,
         IReadOnlyList<int> messageIds, bool pinned, int pts, int ptsCount)
     {
@@ -1163,9 +1089,6 @@ public abstract class MessagesHandlerBase
             .Build();
     }
 
-    // Deletes the owner's messages with the given partner (respecting maxId/date filters),
-    // then advances pts and enqueues an updateDeleteMessages with the removed ids. Returns
-    // the new pts and the number of messages removed.
     protected async Task<(int Pts, int Count)> DeleteConversation(long ownerId,
         TLPeer.PeerType peerType, long peerId, int maxId,
         int? minDate, int? maxDate, IUpdatesContext ownerCtx)
@@ -1294,7 +1217,7 @@ public abstract class MessagesHandlerBase
         return builder.Build();
     }
 
-    protected void AppendUser(ref Vector userVector, HashSet<long> seen, long userId)
+    protected void AppendUser(long viewerUserId, ref Vector userVector, HashSet<long> seen, long userId)
     {
         if (!seen.Add(userId))
         {
@@ -1303,7 +1226,8 @@ public abstract class MessagesHandlerBase
         using var user = _userRepository.GetUser(userId);
         if (user != null)
         {
-            userVector.AppendTLObject(user.Value.AsSpan());
+            using var withStatus = _fanout.WithStatus(viewerUserId, user.Value);
+            userVector.AppendTLObject(withStatus.AsSpan());
         }
     }
 
@@ -1322,9 +1246,6 @@ public abstract class MessagesHandlerBase
         return chatBytes;
     }
 
-    // Viewer-aware variant: channel rows served to a NON-member (e.g. a discovered
-    // public channel in getPeerDialogs before joining) drop the stored creator flags
-    // and carry left:true instead.
     protected async Task<List<byte[]>> GetChatBytesForViewer(long viewerUserId,
         IEnumerable<long> chatIds)
     {

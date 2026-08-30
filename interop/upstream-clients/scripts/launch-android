@@ -1,0 +1,806 @@
+#!/usr/bin/env python3
+"""Manifest-owned Telegram-Android emulator lifecycle for Ferrite."""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import fcntl
+import hashlib
+import json
+import os
+import re
+import socket
+import subprocess
+import sys
+import time
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[3]
+INPUTS = ROOT / "interop/upstream-clients"
+PIN = INPUTS / "PIN"
+PATCH = INPUTS / "patches/android/0001-ferrite-conformance.patch"
+APK = Path(os.environ.get(
+    "FERRITE_ANDROID_APK",
+    ROOT / ".ferrite/upstream-apps/artifacts/android/Telegram.apk",
+))
+STATE = Path(os.environ.get(
+    "FERRITE_ANDROID_STATE_DIR",
+    ROOT / ".ferrite/upstream-apps/android",
+))
+SESSION = STATE / "session.json"
+PACKAGE = "org.telegram.messenger.beta"
+COMPONENT = f"{PACKAGE}/org.telegram.messenger.DefaultIcon"
+CONFIG_NAME = "ferrite-conformance.properties"
+LOGIN_PERMISSIONS = (
+    "android.permission.POST_NOTIFICATIONS",
+    "android.permission.READ_PHONE_STATE",
+    "android.permission.READ_PHONE_NUMBERS",
+    "android.permission.CALL_PHONE",
+    "android.permission.READ_CALL_LOG",
+)
+CONTACT_PERMISSIONS = (
+    "android.permission.READ_CONTACTS",
+    "android.permission.WRITE_CONTACTS",
+)
+CONTACTS_AUTHORITY = "content://com.android.contacts"
+NAME_MIME = "vnd.android.cursor.item/name"
+PHONE_MIME = "vnd.android.cursor.item/phone_v2"
+GUEST_BRIDGE_PORT = 8790
+# The bracket keeps grep from counting its own process.
+DEXOPT_PROBE = "ps -A | grep -c '[d]ex2oat'"
+FIRST_CONSOLE_PORT = 5570
+FIRST_BRIDGE_PORT = 8791
+FIRST_PHONE = 15550000001
+CODE_LOCK = ROOT / ".ferrite/upstream-apps/verification-code.lock"
+TOKEN = re.compile(r"^[0-9a-f]{32}$")
+INSTANCE_ID = re.compile(r"^android-[a-z][a-z0-9-]{0,26}$")
+PHONE = re.compile(r"^[+][0-9]{1,19}$")
+CODE = re.compile(r"Verification code is ==> (\d+) for (\S+)")
+
+
+class LaunchError(RuntimeError):
+    pass
+
+
+class BridgeUnavailable(LaunchError):
+    """The forward accepted the connection and nothing served it."""
+
+
+@contextlib.contextmanager
+def verification_code_lock():
+    CODE_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with CODE_LOCK.open("a+", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
+def provisioning_phones(count: int,
+                        requested: list[str]) -> tuple[list[str], list[str]]:
+    own = [f"+{FIRST_PHONE + index}" for index in range(count)]
+    run = requested or own
+    if (len(run) != len(set(run))
+            or any(not PHONE.fullmatch(phone) for phone in run)):
+        raise LaunchError("run phone roster is malformed or contains duplicates")
+    missing = sorted(set(own) - set(run))
+    if missing:
+        raise LaunchError("run phone roster omits Android identities: "
+                          + ", ".join(missing))
+    return own, run
+
+
+def run(command: list[str], *, check: bool = True, timeout: int = 300,
+        input_text: str | None = None,
+        env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+            input=input_text,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise LaunchError(f"{' '.join(command)} timed out after {timeout}s") from error
+    if check and result.returncode:
+        detail = (result.stdout + result.stderr).strip()[-4096:]
+        raise LaunchError(
+            f"{' '.join(command)} exited {result.returncode}: {detail}")
+    return result
+
+
+def read_pin() -> dict[str, str]:
+    if not PIN.is_file():
+        raise LaunchError(f"PIN is absent: {PIN}")
+    values: dict[str, str] = {}
+    for line in PIN.read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value
+    return values
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def android_inputs() -> dict[str, Any]:
+    values = read_pin()
+    patterns = {
+        "LAYER": r"214",
+        "ANDROID_COMMIT": r"[0-9a-f]{40}",
+        "ANDROID_PATCH_SHA256": r"[0-9a-f]{64}",
+        "ANDROID_APK_SHA256": r"[0-9a-f]{64}",
+        "ANDROID_EMULATOR_API": r"35",
+        "ANDROID_EMULATOR_TAG": r"[a-z0-9_]+",
+        "ANDROID_EMULATOR_ABI": r"[A-Za-z0-9_-]+",
+        "ANDROID_EMULATOR_DEVICE": r"[A-Za-z0-9_-]+",
+    }
+    for key, pattern in patterns.items():
+        if not re.fullmatch(pattern, values.get(key, "")):
+            raise LaunchError(f"{key} is absent or malformed")
+    if not PATCH.is_file() or sha256(PATCH) != values["ANDROID_PATCH_SHA256"]:
+        raise LaunchError("Android patch is absent or does not match PIN")
+    if not APK.is_file() or sha256(APK) != values["ANDROID_APK_SHA256"]:
+        raise LaunchError("Android APK is absent or does not match PIN")
+    return {
+        "layer": int(values["LAYER"]),
+        "commit": values["ANDROID_COMMIT"],
+        "patch_sha256": values["ANDROID_PATCH_SHA256"],
+        "apk": str(APK),
+        "apk_sha256": values["ANDROID_APK_SHA256"],
+        "emulator_api": values["ANDROID_EMULATOR_API"],
+        "emulator_tag": values["ANDROID_EMULATOR_TAG"],
+        "emulator_abi": values["ANDROID_EMULATOR_ABI"],
+        "emulator_device": values["ANDROID_EMULATOR_DEVICE"],
+    }
+
+
+def sdk_root() -> Path:
+    configured = os.environ.get("ANDROID_SDK_ROOT") or os.environ.get("ANDROID_HOME")
+    candidates = [configured]
+    if sys.platform == "darwin":
+        candidates.append(str(Path.home() / "Library/Android/sdk"))
+    elif sys.platform.startswith("linux"):
+        candidates.append(str(Path.home() / "Android/Sdk"))
+    for candidate in candidates:
+        if candidate and Path(candidate).is_dir():
+            return Path(candidate).resolve()
+    raise LaunchError("Android SDK is unavailable")
+
+
+def sdk_tools(inputs: dict[str, Any]) -> dict[str, Path]:
+    sdk = sdk_root()
+    managers = sorted((sdk / "cmdline-tools").glob("*/bin/avdmanager"))
+    managers = [path for path in managers if os.access(path, os.X_OK)]
+    if not managers:
+        raise LaunchError("Android avdmanager is unavailable")
+    result = {
+        "sdk": sdk,
+        "adb": sdk / "platform-tools/adb",
+        "emulator": sdk / "emulator/emulator",
+        "avdmanager": managers[-1],
+        "image": sdk / (
+            f"system-images/android-{inputs['emulator_api']}/"
+            f"{inputs['emulator_tag']}/{inputs['emulator_abi']}"
+        ),
+    }
+    for name in ("adb", "emulator"):
+        if not os.access(result[name], os.X_OK):
+            raise LaunchError(f"Android {name} is unavailable: {result[name]}")
+    if not result["image"].is_dir():
+        raise LaunchError(f"pinned Android system image is absent: {result['image']}")
+    return result
+
+
+def recovery_tools() -> dict[str, Path]:
+    sdk = sdk_root()
+    managers = sorted((sdk / "cmdline-tools").glob("*/bin/avdmanager"))
+    managers = [path for path in managers if os.access(path, os.X_OK)]
+    adb_path = sdk / "platform-tools/adb"
+    if not managers or not os.access(adb_path, os.X_OK):
+        raise LaunchError("Android recovery requires adb and avdmanager")
+    return {
+        "sdk": sdk,
+        "adb": adb_path,
+        "avdmanager": managers[-1],
+    }
+
+
+def avd_names(tools: dict[str, Path]) -> set[str]:
+    return set(run(
+        [str(tools["avdmanager"]), "list", "avd", "-c"],
+        env=sdk_environment(tools["sdk"]),
+    ).stdout.splitlines())
+
+
+def sdk_environment(sdk: Path) -> dict[str, str]:
+    environment = dict(os.environ)
+    environment["ANDROID_HOME"] = str(sdk)
+    environment["ANDROID_SDK_ROOT"] = str(sdk)
+    return environment
+
+
+@dataclass
+class Instance:
+    instance_id: str
+    avd_name: str
+    console_port: int
+    phone: str
+    bridge_port: int
+    ferrite_port: int
+    peers: list[str]
+    process_pid: int | None = None
+
+    @property
+    def serial(self) -> str:
+        return f"emulator-{self.console_port}"
+
+    def validate_owned(self, token: str) -> None:
+        if not INSTANCE_ID.fullmatch(self.instance_id):
+            raise LaunchError(f"unsafe Android instance id: {self.instance_id!r}")
+        expected = f"ferrite-{self.instance_id}-{token[:8]}"
+        if self.avd_name != expected:
+            raise LaunchError(
+                f"refusing non-owned AVD {self.avd_name!r}; expected {expected!r}")
+        if (not isinstance(self.console_port, int)
+                or isinstance(self.console_port, bool)
+                or self.console_port < 5554 or self.console_port > 5680
+                or self.console_port % 2 != 0):
+            raise LaunchError(f"unsafe emulator console port: {self.console_port!r}")
+        for label, port in (("bridge", self.bridge_port),
+                            ("Ferrite", self.ferrite_port)):
+            if (not isinstance(port, int) or isinstance(port, bool)
+                    or port < 1 or port > 65535):
+                raise LaunchError(f"unsafe {label} port: {port!r}")
+        if not PHONE.fullmatch(self.phone):
+            raise LaunchError(f"unsafe phone: {self.phone!r}")
+        if (not isinstance(self.peers, list)
+                or not all(isinstance(peer, str) and PHONE.fullmatch(peer)
+                           for peer in self.peers)
+                or self.phone in self.peers
+                or len(set(self.peers)) != len(self.peers)):
+            raise LaunchError(f"unsafe peer list: {self.peers!r}")
+        if (self.process_pid is not None
+                and (not isinstance(self.process_pid, int)
+                     or isinstance(self.process_pid, bool)
+                     or self.process_pid < 1)):
+            raise LaunchError(f"unsafe emulator pid: {self.process_pid!r}")
+
+
+def write_session(value: dict[str, Any]) -> None:
+    STATE.mkdir(parents=True, exist_ok=True)
+    temporary = SESSION.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(SESSION)
+
+
+def load_session() -> tuple[dict[str, Any], list[Instance]]:
+    if not SESSION.is_file():
+        raise LaunchError(f"no active Android session at {SESSION}")
+    try:
+        value = json.loads(SESSION.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise LaunchError("Android session manifest is malformed") from error
+    token = value.get("run_token")
+    if not isinstance(token, str) or not TOKEN.fullmatch(token):
+        raise LaunchError("Android session has an unsafe run token")
+    raw = value.get("instances")
+    if not isinstance(raw, list):
+        raise LaunchError("Android session has no instance list")
+    try:
+        instances = [Instance(**item) for item in raw]
+    except (TypeError, ValueError) as error:
+        raise LaunchError("Android session has malformed instances") from error
+    for instance in instances:
+        instance.validate_owned(token)
+    return value, instances
+
+
+def adb(tools: dict[str, Path], instance: Instance, *arguments: str,
+        check: bool = True, timeout: int = 180,
+        input_text: str | None = None) -> subprocess.CompletedProcess[str]:
+    return run(
+        [str(tools["adb"]), "-s", instance.serial, *arguments],
+        check=check,
+        timeout=timeout,
+        input_text=input_text,
+        env=sdk_environment(tools["sdk"]),
+    )
+
+
+def bridge_request(instance: Instance, token: str, payload: dict[str, Any],
+                   *, timeout: float = 30.0) -> dict[str, Any]:
+    request = {**payload, "run_token": token}
+    with socket.create_connection(
+        ("127.0.0.1", instance.bridge_port), timeout=timeout,
+    ) as connection:
+        connection.settimeout(timeout)
+        connection.sendall((json.dumps(request) + "\n").encode())
+        data = b""
+        while b"\n" not in data:
+            chunk = connection.recv(65536)
+            if not chunk:
+                raise BridgeUnavailable(
+                    f"{instance.instance_id}: bridge closed without a response")
+            data += chunk
+            if len(data) > 1024 * 1024:
+                raise LaunchError(
+                    f"{instance.instance_id}: bridge response exceeds one MiB")
+    value = json.loads(data.split(b"\n", 1)[0])
+    if value.get("run_token") != token:
+        raise LaunchError(
+            f"{instance.instance_id}: bridge returned a foreign run token")
+    if value.get("ok") is not True:
+        raise LaunchError(
+            f"{instance.instance_id}: bridge failed: {value.get('error')}")
+    return value
+
+
+def await_state(instance: Instance, token: str, expected: str,
+                timeout: float = 600.0) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last: Any = "bridge did not answer"
+    while time.monotonic() < deadline:
+        try:
+            last = bridge_request(instance, token, {"type": "status"})
+            state = last.get("provisioning")
+            if state == expected:
+                return last
+            if state == "FAILED":
+                raise LaunchError(
+                    f"{instance.instance_id}: provisioning failed: "
+                    f"{last.get('provisioning_failure')}")
+        except (BridgeUnavailable, ConnectionError, OSError,
+                json.JSONDecodeError) as error:
+            last = str(error)
+        time.sleep(2)
+    raise LaunchError(
+        f"{instance.instance_id}: never reached {expected}; last={last}")
+
+
+def node_container() -> str:
+    result = run([
+        "docker", "ps", "--filter", "name=ferrite-a", "--format", "{{.Names}}",
+    ])
+    names = result.stdout.split()
+    if len(names) != 1:
+        raise LaunchError(
+            f"expected exactly one running ferrite-a container, found {names}")
+    return names[0]
+
+
+def digits(phone: str) -> str:
+    return re.sub(r"\D", "", phone)
+
+
+def issued_codes(container: str) -> list[tuple[str, str]]:
+    result = run(["docker", "logs", container], check=False)
+    return [(code, digits(destination))
+            for code, destination in CODE.findall(result.stdout + result.stderr)]
+
+
+def await_code(container: str, seen: int, phone: str,
+               timeout: float = 120.0) -> str:
+    """Claims the newest code Ferrite addressed to this instance's number.
+
+    Attribution is by destination, which is what a gateway knows. A client
+    resends on its own once its login screen decides the code is late, so a
+    count of codes says nothing about which one this number can use.
+    """
+    wanted = digits(phone)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        fresh = [code for code, destination in issued_codes(container)[seen:]
+                 if destination == wanted]
+        if fresh:
+            return fresh[-1]
+        time.sleep(1)
+    raise LaunchError(f"Ferrite issued no verification code for {phone}")
+
+
+def wait_for_boot(tools: dict[str, Path], instance: Instance,
+                  timeout: float = 480.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        devices = run([str(tools["adb"]), "devices"], check=False).stdout
+        if any(line.startswith(instance.serial) and line.rstrip().endswith("device")
+               for line in devices.splitlines()):
+            value = adb(
+                tools, instance, "shell", "getprop", "sys.boot_completed",
+                check=False,
+            ).stdout.strip()
+            if value == "1":
+                return
+        time.sleep(3)
+    raise LaunchError(f"{instance.instance_id}: emulator never completed boot")
+
+
+def quiesce_packages(tools: dict[str, Path], instance: Instance,
+                     timeout: float = 300.0, poll: float = 3.0) -> None:
+    # Booting with -wipe-data makes the image reinstall Google Play services,
+    # and sys.boot_completed flips long before that finishes. Completing it
+    # force-stops every process holding Play code, the client included, so the
+    # bridge has to wait the package work out rather than race it.
+    adb(tools, instance, "shell", "am", "force-stop", "com.android.vending",
+        check=False)
+    adb(tools, instance, "shell", "pm", "disable-user", "--user", "0",
+        "com.android.vending", check=False)
+    deadline = time.monotonic() + timeout
+    while True:
+        running = adb(tools, instance, "shell", DEXOPT_PROBE,
+                      check=False).stdout.strip()
+        if running in ("", "0"):
+            return
+        if time.monotonic() >= deadline:
+            raise LaunchError(
+                f"{instance.instance_id}: dexopt never settled; "
+                f"{running} dex2oat still running")
+        time.sleep(poll)
+
+
+def configure_application(tools: dict[str, Path], instance: Instance,
+                          token: str) -> None:
+    adb(tools, instance, "shell", "pm", "clear", PACKAGE)
+    for permission in LOGIN_PERMISSIONS:
+        adb(
+            tools, instance, "shell", "pm", "grant", PACKAGE,
+            permission, check=False,
+        )
+    text = "\n".join([
+        "ferrite.host=127.0.0.1",
+        f"ferrite.port={instance.ferrite_port}",
+        "ferrite.api_id=11111",
+        f"ferrite.api_hash={'1' * 32}",
+        f"instance.id={instance.instance_id}",
+        f"instance.phone={instance.phone}",
+        f"instance.first_name={instance.instance_id}",
+        "instance.last_name=",
+        f"instance.peers={','.join(instance.peers)}",
+        f"bridge.port={GUEST_BRIDGE_PORT}",
+        f"bridge.token={token}",
+        "",
+    ])
+    adb(
+        tools, instance, "shell",
+        f"run-as {PACKAGE} sh -c 'mkdir -p files && "
+        f"cat > files/{CONFIG_NAME}'",
+        input_text=text,
+    )
+    written = adb(
+        tools, instance, "shell", "run-as", PACKAGE,
+        "cat", f"files/{CONFIG_NAME}",
+    ).stdout
+    if f"instance.phone={instance.phone}" not in written:
+        raise LaunchError(
+            f"{instance.instance_id}: configuration did not reach the app")
+    adb(tools, instance, "forward", "--remove",
+        f"tcp:{instance.bridge_port}", check=False)
+    adb(tools, instance, "forward", f"tcp:{instance.bridge_port}",
+        f"tcp:{GUEST_BRIDGE_PORT}")
+    for port in (52222, 52223):
+        adb(tools, instance, "reverse", "--remove", f"tcp:{port}", check=False)
+        adb(tools, instance, "reverse", f"tcp:{port}", f"tcp:{port}")
+    reverse = adb(tools, instance, "reverse", "--list", check=False).stdout
+    if not all(f"tcp:{port}" in reverse for port in (52222, 52223)):
+        raise LaunchError(
+            f"{instance.instance_id}: deployment reverse mapping is incomplete")
+    adb(tools, instance, "logcat", "-c", check=False)
+
+
+def phone_book_numbers(tools: dict[str, Path], instance: Instance) -> list[str]:
+    listed = adb(
+        tools, instance, "shell", "content", "query",
+        "--uri", f"{CONTACTS_AUTHORITY}/data",
+        "--projection", "data1",
+        "--where", f"\"mimetype='{PHONE_MIME}'\"",
+    ).stdout
+    return re.findall(r"data1=(\S+)", listed)
+
+
+def latest_raw_contact_id(tools: dict[str, Path], instance: Instance) -> int:
+    listed = adb(
+        tools, instance, "shell", "content", "query",
+        "--uri", f"{CONTACTS_AUTHORITY}/raw_contacts",
+        "--projection", "_id",
+    ).stdout
+    ids = [int(value) for value in re.findall(r"_id=(\d+)", listed)]
+    if not ids:
+        raise LaunchError(
+            f"{instance.instance_id}: the contacts provider holds no raw contact")
+    return max(ids)
+
+
+def seed_phone_book(tools: dict[str, Path], instance: Instance) -> list[str]:
+    """Writes the instance's peers into the device's own phone book.
+
+    The application imports the contacts it finds there, so the peers have to
+    be in the phone book before it starts. The permission that reads it is
+    granted here rather than with the login permissions because granting it
+    against an empty phone book makes the application's own first sync delete
+    the contacts Ferrite answers with.
+    """
+    if not instance.peers:
+        return []
+    present = {number.replace("+", "")
+               for number in phone_book_numbers(tools, instance)}
+    seeded = [peer for peer in instance.peers
+              if peer.replace("+", "") not in present]
+    for peer in seeded:
+        adb(tools, instance, "shell", "content", "insert",
+            "--uri", f"{CONTACTS_AUTHORITY}/raw_contacts",
+            "--bind", "aggregation_mode:i:0")
+        raw_id = latest_raw_contact_id(tools, instance)
+        adb(tools, instance, "shell", "content", "insert",
+            "--uri", f"{CONTACTS_AUTHORITY}/data",
+            "--bind", f"raw_contact_id:i:{raw_id}",
+            "--bind", f"mimetype:s:{NAME_MIME}",
+            "--bind", f"data1:s:{peer}")
+        adb(tools, instance, "shell", "content", "insert",
+            "--uri", f"{CONTACTS_AUTHORITY}/data",
+            "--bind", f"raw_contact_id:i:{raw_id}",
+            "--bind", f"mimetype:s:{PHONE_MIME}",
+            "--bind", f"data1:s:{peer}")
+    written = {number.replace("+", "")
+               for number in phone_book_numbers(tools, instance)}
+    missing = [peer for peer in instance.peers
+               if peer.replace("+", "") not in written]
+    if missing:
+        raise LaunchError(
+            f"{instance.instance_id}: the phone book kept none of "
+            + ", ".join(missing))
+    for permission in CONTACT_PERMISSIONS:
+        adb(tools, instance, "shell", "pm", "grant", PACKAGE,
+            permission, check=False)
+    return seeded
+
+
+def create_instances(count: int, token: str, ferrite_port: int,
+                     inputs: dict[str, Any],
+                     tools: dict[str, Path],
+                     run_phones: list[str]) -> list[Instance]:
+    image = (
+        f"system-images;android-{inputs['emulator_api']};"
+        f"{inputs['emulator_tag']};{inputs['emulator_abi']}"
+    )
+    phones, all_phones = provisioning_phones(count, run_phones)
+    existing = avd_names(tools)
+    instances: list[Instance] = []
+    for index in range(count):
+        instance_id = f"android-{chr(ord('a') + index)}"
+        avd_name = f"ferrite-{instance_id}-{token[:8]}"
+        if avd_name in existing:
+            raise LaunchError(f"refusing to overwrite existing AVD {avd_name}")
+        run([
+            str(tools["avdmanager"]), "create", "avd",
+            "--name", avd_name,
+            "--package", image,
+            "--device", inputs["emulator_device"],
+        ], input_text="no\n", env=sdk_environment(tools["sdk"]))
+        instance = Instance(
+            instance_id=instance_id,
+            avd_name=avd_name,
+            console_port=FIRST_CONSOLE_PORT + index * 2,
+            phone=phones[index],
+            bridge_port=FIRST_BRIDGE_PORT + index,
+            ferrite_port=ferrite_port,
+            peers=[phone for phone in all_phones if phone != phones[index]],
+        )
+        instance.validate_owned(token)
+        instances.append(instance)
+        write_session({
+            "schema": 1,
+            "status": "starting",
+            "run_token": token,
+            "inputs": inputs,
+            "instances": [asdict(item) for item in instances],
+        })
+    return instances
+
+
+def command_start(count: int, token: str, ferrite_port: int,
+                  run_phones: list[str]) -> None:
+    if SESSION.exists():
+        raise LaunchError("an Android session already exists; use status or stop")
+    if count < 1 or count > 8:
+        raise LaunchError("Android instance count must be between 1 and 8")
+    if not TOKEN.fullmatch(token):
+        raise LaunchError("run token must be exactly 32 lowercase hex characters")
+    if ferrite_port < 1 or ferrite_port > 65535:
+        raise LaunchError("Ferrite port is outside 1..65535")
+    inputs = android_inputs()
+    tools = sdk_tools(inputs)
+    ports = []
+    for index in range(count):
+        ports.extend((FIRST_CONSOLE_PORT + index * 2,
+                      FIRST_CONSOLE_PORT + index * 2 + 1,
+                      FIRST_BRIDGE_PORT + index))
+    for port in ports:
+        with socket.socket() as probe:
+            try:
+                probe.bind(("127.0.0.1", port))
+            except OSError as error:
+                raise LaunchError(f"required Android port is in use: {port}") from error
+
+    instances = create_instances(
+        count, token, ferrite_port, inputs, tools, run_phones)
+    value = {
+        "schema": 1,
+        "status": "starting",
+        "run_token": token,
+        "inputs": inputs,
+        "instances": [asdict(item) for item in instances],
+    }
+    try:
+        headless = os.environ.get("FERRITE_ANDROID_HEADLESS", "1") != "0"
+        for instance in instances:
+            log = STATE / f"{instance.instance_id}-emulator.log"
+            log.parent.mkdir(parents=True, exist_ok=True)
+            stream = log.open("wb")
+            command = [
+                str(tools["emulator"]), "-avd", instance.avd_name,
+                "-port", str(instance.console_port), "-no-audio",
+                "-no-boot-anim", "-no-snapshot", "-wipe-data",
+            ]
+            if headless:
+                command += ["-no-window", "-gpu", "swiftshader_indirect"]
+            process = subprocess.Popen(
+                command,
+                stdout=stream,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True,
+                env=sdk_environment(tools["sdk"]),
+            )
+            stream.close()
+            instance.process_pid = process.pid
+            value["instances"] = [asdict(item) for item in instances]
+            write_session(value)
+            wait_for_boot(tools, instance)
+            quiesce_packages(tools, instance)
+            adb(tools, instance, "uninstall", PACKAGE, check=False)
+            adb(tools, instance, "install", "-t", "-g", str(APK), timeout=900)
+            configure_application(tools, instance, token)
+            seed_phone_book(tools, instance)
+
+        container = node_container()
+        for instance in instances:
+            with verification_code_lock():
+                seen = len(issued_codes(container))
+                adb(tools, instance, "shell", "am", "start", "-W", "-n",
+                    COMPONENT, timeout=180)
+                await_state(instance, token, "AWAITING_CODE")
+                code = await_code(container, seen, instance.phone)
+                bridge_request(instance, token, {
+                    "type": "deliver-code",
+                    "code": code,
+                }, timeout=120)
+
+        statuses = {
+            item.instance_id: await_state(item, token, "READY")
+            for item in instances
+        }
+        value["status"] = "running"
+        value["instances"] = [asdict(item) for item in instances]
+        value["provisioning"] = statuses
+        write_session(value)
+        print(json.dumps(value, indent=2))
+    except Exception as error:
+        value["status"] = "failed"
+        value["instances"] = [asdict(item) for item in instances]
+        value["failure"] = str(error)
+        write_session(value)
+        raise
+
+
+def command_status() -> None:
+    value, instances = load_session()
+    tools = recovery_tools()
+    listed = run([str(tools["adb"]), "devices"], check=False).stdout
+    statuses: dict[str, Any] = {}
+    failures: list[str] = []
+    for instance in instances:
+        if not any(line.startswith(instance.serial)
+                   and line.rstrip().endswith("device")
+                   for line in listed.splitlines()):
+            failures.append(f"{instance.instance_id}: emulator is absent")
+            continue
+        try:
+            statuses[instance.instance_id] = bridge_request(
+                instance, value["run_token"], {"type": "status"})
+        except (LaunchError, OSError, json.JSONDecodeError) as error:
+            failures.append(str(error))
+    result = {
+        "status": value.get("status"),
+        "run_token": value["run_token"],
+        "requested": len(instances),
+        "ready": sum(item.get("provisioning") == "READY"
+                     for item in statuses.values()),
+        "instances": statuses,
+        "failures": failures,
+    }
+    print(json.dumps(result, indent=2))
+    if failures or result["ready"] != len(instances):
+        raise LaunchError("one or more Android instances are not READY")
+
+
+def command_stop(expected_token: str | None = None) -> None:
+    value, instances = load_session()
+    token = value["run_token"]
+    if expected_token is not None and expected_token != token:
+        raise LaunchError(
+            "refusing to stop an Android session owned by a different run token")
+    tools = recovery_tools()
+    listed = run([str(tools["adb"]), "devices"], check=False).stdout
+    for instance in instances:
+        instance.validate_owned(token)
+        if any(line.startswith(instance.serial) for line in listed.splitlines()):
+            actual = adb(
+                tools, instance, "emu", "avd", "name", check=False,
+            ).stdout.splitlines()
+            if instance.avd_name not in actual:
+                raise LaunchError(
+                    f"{instance.serial} is not owned AVD {instance.avd_name}")
+            adb(tools, instance, "emu", "kill", check=False)
+            deadline = time.monotonic() + 60.0
+            while time.monotonic() < deadline:
+                current = run(
+                    [str(tools["adb"]), "devices"], check=False,
+                ).stdout
+                if not any(line.startswith(instance.serial)
+                           for line in current.splitlines()):
+                    break
+                time.sleep(1)
+        if instance.avd_name in avd_names(tools):
+            run([
+                str(tools["avdmanager"]), "delete", "avd",
+                "--name", instance.avd_name,
+            ], env=sdk_environment(tools["sdk"]))
+        if instance.avd_name in avd_names(tools):
+            raise LaunchError(f"owned AVD was not removed: {instance.avd_name}")
+    SESSION.unlink(missing_ok=True)
+    print(json.dumps({
+        "status": "stopped",
+        "run_token": token,
+        "removed": [item.instance_id for item in instances],
+    }))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("metadata")
+    start = commands.add_parser("start")
+    start.add_argument("--count", type=int, required=True)
+    start.add_argument("--run-token", required=True)
+    start.add_argument("--ferrite-port", type=int, default=52222)
+    start.add_argument("--run-phone", action="append", default=[])
+    commands.add_parser("status")
+    stop = commands.add_parser("stop")
+    stop.add_argument("--run-token")
+    arguments = parser.parse_args()
+    if arguments.command == "metadata":
+        print(json.dumps(android_inputs(), indent=2))
+    elif arguments.command == "start":
+        command_start(arguments.count, arguments.run_token,
+                      arguments.ferrite_port, arguments.run_phone)
+    elif arguments.command == "status":
+        command_status()
+    else:
+        command_stop(arguments.run_token)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (LaunchError, OSError, json.JSONDecodeError) as error:
+        print(f"launch-android: {error}", file=sys.stderr)
+        raise SystemExit(1)

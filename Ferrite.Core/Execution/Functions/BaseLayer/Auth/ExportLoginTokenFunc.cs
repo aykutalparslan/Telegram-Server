@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Services;
 using Ferrite.Core.Execution;
 using Ferrite.TL;
 
@@ -19,7 +18,7 @@ public class ExportLoginTokenFunc : ITLFunction
 
     public async ValueTask<TLBytes?> Process(TLBytes q, TLExecutionContext ctx)
     {
-        using var export = await _auth.ExportLoginToken(ctx.AuthKeyId, ctx.SessionId, q);
+        using var export = await _auth.ExportLoginToken(ctx.CurrentAuthKeyId, ctx.SessionId, q);
         var rpcResult = RpcResultGenerator.Generate(export, ctx.MessageId);
         return rpcResult;
     }

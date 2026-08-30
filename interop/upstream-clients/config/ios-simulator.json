@@ -1,0 +1,14 @@
+{
+  "bundle_id": "org.ferrite.conformance",
+  "api_id": "11111",
+  "api_hash": "11111111111111111111111111111111",
+  "team_id": "FERRITETEST",
+  "app_center_id": "0",
+  "is_internal_build": "true",
+  "is_appstore_build": "false",
+  "appstore_id": "0",
+  "app_specific_url_scheme": "ferrite",
+  "premium_iap_product_id": "",
+  "enable_siri": false,
+  "enable_icloud": false
+}

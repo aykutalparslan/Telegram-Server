@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Services;
-
 namespace Ferrite.Core;
 
 public class DataCenter : IDataCenter

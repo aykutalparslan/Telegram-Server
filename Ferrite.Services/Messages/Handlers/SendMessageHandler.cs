@@ -2,9 +2,9 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
+using Ferrite.Services.Scheduling;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.dto;
@@ -107,11 +107,6 @@ public sealed class SendMessageHandler : MessagesHandlerBase
                 .Build();
         }
 
-    /// <summary>
-    /// A queued text message runs the same peer/rights preflight an immediate send
-    /// does, so a user who may not post is refused now rather than at flush time,
-    /// and then stores a queue entry instead of delivering anything.
-    /// </summary>
     private async Task<TLUpdates> ScheduleTextMessage(long authKeyId, TLBytes q,
         long userId, TLPeer.PeerType peerType, long peerId, int scheduleDate)
     {

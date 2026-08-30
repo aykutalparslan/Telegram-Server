@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -60,7 +59,6 @@ public sealed class EditExportedChatInviteHandler : MessagesHandlerBase
             }
             if (!context!.IsCreator && invite.AdminId != context.CurrentUserId)
             {
-                // Non-creator admins may only edit their own links.
                 return ErrorMessagesExportedInvite("CHAT_ADMIN_REQUIRED");
             }
 
@@ -77,8 +75,6 @@ public sealed class EditExportedChatInviteHandler : MessagesHandlerBase
 
                 if (invite.Permanent)
                 {
-                    // Revoking the primary link replaces it: the server mints a fresh
-                    // permanent link and returns both.
                     int date = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
                     string newHash = ChatInvites.GenerateHash();
                     byte[] newInviteBytes;
@@ -94,7 +90,7 @@ public sealed class EditExportedChatInviteHandler : MessagesHandlerBase
                     _log.Debug($"🔗 EditExportedChatInvite user:{context.CurrentUserId} " +
                                $"chat:{chatId} hash:{hash} revoked permanent -> {newHash}");
                     var replacedUsers = new Vector();
-                    AppendUsers(ref replacedUsers, new[] { invite.AdminId, context.CurrentUserId });
+                    AppendUsers(context.CurrentUserId, ref replacedUsers, new[] { invite.AdminId, context.CurrentUserId });
                     return ExportedChatInviteReplaced.Builder()
                         .Invite(revokedBytes)
                         .NewInvite(newInviteBytes)
@@ -106,7 +102,7 @@ public sealed class EditExportedChatInviteHandler : MessagesHandlerBase
                 _log.Debug($"🔗 EditExportedChatInvite user:{context.CurrentUserId} " +
                            $"chat:{chatId} hash:{hash} revoked");
                 var revokedUsers = new Vector();
-                AppendUsers(ref revokedUsers, new[] { invite.AdminId });
+                AppendUsers(context.CurrentUserId, ref revokedUsers, new[] { invite.AdminId });
                 return Ferrite.TL.baseLayer.messages.ExportedChatInvite.Builder()
                     .Invite(revokedBytes)
                     .Users(revokedUsers)
@@ -115,7 +111,6 @@ public sealed class EditExportedChatInviteHandler : MessagesHandlerBase
 
             if (invite.Revoked)
             {
-                // Revoked links can no longer be edited.
                 return ErrorMessagesExportedInvite("INVITE_HASH_EXPIRED");
             }
 
@@ -131,7 +126,7 @@ public sealed class EditExportedChatInviteHandler : MessagesHandlerBase
             _log.Debug($"🔗 EditExportedChatInvite user:{context.CurrentUserId} chat:{chatId} " +
                        $"hash:{hash} edited");
             var userVector = new Vector();
-            AppendUsers(ref userVector, new[] { invite.AdminId });
+            AppendUsers(context.CurrentUserId, ref userVector, new[] { invite.AdminId });
             return Ferrite.TL.baseLayer.messages.ExportedChatInvite.Builder()
                 .Invite(edited!.InviteBytes)
                 .Users(userVector)

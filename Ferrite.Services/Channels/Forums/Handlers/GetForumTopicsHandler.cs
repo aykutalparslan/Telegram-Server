@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer.channels;
@@ -16,12 +15,12 @@ public sealed class GetForumTopicsHandler
     private readonly IChatParticipantsRepository _chatParticipantsRepository;
     private readonly IChatRepository _chatRepository;
     private readonly IForumTopicsRepository _forumTopicsRepository;
-    private readonly IUserRepository _userRepository;
+    private readonly UserSerializer _userSerializer;
 
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICounterFactory _counterFactory;
 
-    public GetForumTopicsHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IChannelMessagesRepository channelMessagesRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IForumTopicsRepository forumTopicsRepository, IUserRepository userRepository,
+    public GetForumTopicsHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IChannelMessagesRepository channelMessagesRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IForumTopicsRepository forumTopicsRepository, UserSerializer userSerializer,
         ICounterFactory counterFactory)
     {
         _authorizationRepository = authorizationRepository;
@@ -29,7 +28,7 @@ public sealed class GetForumTopicsHandler
         _chatParticipantsRepository = chatParticipantsRepository;
         _chatRepository = chatRepository;
         _forumTopicsRepository = forumTopicsRepository;
-        _userRepository = userRepository;
+        _userSerializer = userSerializer;
 
         _unitOfWork = unitOfWork;
         _counterFactory = counterFactory;
@@ -46,7 +45,7 @@ public sealed class GetForumTopicsHandler
         int offsetId = request.OffsetId;
         int offsetTopic = request.OffsetTopic;
         int limit = request.Limit;
-        return await ChannelForumTopics.GetAsync(_authorizationRepository, _chatRepository, _chatParticipantsRepository, _channelMessagesRepository, _forumTopicsRepository, _userRepository, _counterFactory,
+        return await ChannelForumTopics.GetAsync(_authorizationRepository, _chatRepository, _chatParticipantsRepository, _channelMessagesRepository, _forumTopicsRepository, _userSerializer, _counterFactory,
             authKeyId, channelId, query, offsetDate, offsetId, offsetTopic, limit, null);
     }
 }

@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -11,12 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Reports when the recipient of the caller's own private message first read it.
-/// The answer is the recipient's stored receipt for the logical message, never
-/// the query time, and a receipt older than the retention window is reported as
-/// too old rather than as unread.
-/// </summary>
 public sealed class GetOutboxReadDateHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -62,7 +55,6 @@ public sealed class GetOutboxReadDateHandler
         }
         long peerUserId = key.Id;
         int messageId = request.MsgId;
-        // A read date names another person's read; the self dialog has no reader.
         if (peerUserId == userId)
         {
             return Error("PEER_ID_INVALID");

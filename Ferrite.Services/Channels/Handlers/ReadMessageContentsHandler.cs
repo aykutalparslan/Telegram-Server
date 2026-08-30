@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -11,11 +10,6 @@ using System.Text;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// A channel post exists once in the shared box, so marking its content read is
-/// recorded per viewer. The stored message keeps its mention/media-unread flags
-/// for everyone who has not read it, and only the caller's sessions are told.
-/// </summary>
 public sealed class ReadMessageContentsHandler
 {
     private readonly IChatParticipantsRepository _chatParticipantsRepository;
@@ -130,17 +124,11 @@ public sealed class ReadMessageContentsHandler
             return Error("INTERNAL_SERVER_ERROR");
         }
 
-        // EnqueueUpdate owns the value it is handed and disposes it, so the pooled
-        // update is transferred rather than scoped with `using`.
         await _updates.EnqueueUpdate(userId,
             BuildUpdate(channelId.Value, newlyRead));
         return BoolTrue.Builder().Build();
     }
 
-    /// <summary>
-    /// Content is readable exactly once per viewer, is never read by its own
-    /// author, and only applies to a message the shared box still marks unread.
-    /// </summary>
     private async ValueTask<bool> IsUnreadContentAsync(long channelId,
         int messageId, long userId, string? username)
     {
@@ -163,10 +151,6 @@ public sealed class ReadMessageContentsHandler
         {
             return false;
         }
-        // The shared channel row deliberately has no viewer-specific `mentioned`
-        // bit. Derive it from its canonical entities just as difference replay
-        // does; otherwise channels.readMessageContents can never persist a read
-        // marker for a named member.
         if (!message.Flags[4] && !message.Flags[5] &&
             !MessageMentions.MentionsUser(message, userId, username))
         {

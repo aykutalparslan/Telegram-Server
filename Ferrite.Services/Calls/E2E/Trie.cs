@@ -3,10 +3,6 @@
 
 namespace Ferrite.Services.Calls.E2E;
 
-// A direct port of TDLib tde2e/td/e2e/Trie.cpp. The client does not
-// hold the full key-value state and needs a proof of every changed key to build
-// its next block, so a divergence here produces blocks the client cannot build
-// on with no local symptom.
 public static class Trie
 {
     public static TrieNode Set(TrieNode node, TrieBitString key, ReadOnlySpan<byte> value,
@@ -110,10 +106,6 @@ public static class Trie
         }
     }
 
-    // prune_node from Trie.cpp:219-260. Two rules are easy to get wrong and
-    // both change the proof bytes: a Leaf is returned whole even when the key
-    // list is non-empty, and an Inner node with an empty key list collapses to
-    // a Pruned stand-in.
     public static TrieNode Prune(TrieNode node, IReadOnlyList<TrieBitString> keys,
         ReadOnlySpan<byte> snapshot)
     {
@@ -219,9 +211,6 @@ public static class Trie
                 var prefix = TrieBitString.Fetch(ref reader, baseBitString);
                 var leftBase = baseBitString.Substr(prefix.BitLength + 1);
                 var left = ParseFromNetwork(ref reader, leftBase);
-                // The right sibling gets a FRESH buffer at the same within-byte
-                // offset. Sharing the left's buffer would let the right's bits
-                // overwrite the left's inside the byte they straddle.
                 var rightBase = TrieBitString.Allocate(leftBase.BeginBitInByte, leftBase.BitLength);
                 var right = ParseFromNetwork(ref reader, rightBase);
                 return TrieNode.Inner(prefix, left, right);
@@ -235,9 +224,6 @@ public static class Trie
         }
     }
 
-    // store_for_snapshot from Trie.cpp:400-454: an 8-byte root-offset header
-    // followed by a post-order layout, where each inner node records its
-    // children's absolute offsets and hashes so a subtree can be loaded lazily.
     public static byte[] SerializeForSnapshot(TrieNode node, ReadOnlySpan<byte> snapshot)
     {
         var writer = new TrieByteWriter();
@@ -322,8 +308,6 @@ public static class Trie
                 byte[] rightHash = reader.ReadBytes(32).ToArray();
 
                 var leftBase = baseBitString.Substr(prefix.BitLength + 1);
-                // The right child's base is recorded WITHOUT a buffer; TryLoad
-                // allocates one, which keeps siblings from sharing bytes.
                 var rightBase = new TrieBitString(null, leftBase.BeginBitInByte, leftBase.BitLength);
 
                 var left = TrieNode.Pruned(leftHash, leftOffset, leftBase);

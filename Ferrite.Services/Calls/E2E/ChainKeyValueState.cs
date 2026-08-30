@@ -3,12 +3,6 @@
 
 namespace Ferrite.Services.Calls.E2E;
 
-// KeyValueState from Blockchain.cpp:243-275.
-//
-// Note the asymmetry the reference has and that this port must keep: set and
-// get demand an exactly-32-byte key, while proof generation pads through
-// to_key(). A change carrying a short key is therefore a rejected block, not a
-// silently padded write.
 public sealed class ChainKeyValueState
 {
     private TrieNode _root;
@@ -31,9 +25,6 @@ public sealed class ChainKeyValueState
 
     public byte[] Hash => _root.Hash;
 
-    // Trie nodes are persistent, so copying the root reference is a real copy.
-    // GroupCallChain validates a block against a clone and only publishes it
-    // once the whole block succeeds.
     public ChainKeyValueState Clone() => new(_root, _snapshot);
 
     private static TrieBitString RequireExactKey(ReadOnlySpan<byte> key)

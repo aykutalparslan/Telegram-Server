@@ -23,17 +23,21 @@ dotnet run --project Ferrite
 Ferrite listens on TCP port 5222 and serves MTProto over both raw TCP and
 WebSocket on that port.
 
-On first start Ferrite assigns itself a node id and creates the `data/` directory.
+Ferrite resolves its keys, `node.guid` and `data/` against the working directory,
+so the command above run from the repository root creates them there: a fresh key
+pair, a new node id, and the local stores.
 
 **Replace the sample server keys before running anything real.** This repository
-ships `default-private.key` and `default-public.key` as samples so a fresh clone
-runs immediately. They are public, so anyone can impersonate a server that still
-uses them. Ferrite loads whatever key files it finds and only generates a new pair
-when they are absent, so delete both from the working directory and restart:
+ships `default-private.key` and `default-public.key` under `Ferrite/` as samples
+so a fresh clone runs immediately, and the build copies them — along with a
+sample `node.guid` — into the output directory and the server image. They are
+public, so anyone can impersonate a server that still uses them. Ferrite only
+generates a new pair when both files are absent, so delete them at the source and
+rebuild:
 
 ```sh
-rm default-private.key default-public.key
-dotnet run --project Ferrite
+rm Ferrite/default-private.key Ferrite/default-public.key
+dotnet build Ferrite.sln
 ```
 
 Then keep the generated `default-private.key` secret and back it up. Clients pin
@@ -74,7 +78,7 @@ npm start
 Then start Ferrite with the worker's control endpoint and shared secret:
 
 ```sh
-FERRITE_GROUP_CALL_CONTROL_URL=http://127.0.0.1:3000 \
+FERRITE_GROUP_CALL_CONTROL_URL=http://127.0.0.1:9090 \
 FERRITE_GROUP_CALL_AUTH_SECRET=<shared-secret> \
 dotnet run --project Ferrite
 ```

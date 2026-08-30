@@ -5,11 +5,6 @@ using System.Security.Cryptography;
 
 namespace Ferrite.Services.Calls;
 
-/// <summary>
-/// Builds the public deep links exported by phone.exportGroupCallInvite. A link
-/// without a hash is listen-only; a hash is a dedicated group-call credential
-/// whose generation, revocation, and expiry are validated by joinGroupCall.
-/// </summary>
 public static class GroupCallInviteLinks
 {
     private const int HashBytes = 18;

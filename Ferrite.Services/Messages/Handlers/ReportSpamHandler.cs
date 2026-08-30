@@ -10,12 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// The spam branch of pinned TDLib's `UpdatePeerSettingsQuery`
-/// (`DialogManager.cpp:645`). Reporting a peer for spam both records the report
-/// and dismisses the action bar, because the client immediately replaces its
-/// local settings with an empty `peerSettings` and never asks the bar back.
-/// </summary>
 public sealed class ReportSpamHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -49,8 +43,6 @@ public sealed class ReportSpamHandler
         bool resolved = PeerResolver.TryResolveInputPeerDialogKey(
             request.Get_PeerView(), userId, out DialogPeerKey peer);
 
-        // Reporting your own Saved Messages dialog is not a real report; the
-        // client never offers it and accepting it would store a self-accusation.
         if (!resolved ||
             (peer.Type == TLPeer.PeerType.PeerUser && peer.Id == userId))
         {

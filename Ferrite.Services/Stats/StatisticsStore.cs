@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -10,16 +9,6 @@ using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Stats;
 
-/// <summary>
-/// Reads every row `stats.*` derives an answer from, and projects it into the
-/// plain shapes <see cref="ChannelStatsSnapshot"/> declares.
-///
-/// The whole snapshot is read per request rather than per graph. The counters and
-/// the graphs overlap almost entirely, a self-hosted deployment's volumes are
-/// small, and one read keeps a statistics answer internally consistent — a
-/// follower count and a growth graph built from two different reads could
-/// disagree.
-/// </summary>
 public sealed class StatisticsStore
 {
     private readonly IChannelAdminLogRepository _channelAdminLogRepository;
@@ -29,17 +18,6 @@ public sealed class StatisticsStore
     private readonly IMessageReactionsRepository _messageReactionsRepository;
     private readonly IStatisticsRepository _statisticsRepository;
 
-    /// <summary>
-    /// The DC id `channelFull.stats_dc` reports. Ferrite is a single-DC
-    /// deployment and `help.getConfig` already advertises `this_dc:1`, so
-    /// statistics are served from the DC the client is already connected to.
-    ///
-    /// It is LOAD-BEARING that this is an exact DC id in 1..1000
-    /// (`DcId::is_valid`, `net/DcId.h:22-24`): pinned TDLib refuses to send any
-    /// statistics query at all when `stats_dc` is absent or out of range, and
-    /// `on_get_channel_full` additionally CLEARS `can_view_stats` and logs an
-    /// error in that case (`ChatManager.cpp:5769-5775`).
-    /// </summary>
     public const int StatsDcId = 1;
 
     private readonly IUnitOfWork _unitOfWork;
@@ -79,8 +57,6 @@ public sealed class StatisticsStore
             using (row)
             {
                 var view = row.AsChatParticipantInfo();
-                // Banned and left rows are not membership; the same predicate
-                // `channelFull.participants_count` is already built from.
                 if (view.Role == (int)ChatParticipantRole.Banned ||
                     view.Role == (int)ChatParticipantRole.Left)
                 {
@@ -101,8 +77,6 @@ public sealed class StatisticsStore
             using (row)
             {
                 MessageView message = row.AsSavedMessage().Get_OriginalMessageView();
-                // Service messages are events rather than content, so they are not
-                // posts and never count towards message statistics.
                 if (!message.Is(out Message body))
                 {
                     continue;
@@ -149,8 +123,6 @@ public sealed class StatisticsStore
                 for (int i = 0; i < count; i++)
                 {
                     var reaction = (ReactionEmoji)chosen.ReadTLObject();
-                    // Only an emoji reaction has an emotion to group by; a custom
-                    // emoji or a paid reaction carries no emoticon at all.
                     if (reaction.Constructor != Constructors.baseLayer_ReactionEmoji)
                     {
                         continue;
@@ -202,12 +174,6 @@ public sealed class StatisticsStore
         return actions;
     }
 
-    /// <summary>
-    /// The three administrative actions `statsGroupTopAdmin` counts. A ban that
-    /// leaves the member in the channel is a RESTRICTION and one that puts them
-    /// out is a removal, which is the same distinction the stored
-    /// `channelParticipantBanned.left` flag already draws.
-    /// </summary>
     private static bool TryReadAdminAction(ChannelAdminLogEventActionView action,
         out StatsAdminActionKind kind)
     {

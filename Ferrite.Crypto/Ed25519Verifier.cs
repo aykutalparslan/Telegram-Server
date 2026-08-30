@@ -5,9 +5,6 @@ using Org.BouncyCastle.Math.EC.Rfc8032;
 
 namespace Ferrite.Crypto;
 
-// RFC 8032 Ed25519 over the raw message, matching
-// td::Ed25519::PublicKey::verify_signature, which tde2e uses for conference
-// chain blocks and sub-chain broadcasts.
 public static class Ed25519Verifier
 {
     public const int PublicKeySize = 32;
@@ -25,8 +22,6 @@ public static class Ed25519Verifier
         }
         catch (Exception)
         {
-            // A malformed point or a non-canonical encoding is a rejected
-            // signature, not a server fault.
             return false;
         }
     }

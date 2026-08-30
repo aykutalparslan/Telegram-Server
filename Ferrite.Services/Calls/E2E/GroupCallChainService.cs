@@ -11,9 +11,6 @@ public sealed class GroupCallChainService : IGroupCallChainService
 {
     private readonly IGroupCallChainRepository _groupCallChainRepository;
 
-    // BLOCK_POLL_COUNT in pinned TDLib (GroupCallManager.h:205). A client never
-    // asks for more, and a window larger than the client's own poll size would
-    // just be discarded.
     public const int MaxWindow = 100;
     private const int MaxBroadcastAppendAttempts = 16;
 
@@ -32,13 +29,6 @@ public sealed class GroupCallChainService : IGroupCallChainService
 
     private IGroupCallChainRepository Repository => _groupCallChainRepository;
 
-    // Validate against the persisted head, then append under the repository's
-    // per-(call, sub-chain) gate with the height we validated against. Two
-    // clients that both built on height N have both validated successfully; the
-    // repository decides which one is real, and the loser gets a height mismatch
-    // so it refetches the head and rebuilds. This is the fork prevention the
-    // protocol depends on, and it is why validation may not publish state before
-    // the append commits.
     public async ValueTask<GroupCallChainAppend> TryAppendAsync(long callId, int subChainId,
         long userId, byte[] serializedBlock, CancellationToken cancellationToken = default)
     {
@@ -96,8 +86,6 @@ public sealed class GroupCallChainService : IGroupCallChainService
             committed.Height + 1);
     }
 
-    // Sub-chain 1 rows are opaque: a broadcast is not a chained block, so it has
-    // no predecessor hash and is appended in arrival order at the next offset.
     private async ValueTask<GroupCallChainAppend> AppendBroadcastAsync(long callId,
         long userId, byte[] payload, CancellationToken cancellationToken)
     {
@@ -113,10 +101,6 @@ public sealed class GroupCallChainService : IGroupCallChainService
             return Rejected(error, currentHeight);
         }
 
-        // TDLib does not retry a rejected opaque broadcast. Unlike sub-chain 0,
-        // there is no predecessor to rebuild and therefore no protocol reason to
-        // expose an ordinary offset race to the client. Re-read the append-only
-        // head and place this payload at the next free offset instead.
         GroupCallChainAppendResult committed = default;
         for (int attempt = 0; attempt < MaxBroadcastAppendAttempts; attempt++)
         {
@@ -151,9 +135,6 @@ public sealed class GroupCallChainService : IGroupCallChainService
     public async ValueTask<GroupCallChainWindow> GetWindowAsync(long callId, int subChainId,
         int offset, int limit, CancellationToken cancellationToken = default)
     {
-        // offset -1 is the client's opening question, "what is the head": the
-        // reply is the head block alone, or nothing at all when the chain has
-        // not started and the client must build a zero block.
         if (offset < 0)
         {
             using TLDto.TLGroupCallChainBlock? head = await Repository.GetLastBlockAsync(
@@ -178,8 +159,6 @@ public sealed class GroupCallChainService : IGroupCallChainService
             }
         }
 
-        // TDLib applies the LAST (next_offset - its own next offset) entries, so
-        // the window must be contiguous and end exactly at next_offset.
         return new GroupCallChainWindow(blocks, offset + blocks.Count);
     }
 
@@ -210,9 +189,6 @@ public sealed class GroupCallChainService : IGroupCallChainService
     private static GroupCallChainAppend Rejected(ChainValidationError error, int height) =>
         new(error, height, height + 1);
 
-    // The head is restored from its snapshot rather than by replaying blocks:
-    // the trie snapshot is the reference's own layout and reproduces the exact
-    // kv hash the next block's state proof is checked against.
     private static GroupCallChain RestoreChain(TLDto.TLGroupCallChainState stored)
     {
         var view = stored.AsGroupCallChainState();

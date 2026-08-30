@@ -3,7 +3,6 @@
 
 using System.Text;
 using Ferrite.Crypto;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.Utils;

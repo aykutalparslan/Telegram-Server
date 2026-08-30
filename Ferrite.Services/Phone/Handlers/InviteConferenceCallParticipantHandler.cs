@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.Services.Calls.E2E;
@@ -14,12 +13,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.inviteConferenceCallParticipant. An invite is signaling only: it writes
-/// one ordinary private service message carrying messageActionConferenceCall into
-/// both sides' boxes and creates no participant row, no media source and no call
-/// version step. The invitee joins by acting on that message.
-/// </summary>
 public sealed class InviteConferenceCallParticipantHandler : ConferenceCallHandlerBase
 {
     private readonly IUserRepository _userRepository;
@@ -64,7 +57,6 @@ public sealed class InviteConferenceCallParticipantHandler : ConferenceCallHandl
         {
             return Error(resolution.Error);
         }
-        // Only somebody who is actually in the call may pull anyone else into it.
         if (!resolution.IsParticipant)
         {
             return Error(GroupCallErrors.GroupCallJoinMissing);
@@ -112,8 +104,6 @@ public sealed class InviteConferenceCallParticipantHandler : ConferenceCallHandl
             new[] { update.AsSpan().ToArray() }, new[] { inviteeId });
     }
 
-    // An open invite: neither missed nor active, so the client renders it as a
-    // ringing conference invitation it can accept or decline.
     private static byte[] BuildInviteAction(long callId, bool video)
     {
         var builder = MessageActionConferenceCall.Builder().CallId(callId);

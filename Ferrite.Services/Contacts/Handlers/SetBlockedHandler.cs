@@ -3,7 +3,6 @@
 
 using System.Text;
 using DotNext.Collections.Generic;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -18,9 +17,9 @@ public sealed class SetBlockedHandler : ContactsHandlerBase
     private readonly IAuthorizationRepository _authorizationRepository;
     private readonly IBlockedPeersRepository _blockedPeersRepository;
 
-    public SetBlockedHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IBlockedPeersRepository blockedPeersRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
+    public SetBlockedHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IBlockedPeersRepository blockedPeersRepository, IContactsRepository contactsRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
         IUpdatesService updates, IUpdatesContextFactory updatesContextFactory)
-        : base(unitOfWork, userRepository, userStatusRepository, search, updates, updatesContextFactory)
+        : base(unitOfWork, contactsRepository, userRepository, userStatusRepository, search, updates, updatesContextFactory)
     {
         _authorizationRepository = authorizationRepository;
         _blockedPeersRepository = blockedPeersRepository;

@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -50,7 +49,6 @@ public sealed class GetExportedChatInvitesHandler : MessagesHandlerBase
             long adminFilter = adminIsSelf || adminUserId <= 0 ? context!.CurrentUserId : adminUserId;
             if (adminFilter != context!.CurrentUserId && !context.IsCreator)
             {
-                // Non-creator admins may only list their own links.
                 return ErrorExportedInvites("CHAT_ADMIN_REQUIRED");
             }
 
@@ -87,7 +85,7 @@ public sealed class GetExportedChatInvitesHandler : MessagesHandlerBase
                 invitesVector.AppendTLObject(invite.InviteBytes);
             }
             var userVector = new Vector();
-            AppendUsers(ref userVector, page.Select(i => i.AdminId).Append(adminFilter));
+            AppendUsers(context.CurrentUserId, ref userVector, page.Select(i => i.AdminId).Append(adminFilter));
 
             _log.Debug($"🔗 GetExportedChatInvites user:{context.CurrentUserId} chat:{chatId} " +
                        $"revoked:{revokedFilter} total:{filtered.Count} page:{page.Count}");

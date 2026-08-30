@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.SecretChats.Handlers;
 using Ferrite.TL;
@@ -26,11 +25,20 @@ public sealed class GetDifferenceHandler : UpdatesHandlerBase
 
     private readonly ISecretChatTransitionRepair _secretChatTransitionRepair;
 
-    public GetDifferenceHandler(IMTProtoTime time, IUnitOfWork unitOfWork, IMessageRepository messageRepository, IUpdatesStateRepository updatesStateRepository, IAuthorizationRepository authorizationRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, ISecretChatsRepository secretChatsRepository, IUserRepository userRepository,
+    private readonly UserSerializer _userSerializer;
+
+    private byte[] WithStatus(long viewerUserId, TLUser user)
+    {
+        using var hydrated = _userSerializer.WithStatus(viewerUserId, user);
+        return hydrated.AsSpan().ToArray();
+    }
+
+    public GetDifferenceHandler(IMTProtoTime time, IUnitOfWork unitOfWork, IMessageRepository messageRepository, IUpdatesStateRepository updatesStateRepository, IAuthorizationRepository authorizationRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IContactsRepository contactsRepository, ISecretChatsRepository secretChatsRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository,
         IUpdatesContextFactory updatesContextFactory, ICounterFactory counterFactory,
         ILogger log, ISecretChatTransitionRepair secretChatTransitionRepair)
         : base(time, unitOfWork, chatParticipantsRepository, chatRepository, updatesContextFactory, counterFactory, log)
     {
+        _userSerializer = new UserSerializer(userRepository, userStatusRepository, contactsRepository);
         _messageRepository = messageRepository;
         _updatesStateRepository = updatesStateRepository;
 
@@ -40,6 +48,28 @@ public sealed class GetDifferenceHandler : UpdatesHandlerBase
         _userRepository = userRepository;
 
         _secretChatTransitionRepair = secretChatTransitionRepair;
+    }
+
+    [TLFunction(Constructors.layer58_UpdatesGetDifference)]
+    public async Task<TLDifference> HandleLayer58(long authKeyId, TLBytes q)
+    {
+        using var current = ToCurrentDifferenceRequest(q);
+        return await Handle(authKeyId, current);
+    }
+
+    private static TLBytes ToCurrentDifferenceRequest(TLBytes q)
+    {
+        var sent = new TL.layer58.updates.UpdatesGetDifference(q.AsSpan());
+        var builder = UpdatesGetDifference.Builder()
+            .Pts(sent.Pts)
+            .Date(sent.Date)
+            .Qts(sent.Qts);
+        if (sent.Flags[0])
+        {
+            builder = builder.PtsTotalLimit(sent.PtsTotalLimit);
+        }
+        var current = builder.Build();
+        return current.TLBytes!.Value;
     }
 
     [TLFunction(Constructors.baseLayer_UpdatesGetDifference)]
@@ -114,14 +144,11 @@ public sealed class GetDifferenceHandler : UpdatesHandlerBase
         List<(long ChannelId, int Pts, byte[] ChannelBytes)> channelMarkers = isProbe
             ? []
             : await GatherChannelTooLong(userId);
-        List<byte[]> relatedUsers = await GatherControlUsers(controlUpdates);
+        List<byte[]> relatedUsers = await GatherControlUsers(userId, controlUpdates);
         (List<byte[]> messageUsers, List<byte[]> messageChats) =
-            await GatherMessageRelations(commonDifference.Messages);
+            await GatherMessageRelations(userId, commonDifference.Messages);
         relatedUsers.AddRange(messageUsers);
 
-        // Reading a difference also acknowledges secret-chat QTS/control state.
-        // Those durable writes must share the request's one Cassandra flush even
-        // when the resulting API payload is otherwise an empty difference.
         await _unitOfWork.SaveAsync();
 
         bool needsStateAdvance = finalQts > requestQts ||
@@ -255,7 +282,7 @@ public sealed class GetDifferenceHandler : UpdatesHandlerBase
     }
 
     private async Task<(List<byte[]> Users, List<byte[]> Chats)>
-        GatherMessageRelations(IReadOnlyList<CommonMessage> messages)
+        GatherMessageRelations(long viewerUserId, IReadOnlyList<CommonMessage> messages)
     {
         var userIds = new HashSet<long>();
         var chatIds = new HashSet<long>();
@@ -275,7 +302,7 @@ public sealed class GetDifferenceHandler : UpdatesHandlerBase
             using TLUser? user = _userRepository.GetUser(relatedUserId);
             if (user is not null)
             {
-                users.Add(user.Value.AsSpan().ToArray());
+                users.Add(WithStatus(viewerUserId, user.Value));
             }
         }
 
@@ -305,7 +332,7 @@ public sealed class GetDifferenceHandler : UpdatesHandlerBase
             .Build();
     }
 
-    private async Task<List<byte[]>> GatherControlUsers(
+    private async Task<List<byte[]>> GatherControlUsers(long viewerUserId,
         IReadOnlyList<(int ChatId, byte[] Update)> controls)
     {
         var userIds = new HashSet<long>();
@@ -328,7 +355,7 @@ public sealed class GetDifferenceHandler : UpdatesHandlerBase
             using TLUser? user = _userRepository.GetUser(userId);
             if (user is not null)
             {
-                users.Add(user.Value.AsSpan().ToArray());
+                users.Add(WithStatus(viewerUserId, user.Value));
             }
         }
         return users;

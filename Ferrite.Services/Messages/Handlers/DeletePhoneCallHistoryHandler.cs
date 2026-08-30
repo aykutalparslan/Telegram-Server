@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -10,11 +9,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Removes the caller's one-to-one call-log service messages. When revoke is
-/// requested, the peer copy is found by the stable call id plus the caller/peer
-/// relationship because private message ids are local to each user's box.
-/// </summary>
 public sealed class DeletePhoneCallHistoryHandler
 {
     private readonly IMessageRepository _messageRepository;

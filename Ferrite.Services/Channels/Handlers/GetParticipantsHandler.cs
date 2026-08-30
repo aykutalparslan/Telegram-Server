@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -64,8 +63,6 @@ public sealed class GetParticipantsHandler : ChannelsHandlerBase
                 .GenerateError(400, "CHANNEL_INVALID"u8);
         }
 
-        // Only members see the participant list, and in broadcast channels only the
-        // creator/admins do (channelFull.can_view_participants is false for them).
         var caller = await _chatParticipantsRepository
             .GetParticipantAsync(channelId.Value, currentUserId);
         if (caller == null || !IsActiveParticipant(caller.Value))
@@ -86,7 +83,6 @@ public sealed class GetParticipantsHandler : ChannelsHandlerBase
         var participantInfos = await _chatParticipantsRepository
             .GetParticipantsAsync(channelId.Value);
 
-        // Filter + order + serialize synchronously (no ref struct crosses an await).
         var selected = new List<(long UserId, int Role, byte[] Bytes)>();
         foreach (var p in participantInfos)
         {
@@ -118,7 +114,7 @@ public sealed class GetParticipantsHandler : ChannelsHandlerBase
             participantVector.AppendTLObject(item.Bytes);
         }
         var userVector = new Vector();
-        AppendUsers(ref userVector, pageList.Select(x => x.UserId));
+        AppendUsers(currentUserId, ref userVector, pageList.Select(x => x.UserId));
 
         _log.Debug($"📣 GetParticipants channel:{channelId.Value} filter:{filterKind} " +
                    $"total:{total} page:{pageList.Count}");

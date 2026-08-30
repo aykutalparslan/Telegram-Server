@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -74,8 +73,6 @@ public sealed class ReadHistoryHandler : ChannelsHandlerBase
             return (TLBool)RpcErrorGenerator.GenerateError(400, "CHANNEL_PRIVATE"u8);
         }
 
-        // The read pointer only advances forward; a lower max_id is a no-op that still
-        // returns true. The outbox pointer is left untouched.
         int existingInbox = 0;
         int existingOutbox = 0;
         using (var readState = await _channelMessagesRepository
@@ -100,13 +97,10 @@ public sealed class ReadHistoryHandler : ChannelsHandlerBase
             _channelMessagesRepository.PutReadState(updated);
         }
 
-        // Dated receipts cover exactly the window this read advanced past; they are
-        // what a later read-participant query reports.
         await _receipts.RecordChannelReceiptsAsync(currentUserId, channelId.Value,
             existingInbox, maxId,
             checked((int)_timeProvider.GetUtcNow().ToUnixTimeSeconds()));
 
-        // Still-unread = stored posts above the read pointer not authored by the reader.
         int stillUnread = 0;
         var unread = await _channelMessagesRepository
             .GetMessagesAsync(channelId.Value, newInbox + 1, 0);
@@ -125,10 +119,6 @@ public sealed class ReadHistoryHandler : ChannelsHandlerBase
 
         await _unitOfWork.SaveAsync();
 
-        // Reading does not advance channel pts; updateReadChannelInbox carries the current
-        // pts so the reader's other sessions sync the pointer. Cross-member outbox read
-        // state (updateReadChannelOutbox to the author) needs per-post read tracking and
-        // is deferred to a later channel read-state pass.
         TLUpdate inboxUpdate = UpdateReadChannelInbox.Builder()
             .ChannelId(channelId.Value)
             .MaxId(newInbox)

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -11,12 +10,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Converts a supergroup into a broadcast group. The conversion is ONE-WAY:
-/// there is no method that clears `gigagroup`, so an already-converted group is
-/// refused rather than silently re-converted. `can_convert_channel_to_gigagroup`
-/// (`ChatManager.cpp:3782-3787`) requires a supergroup the caller created.
-/// </summary>
 public sealed class ConvertToGigagroupHandler : ChannelPropertyHandlerBase
 {
     public ConvertToGigagroupHandler(IUnitOfWork unitOfWork, IChannelMessagesRepository channelMessagesRepository, IAuthorizationRepository authorizationRepository, IChannelAdminLogRepository channelAdminLogRepository, IChannelAdminRepository channelAdminRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IMessageRepository messageRepository, IUserRepository userRepository,

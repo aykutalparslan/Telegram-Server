@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -59,8 +58,6 @@ public sealed class ReceivedQueueHandler
             return RpcErrorGenerator.GenerateError(400, "MAX_QTS_INVALID"u8);
         }
 
-        // receivedQueue returns random ids whose scheduled pushes were cancelled.
-        // Ferrite has no push scheduler yet, so no ids may be fabricated.
         var cancelledRandomIds = new VectorOfLong();
         byte[] bytes = cancelledRandomIds.ToReadOnlySpan().ToArray();
         return new TLBytes(bytes, 0, bytes.Length);

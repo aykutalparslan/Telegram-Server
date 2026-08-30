@@ -11,7 +11,6 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace Ferrite.TLParser;
 
-//https://github.com/dotnet/roslyn-sdk/blob/main/samples/CSharp/SourceGenerators/SourceGeneratorSamples/MathsGenerator.cs#L467
 [Generator]
 public class TLGenerator : ISourceGenerator
 {

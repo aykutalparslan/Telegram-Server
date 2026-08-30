@@ -8,7 +8,7 @@ namespace Ferrite.Services.Handlers.AccountMethods;
 
 public sealed class GetChannelRestrictedStatusEmojisHandler : EmojiCatalogueHandlerBase
 {
-    public GetChannelRestrictedStatusEmojisHandler(StickerStore stickers,
+    public GetChannelRestrictedStatusEmojisHandler(EmojiCatalogStore stickers,
         ProfileStore profiles) : base(stickers, profiles) { }
 
     [TLFunction(Constructors.baseLayer_GetChannelRestrictedStatusEmojis)]

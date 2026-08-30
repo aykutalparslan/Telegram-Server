@@ -3,7 +3,6 @@
 
 using System.Text;
 using DotNext.Collections.Generic;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -20,9 +19,9 @@ public sealed class SearchHandler : ContactsHandlerBase
     private readonly IChatRepository _chatRepository;
     private readonly IUserRepository _userRepository;
 
-    public SearchHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
+    public SearchHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IContactsRepository contactsRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
         IUpdatesService updates, IUpdatesContextFactory updatesContextFactory)
-        : base(unitOfWork, userRepository, userStatusRepository, search, updates, updatesContextFactory)
+        : base(unitOfWork, contactsRepository, userRepository, userStatusRepository, search, updates, updatesContextFactory)
     {
         _authorizationRepository = authorizationRepository;
         _chatParticipantsRepository = chatParticipantsRepository;
@@ -43,7 +42,7 @@ public sealed class SearchHandler : ContactsHandlerBase
             List<TLUser> users = new();
             foreach (var u in searchResults)
             {
-                var user = _userRepository.GetUser(u.Id);
+                var user = await GetUserInternal(searcherUserId, u.Id);
                 if (user != null)
                 {
                     peers.Add(new PeerUser(u.Id));
@@ -51,8 +50,6 @@ public sealed class SearchHandler : ContactsHandlerBase
                 }
             }
 
-            // Public channels (indexed when a username is assigned) surface after users;
-            // rows are adjusted per viewer so non-members do not see the creator flags.
             var chatResults = await _search.SearchChats(query, limit);
             var chatRowBytes = new List<byte[]>();
             foreach (var c in chatResults)

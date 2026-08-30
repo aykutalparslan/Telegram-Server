@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -55,8 +54,6 @@ public sealed class CreateChannelHandler : ChannelsHandlerBase
         long creatorUserId = auth.Value.AsAuthInfo().UserId;
         var request = (CreateChannel)q;
         bool forum = request.Forum;
-        // TDLib sends createChannel(forum:true) without also setting megagroup.
-        // A forum is always a supergroup, so normalize the stored channel shape.
         bool broadcast = request.Broadcast && !forum;
         bool megagroup = request.Megagroup || forum;
         byte[] title = request.Title.ToArray();
@@ -75,10 +72,6 @@ public sealed class CreateChannelHandler : ChannelsHandlerBase
         byte[] channelBytes;
         {
             using var chatPhoto = ChatPhotoEmpty.Builder().Build();
-            // An empty ban set, sent rather than omitted: the pinned client reads
-            // an absent default_banned_rights as permitting NOTHING, which leaves
-            // every plain member unable to post. See
-            // ChatRights.BuildUnrestrictedDefaultBannedRights.
             byte[] defaultBannedRights =
                 ChatRights.BuildUnrestrictedDefaultBannedRights();
             var channelBuilder = Channel.Builder()
@@ -123,15 +116,12 @@ public sealed class CreateChannelHandler : ChannelsHandlerBase
             .Build();
         _chatParticipantsRepository.PutParticipant(creatorParticipant);
 
-        // Newly created channels already have a default permanent invite link.
         using (TLChatInviteInfo defaultInvite =
                ChatInvites.CreateDefaultPermanentInvite(channelId, creatorUserId, date))
         {
             _chatInvitesRepository.PutInvite(defaultInvite);
         }
 
-        // Channel box: message id starts at 1, pts is seeded to 1 and advances to 2
-        // for the creation event, matching the "pts starts at 1" convention.
         var channelBox = new ChannelMessageBox(_counterFactory, channelId);
         int messageId = await channelBox.NextMessageId();
         using TLPeer channelPeer = new PeerChannel(channelId);
@@ -154,9 +144,6 @@ public sealed class CreateChannelHandler : ChannelsHandlerBase
             _channelMessagesRepository.PutMessage(channelId, serviceMessage, creationPts);
         }
 
-        // The creating client carries its own default auto-delete period in the
-        // request, which is how a new channel inherits it; the account-wide default
-        // never rewrites a conversation that already exists.
         if (requestedTtlPeriod > 0)
         {
             _settings.Put(ChatSettingsScope.ForChannel(channelId),
@@ -182,10 +169,6 @@ public sealed class CreateChannelHandler : ChannelsHandlerBase
             resultUpdates.AppendTLObject(updateChannel.AsSpan());
         }
 
-        // TDLib's on_create_new_dialog (CreateChannelQuery) rejects the result unless the
-        // creation service message is paired with an updateMessageID carrying a nonzero
-        // random_id (get_sent_messages_random_ids must return exactly one), mirroring the
-        // basic-group createChat requirement.
         long randomId;
         do
         {
@@ -209,7 +192,7 @@ public sealed class CreateChannelHandler : ChannelsHandlerBase
         }
 
         var userVector = new Vector();
-        AppendUser(ref userVector, creatorUserId);
+        AppendUser(creatorUserId, ref userVector, creatorUserId);
         var chatVector = new Vector();
         chatVector.AppendTLObject(channelBytes);
 

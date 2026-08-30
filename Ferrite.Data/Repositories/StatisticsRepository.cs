@@ -15,18 +15,12 @@ public sealed class StatisticsRepository : IStatisticsRepository
         _publicForwards = publicForwards;
         _graphTokens = graphTokens;
 
-        // The source post leads the key so one post's forwards are a contiguous
-        // prefix; the destination completes it so the same forward recorded twice
-        // is the same row.
         publicForwards.SetSchema(new TableDefinition("ferrite", "public_forwards",
             new KeyDefinition("pk",
                 new DataColumn { Name = "channel_id", Type = DataType.Long },
                 new DataColumn { Name = "msg_id", Type = DataType.Int },
                 new DataColumn { Name = "fwd_channel_id", Type = DataType.Long },
                 new DataColumn { Name = "fwd_msg_id", Type = DataType.Int })));
-        // The column is `graph_token` rather than `token`: CQL RESERVES `token`
-        // as a function name, and the distributed adapter's CREATE TABLE fails
-        // to parse with it. The row's TL field is still `token`.
         graphTokens.SetSchema(new TableDefinition("ferrite", "stats_graph_tokens",
             new KeyDefinition("pk",
                 new DataColumn { Name = "graph_token", Type = DataType.String })));

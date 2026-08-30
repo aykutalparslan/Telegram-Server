@@ -10,22 +10,28 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class SaveGifHandler : StickerHandlerBase
 {
-    public SaveGifHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerCollectionStore _collections;
+
+    public SaveGifHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerCollectionStore store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _collections = store;
+    }
 
     [TLFunction(Constructors.baseLayer_SaveGif)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
     {
         var request = (SaveGif)q;
-        var input = StickerStore.ReadInputDocument(request.Get_IdView());
+        var input = StickerInput.ReadInputDocument(request.Get_IdView());
         bool unsave = request.Unsave;
         if (!input.Id.HasValue || !input.AccessHash.HasValue)
             return Invalid("STICKER_ID_INVALID");
         long? userId = await GetUserIdAsync(authKeyId);
         return userId.HasValue
-            ? await Store.SaveCollectionDocumentAsync(userId.Value, authKeyId,
+            ? await _collections.SaveCollectionDocumentAsync(userId.Value, authKeyId,
                 input.Id.Value, input.AccessHash.Value,
-                StickerStore.AccountCollection.SavedGifs, unsave)
+                StickerCollection.SavedGifs, unsave)
             : AuthError();
     }
 }

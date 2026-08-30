@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -10,20 +9,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// The supergroups the caller could attach to a broadcast channel as its
-/// discussion group, which is what `td_api::getSuitableDiscussionChats`
-/// (`Requests.cpp:3263`) offers.
-///
-/// Eligibility mirrors what `channels.setDiscussionGroup` would actually accept,
-/// so the list never offers a group the link would then refuse: a megagroup the
-/// caller can pin messages in (`ChatManager.cpp:3602`), not already linked to
-/// another channel, and without a hidden pre-history — a discussion group whose
-/// history new arrivals cannot read is not a usable one.
-///
-/// A GIGAGROUP is excluded. It is a broadcast group, so it cannot itself be a
-/// discussion group, and `convertToGigagroup` is one-way.
-/// </summary>
 public sealed class GetGroupsForDiscussionHandler : ChannelCatalogueHandlerBase
 {
     private readonly IChannelAdminRepository _channelAdminRepository;

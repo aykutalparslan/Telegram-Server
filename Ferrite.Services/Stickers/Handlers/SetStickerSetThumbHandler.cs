@@ -9,14 +9,20 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class SetStickerSetThumbHandler : StickerHandlerBase
 {
-    public SetStickerSetThumbHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerSetEditor _editor;
+
+    public SetStickerSetThumbHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerSetEditor store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _editor = store;
+    }
 
     [TLFunction(Constructors.baseLayer_SetStickerSetThumb)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
     {
         var request = (SetStickerSetThumb)q;
-        var set = StickerStore.ReadInputSet(request.Get_StickersetView());
+        var set = StickerInput.ReadInputSet(request.Get_StickersetView());
         bool hasThumb = request.Flags[0];
         bool hasDocumentId = request.Flags[1];
         if (hasThumb == hasDocumentId) return Invalid("STICKER_ID_INVALID");
@@ -24,7 +30,7 @@ public sealed class SetStickerSetThumbHandler : StickerHandlerBase
         long? thumbAccessHash;
         if (hasThumb)
         {
-            var thumb = StickerStore.ReadInputDocument(request.Get_ThumbView());
+            var thumb = StickerInput.ReadInputDocument(request.Get_ThumbView());
             if (!thumb.Id.HasValue || !thumb.AccessHash.HasValue)
                 return Invalid("STICKER_ID_INVALID");
             thumbId = thumb.Id.Value;
@@ -38,7 +44,7 @@ public sealed class SetStickerSetThumbHandler : StickerHandlerBase
         }
         long? userId = await GetUserIdAsync(authKeyId);
         return userId.HasValue
-            ? await Store.SetThumbAsync(userId.Value, set.Id, set.AccessHash,
+            ? await _editor.SetThumbAsync(userId.Value, set.Id, set.AccessHash,
                 set.ShortName, thumbId, thumbAccessHash) : AuthError();
     }
 }

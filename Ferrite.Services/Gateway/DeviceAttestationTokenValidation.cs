@@ -10,9 +10,6 @@ public enum DeviceAttestationTokenKind
     ApplePushSecret
 }
 
-/// <summary>
-/// An untrusted device-attestation token and the request it is bound to.
-/// </summary>
 public sealed class DeviceAttestationTokenValidationRequest
 {
     public DeviceAttestationTokenValidationRequest(
@@ -36,9 +33,6 @@ public sealed class DeviceAttestationTokenValidationRequest
         $"{nameof(DeviceAttestationTokenValidationRequest)} {{ Kind = {Kind}, Credentials = <redacted> }}";
 }
 
-/// <summary>
-/// Validates Firebase, device-integrity, and APNs proof tokens.
-/// </summary>
 public interface IDeviceAttestationTokenValidator
 {
     ValueTask<bool> ValidateAsync(
@@ -46,9 +40,6 @@ public interface IDeviceAttestationTokenValidator
         CancellationToken cancellationToken = default);
 }
 
-/// <summary>
-/// Safe production default used until a deployment configures a trusted issuer.
-/// </summary>
 public sealed class RejectingDeviceAttestationTokenValidator :
     IDeviceAttestationTokenValidator
 {

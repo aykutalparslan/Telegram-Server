@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -12,17 +11,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Shared plumbing for property toggles: the ones that mutate one
-/// channel property and answer <c>Updates</c>.
-///
-/// Every one of them MUST finish through <see cref="CompleteAsync"/>, which fans
-/// the change out to every OTHER member. Placing <c>updateChannel</c> only in the
-/// actor's own RPC result is the `7630f49c` defect: the actor sees the change,
-/// every other member keeps a cached <c>channelFull</c> forever, and the
-/// diagnostic signature is ZERO requests from that member, so there is no failing
-/// request to find.
-/// </summary>
 public abstract class ChannelPropertyHandlerBase : ChannelsHandlerBase
 {
     private readonly IChannelAdminRepository _channelAdminRepository;
@@ -42,10 +30,6 @@ public abstract class ChannelPropertyHandlerBase : ChannelsHandlerBase
 
     }
 
-    /// <summary>
-    /// The facts a toggle needs before it decides anything. Read in one
-    /// synchronous frame so no view outlives its buffer across an await.
-    /// </summary>
     protected readonly record struct ChannelFacts(Flags Flags, Flags Flags2,
         bool Megagroup, bool Broadcast, int ParticipantsCount);
 
@@ -57,13 +41,6 @@ public abstract class ChannelPropertyHandlerBase : ChannelsHandlerBase
             channel.Broadcast, channel.ParticipantsCount);
     }
 
-    /// <summary>
-    /// Rewrites and persists the stored channel row with up to one bare flag
-    /// changed in each flag word. A bit index below zero leaves that word alone.
-    /// Two independent bits are expressible because <c>toggleSignatures</c> owns
-    /// <c>signatures</c> and <c>signature_profiles</c> separately and must not
-    /// collapse them into one.
-    /// </summary>
     protected byte[] StoreChannelFlags(byte[] channelBytes,
         int flagBit = -1, bool flagValue = false,
         int flags2Bit = -1, bool flags2Value = false)
@@ -86,11 +63,6 @@ public abstract class ChannelPropertyHandlerBase : ChannelsHandlerBase
         return updated.AsSpan().ToArray();
     }
 
-    /// <summary>
-    /// The stored administration row, or the all-clear row a channel without one
-    /// behaves as, so callers mutate rather than branch on absence. The result is
-    /// owned and must be disposed.
-    /// </summary>
     protected async Task<TLChannelAdminState> LoadAdminStateAsync(long channelId,
         int date)
     {
@@ -99,12 +71,6 @@ public abstract class ChannelPropertyHandlerBase : ChannelsHandlerBase
         return stored ?? ChannelAdminStateRows.Empty(channelId, date);
     }
 
-    /// <summary>
-    /// Persists everything the toggle wrote, answers the actor with
-    /// <c>Updates(updateChannel)</c>, and pushes the same update to every other
-    /// active member. Order matters: the fanout runs after the save so nobody
-    /// re-reads a stale row.
-    /// </summary>
     protected async Task<Ferrite.TL.baseLayer.TLUpdates> CompleteAsync(long authKeyId,
         long actorUserId, long channelId, byte[] channelBytes)
     {

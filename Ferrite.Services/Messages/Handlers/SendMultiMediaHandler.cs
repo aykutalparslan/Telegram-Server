@@ -3,6 +3,7 @@
 
 using System.Text;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Scheduling;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.messages;
@@ -123,8 +124,6 @@ public sealed class SendMultiMediaHandler
         long groupedId = await _ids.NextMediaGroupIdAsync();
         if (snapshot.ScheduleDate > 0 && _schedule.IsQueued(snapshot.ScheduleDate))
         {
-            // An album keeps its grouping key in the queue, so the flushed copies
-            // are still one album in the destination.
             var queuedItems = new List<ScheduledMessageSender.ScheduledItem>(
                 snapshot.Items.Count);
             for (int i = 0; i < snapshot.Items.Count; i++)

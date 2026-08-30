@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -456,7 +455,7 @@ public abstract class ChatJoinRequestHandlerBase
         {
             resultUserIds.Add(importer.UserId);
         }
-        return _fanout.BuildUpdates(resultUpdateBytes, resultUserIds,
+        return _fanout.BuildUpdates(currentUserId, resultUpdateBytes, resultUserIds,
             new[] { resultChatBytes }, date, seq);
     }
 

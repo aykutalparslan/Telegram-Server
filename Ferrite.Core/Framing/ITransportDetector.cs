@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Buffers;
-using Ferrite.Services;
 
 namespace Ferrite.Core.Framing
 {

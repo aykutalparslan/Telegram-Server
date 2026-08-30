@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -13,11 +12,6 @@ using TLDto = Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.exportGroupCallInvite. Public members may export a listen-only deep
-/// link, while only manage-call admins may mint the dedicated invite hash that
-/// grants can_self_unmute on a muted join.
-/// </summary>
 public sealed class ExportGroupCallInviteHandler : GroupCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;

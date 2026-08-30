@@ -13,6 +13,24 @@ public sealed class UploadWallPaperHandler : WallpaperHandlerBase
     public UploadWallPaperHandler(WallpaperStore store, ProfileStore profiles)
         : base(store, profiles) { }
 
+    [TLFunction(Constructors.layer95_AccountUploadWallPaper)]
+    public async Task<TLBytes> HandleLayer95(long authKeyId, TLBytes q)
+    {
+        using var current = ToCurrentUploadWallPaperRequest(q);
+        return await Handle(authKeyId, current);
+    }
+
+    private static TLBytes ToCurrentUploadWallPaperRequest(TLBytes q)
+    {
+        var sent = new TL.layer95.account.AccountUploadWallPaper(q.AsSpan());
+        var current = UploadWallPaper.Builder()
+            .File(sent.File)
+            .MimeType(sent.MimeType)
+            .Settings(sent.Settings)
+            .Build();
+        return current.TLBytes!.Value;
+    }
+
     [TLFunction(Constructors.baseLayer_UploadWallPaper)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
     {

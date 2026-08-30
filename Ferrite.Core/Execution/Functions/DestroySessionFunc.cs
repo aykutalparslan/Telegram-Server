@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Services;
+using Ferrite.Services.Sessions;
 using Ferrite.Core.Execution;
 using Ferrite.TL;
 using Ferrite.TL.mtproto;
@@ -23,11 +23,6 @@ public class DestroySessionFunc : ITLFunction
         var request = new DestroySession(q.AsSpan());
         long sessionId = request.SessionId;
 
-        // destroy_session is an MTProto service message: the client asks the
-        // server to forget a DIFFERENT session belonging to the same auth key.
-        // The response is a top-level destroy_session_ok / destroy_session_none
-        // message (NOT wrapped in rpc_result -- Android tgnet, iOS MtProtoKit,
-        // and TDLib all parse DestroySessionRes as a top-level mtproto object).
         var sessions = await _sessions.GetSessionsAsync(ctx.CurrentAuthKeyId);
         bool exists = sessions.Any(s => s.SessionId == sessionId);
         if (exists)

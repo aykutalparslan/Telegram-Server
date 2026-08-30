@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -40,7 +39,6 @@ public sealed class GetAdminsWithInvitesHandler : MessagesHandlerBase
             }
             if (!context!.IsCreator)
             {
-                // Per-admin invite stats are owner-only.
                 return ErrorChatAdminsWithInvites("CHAT_ADMIN_REQUIRED");
             }
 
@@ -67,7 +65,7 @@ public sealed class GetAdminsWithInvitesHandler : MessagesHandlerBase
                 adminsVector.AppendTLObject(admin.ToReadOnlySpan());
             }
             var userVector = new Vector();
-            AppendUsers(ref userVector, byAdmin.Keys);
+            AppendUsers(context!.CurrentUserId, ref userVector, byAdmin.Keys);
 
             return ChatAdminsWithInvites.Builder()
                 .Admins(adminsVector)

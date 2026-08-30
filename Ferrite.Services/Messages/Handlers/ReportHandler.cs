@@ -10,15 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// The interactive report protocol pinned TDLib drives through `ReportPeerQuery`
-/// (`DialogManager.cpp:480`). An empty `option` is the client asking what it may
-/// report, so the server answers with the deterministic reason menu; the client
-/// then re-invokes the method with one menu token and the report is accepted.
-/// Ferrite never asks for a second comment step: `reportResultAddComment` would
-/// force another round trip for a comment the client may already have supplied
-/// in `message`, and every menu entry is self-explanatory.
-/// </summary>
 public sealed class ReportHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -124,8 +115,6 @@ public sealed class ReportHandler
 
     private static List<int> ReadIds(VectorOfInt ids)
     {
-        // Duplicates collapse, but an out-of-range id is kept so validation can
-        // reject it rather than quietly accept a report naming no message.
         var messageIds = new List<int>(ids.Count);
         for (int i = 0; i < ids.Count; i++)
         {

@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -48,12 +47,10 @@ public sealed class LeaveChannelHandler : ChannelsHandlerBase
         if (!active)
         {
             existing?.Dispose();
-            // Idempotent: already not a member; echo the channel row without changes.
             return await BuildChannelUpdates(authKeyId, currentUserId, channelBytes,
                 Array.Empty<long>());
         }
 
-        // Mark left rather than deleting so inviter/date survive a re-join.
         using (TLChatParticipantInfo left = existing!.Value.AsChatParticipantInfo().Clone()
                    .Role((int)ChatParticipantRole.Left)
                    .Build())

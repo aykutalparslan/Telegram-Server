@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -12,12 +11,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Applies a generated chat wallpaper, clears it, restores a wallpaper that was
-/// overridden by the other private participant, or accepts an earlier wallpaper
-/// service message. Image and pattern lookup remains owned by the /// account-wallpaper surface; this handler can resolve generated no-file fills
-/// without inventing a second wallpaper catalogue.
-/// </summary>
 public sealed class SetChatWallPaperHandler : MessagesHandlerBase
 {
     private readonly IChannelMessagesRepository _channelMessagesRepository;
@@ -108,8 +101,6 @@ public sealed class SetChatWallPaperHandler : MessagesHandlerBase
         }
         if (operation == WallpaperOperation.Set && !generatedFill)
         {
-            // inputWallPaper/inputWallPaperSlug require the account wallpaper
-            // catalogue and upload lifecycle.
             return ErrorUpdates("WALLPAPER_NOT_FOUND");
         }
 
@@ -282,7 +273,7 @@ public sealed class SetChatWallPaperHandler : MessagesHandlerBase
 
         _log.Debug($"🖼️ SetChatWallPaper user:{userId} peer:{peerUserId} " +
                    $"same:{same} forBoth:{forBoth}");
-        return _fanout.BuildUpdates(updateBytes, new[] { userId, peerUserId },
+        return _fanout.BuildUpdates(userId, updateBytes, new[] { userId, peerUserId },
             Array.Empty<byte[]>(), date, seq);
     }
 
@@ -325,7 +316,7 @@ public sealed class SetChatWallPaperHandler : MessagesHandlerBase
             .IncrementSeq();
         _log.Debug($"🖼️ SetChatWallPaper user:{userId} peer:{peerUserId} " +
                    (revert ? "revert" : "delete"));
-        return _fanout.BuildUpdates(new[] { updateBytes },
+        return _fanout.BuildUpdates(userId, new[] { updateBytes },
             new[] { userId, peerUserId }, Array.Empty<byte[]>(), UnixNow(), seq);
     }
 
@@ -366,7 +357,7 @@ public sealed class SetChatWallPaperHandler : MessagesHandlerBase
                 userId, new[] { cleared });
             int deleteSeq = await _updatesContextFactory
                 .GetUpdatesContext(authKeyId, userId).IncrementSeq();
-            return _fanout.BuildUpdates(new[] { cleared }, new[] { userId },
+            return _fanout.BuildUpdates(userId, new[] { cleared }, new[] { userId },
                 new[] { channelBytes }, date, deleteSeq);
         }
 
@@ -407,7 +398,7 @@ public sealed class SetChatWallPaperHandler : MessagesHandlerBase
         }
         updateBytes.Add(wallpaperUpdate);
         _log.Debug($"🖼️ SetChatWallPaper user:{userId} channel:{channelId}");
-        return _fanout.BuildUpdates(updateBytes, new[] { userId },
+        return _fanout.BuildUpdates(userId, updateBytes, new[] { userId },
             new[] { channelBytes }, date, seq);
     }
 

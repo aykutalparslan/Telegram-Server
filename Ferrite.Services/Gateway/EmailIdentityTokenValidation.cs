@@ -9,9 +9,6 @@ public enum EmailIdentityTokenProvider
     Apple
 }
 
-/// <summary>
-/// An untrusted identity token supplied instead of an emailed verification code.
-/// </summary>
 public sealed class EmailIdentityTokenValidationRequest
 {
     public EmailIdentityTokenValidationRequest(
@@ -28,9 +25,6 @@ public sealed class EmailIdentityTokenValidationRequest
         $"{nameof(EmailIdentityTokenValidationRequest)} {{ Provider = {Provider}, Token = <redacted> }}";
 }
 
-/// <summary>
-/// The email address proven by a trusted Apple or Google identity token.
-/// </summary>
 public readonly struct EmailIdentityTokenValidationResult
 {
     private EmailIdentityTokenValidationResult(bool isValid, string? email)
@@ -51,9 +45,6 @@ public readonly struct EmailIdentityTokenValidationResult
     }
 }
 
-/// <summary>
-/// Validates Apple and Google email identity tokens at the external trust boundary.
-/// </summary>
 public interface IEmailIdentityTokenValidator
 {
     ValueTask<EmailIdentityTokenValidationResult> ValidateAsync(
@@ -61,9 +52,6 @@ public interface IEmailIdentityTokenValidator
         CancellationToken cancellationToken = default);
 }
 
-/// <summary>
-/// Safe production default used until a deployment configures a trusted issuer.
-/// </summary>
 public sealed class RejectingEmailIdentityTokenValidator :
     IEmailIdentityTokenValidator
 {

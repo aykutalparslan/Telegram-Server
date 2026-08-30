@@ -4,6 +4,7 @@
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.dto;
+using Ferrite.Data.Models;
 
 namespace Ferrite.Data.Repositories;
 

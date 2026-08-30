@@ -9,17 +9,23 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class DeleteStickerSetHandler : StickerHandlerBase
 {
-    public DeleteStickerSetHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerSetEditor _editor;
+
+    public DeleteStickerSetHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerSetEditor store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _editor = store;
+    }
 
     [TLFunction(Constructors.baseLayer_DeleteStickerSet)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
     {
-        var set = StickerStore.ReadInputSet(
+        var set = StickerInput.ReadInputSet(
             ((DeleteStickerSet)q).Get_StickersetView());
         long? userId = await GetUserIdAsync(authKeyId);
         return userId.HasValue
-            ? await Store.DeleteAsync(userId.Value, set.Id, set.AccessHash,
+            ? await _editor.DeleteAsync(userId.Value, set.Id, set.AccessHash,
                 set.ShortName) : AuthError();
     }
 }

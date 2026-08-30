@@ -66,7 +66,7 @@ public class SessionRepository : ISessionRepository
     public ICollection<long> GetSessionsByAuthKey(long authKeyId, TimeSpan expire)
     {
         var time = DateTimeOffset.Now - expire;
-        _storeByAuthKey.ListDeleteByScore(time.ToUnixTimeMilliseconds());
+        _storeByAuthKey.ListDeleteByScore(time.ToUnixTimeMilliseconds(), authKeyId);
         var result = new List<long>();
         foreach (byte[] bytes in _storeByAuthKey.ListGet(authKeyId))
         {

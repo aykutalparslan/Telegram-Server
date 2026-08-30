@@ -8,11 +8,6 @@ namespace Ferrite.Data.Repositories;
 
 public static class MessageIds
 {
-    /// <summary>
-    /// Reads the message id from any stored Message variant. The message,
-    /// messageService, and messageEmpty constructors have different layouts,
-    /// so the id must be read through the matching concrete view.
-    /// </summary>
     public static int GetId(in TLMessage message) => message.Type switch
     {
         TLMessage.MessageType.Message => message.AsMessage().Id,

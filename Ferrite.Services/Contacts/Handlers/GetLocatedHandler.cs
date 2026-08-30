@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -11,17 +10,6 @@ using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Handlers.ContactMethods;
 
-/// <summary>
-/// Publishes and reads the nearby-people list. `self_expires` is what makes the
-/// call a write: present means publish or refresh for that many seconds, present
-/// and zero means stop sharing, absent means read only. The answer is an
-/// `updatePeerLocated` carrying every other still-sharing user by distance, plus
-/// `peerSelfLocated` when the caller is sharing.
-///
-/// Ferrite does not model geo-groups, so only users are located. Pinned TDLib no
-/// longer exposes the nearby flow at all, so its generated-request integration is
-/// the exact gate.
-/// </summary>
 public sealed class GetLocatedHandler : ContactsHandlerBase
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -29,10 +17,10 @@ public sealed class GetLocatedHandler : ContactsHandlerBase
     private readonly NearbyLocationStore _nearby;
     private readonly UpdateFanout _fanout;
 
-    public GetLocatedHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
+    public GetLocatedHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IContactsRepository contactsRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
         IUpdatesService updates, IUpdatesContextFactory updatesContextFactory,
         NearbyLocationStore nearby, UpdateFanout fanout)
-        : base(unitOfWork, userRepository, userStatusRepository, search, updates, updatesContextFactory)
+        : base(unitOfWork, contactsRepository, userRepository, userStatusRepository, search, updates, updatesContextFactory)
     {
         _authorizationRepository = authorizationRepository;
 
@@ -68,7 +56,6 @@ public sealed class GetLocatedHandler : ContactsHandlerBase
             return Error(400, "GEO_POINT_INVALID");
         }
 
-        // Stopping needs no coordinates; measuring does.
         bool stopping = publishes && selfExpires <= 0;
         if (!hasPoint && !stopping)
         {
@@ -93,8 +80,6 @@ public sealed class GetLocatedHandler : ContactsHandlerBase
             ? await _nearby.FindNearbyAsync(userId, lat, lon)
             : [];
         NearbyPeer? self = await _nearby.GetLiveAsync(userId);
-        // Reading the list is what retires expired rows, so the pass may have
-        // deleted some; committing here keeps that GC durable.
         await _unitOfWork.SaveAsync();
 
         return BuildResult(userId, nearby, self);
@@ -130,7 +115,7 @@ public sealed class GetLocatedHandler : ContactsHandlerBase
         {
             updateBytes = update.AsSpan().ToArray();
         }
-        return _fanout.BuildUpdates([updateBytes], relatedUserIds, [], _nearby.Now(),
+        return _fanout.BuildUpdates(userId, [updateBytes], relatedUserIds, [], _nearby.Now(),
             seq: 0);
     }
 

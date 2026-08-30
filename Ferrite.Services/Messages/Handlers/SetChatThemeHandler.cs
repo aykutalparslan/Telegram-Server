@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -13,10 +12,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Sets or clears the shared theme of a conversation and announces it with a
-/// messageActionSetChatTheme service message.
-/// </summary>
 public sealed class SetChatThemeHandler : MessagesHandlerBase
 {
     private readonly IChannelMessagesRepository _channelMessagesRepository;
@@ -143,7 +138,7 @@ public sealed class SetChatThemeHandler : MessagesHandlerBase
 
         _log.Debug($"🎨 SetChatTheme user:{userId} peer:{peerUserId} " +
                    $"theme:{emoticon ?? "(none)"}");
-        return _fanout.BuildUpdates(updateBytes, new[] { userId, peerUserId },
+        return _fanout.BuildUpdates(userId, updateBytes, new[] { userId, peerUserId },
             Array.Empty<byte[]>(), date, seq);
     }
 
@@ -225,7 +220,7 @@ public sealed class SetChatThemeHandler : MessagesHandlerBase
 
         _log.Debug($"🎨 SetChatTheme user:{userId} channel:{channelId} " +
                    $"theme:{emoticon ?? "(none)"}");
-        return _fanout.BuildUpdates(updateBytes, new[] { userId },
+        return _fanout.BuildUpdates(userId, updateBytes, new[] { userId },
             new[] { channelBytes }, date, seq);
     }
 

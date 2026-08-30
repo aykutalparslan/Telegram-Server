@@ -4,18 +4,12 @@
 using System.Buffers;
 using System.IO.Pipelines;
 using Ferrite.Core.Execution;
-using Ferrite.Services;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer.upload;
 using DotNext.IO.Pipelines;
 
 namespace Ferrite.Core.Execution.Functions.BaseLayer.Upload;
 
-/// <summary>
-/// Buffered twin of <see cref="SaveBigFilePartFunc"/>; see
-/// <see cref="SaveFilePartBufferedFunc"/> for why wrapped save-part requests
-/// bypass the streaming path.
-/// </summary>
 [TLFunction(Constructors.baseLayer_SaveBigFilePart)]
 public class SaveBigFilePartBufferedFunc : ITLFunction
 {
@@ -29,7 +23,7 @@ public class SaveBigFilePartBufferedFunc : ITLFunction
     public async ValueTask<TLBytes?> Process(TLBytes q, TLExecutionContext ctx)
     {
         var reader = PipeReader.Create(new ReadOnlySequence<byte>(q.AsSpan().ToArray()));
-        _ = await reader.ReadInt32Async(true); // constructor, already dispatched
+        _ = await reader.ReadInt32Async(true);
         var request = await SaveBigFilePart.ReadAsync(reader);
         var result = await _uploadService.SaveBigFilePart(request.FileId, request.FilePart,
             request.FileTotalParts, request.Bytes);

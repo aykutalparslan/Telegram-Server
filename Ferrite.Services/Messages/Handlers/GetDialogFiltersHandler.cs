@@ -40,12 +40,12 @@ public sealed class GetDialogFiltersHandler
             userId = auth.Value.AsAuthInfo().UserId;
         }
 
-        List<DialogFilterSnapshot> stored = await _filters.GetFiltersAsync(userId);
+        List<byte[]> stored = await _filters.GetFilterVectorAsync(userId);
         bool tagsEnabled = await _filters.GetTagsEnabledAsync(userId);
         var values = new Vector();
-        foreach (DialogFilterSnapshot filter in stored)
+        foreach (byte[] filter in stored)
         {
-            values.AppendTLObject(filter.Filter);
+            values.AppendTLObject(filter);
         }
         var builder = DialogFilters.Builder().Filters(values);
         if (tagsEnabled) builder = builder.TagsEnabled(true);

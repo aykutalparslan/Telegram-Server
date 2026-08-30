@@ -3,7 +3,6 @@
 
 using System.Text;
 using Ferrite.Crypto;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.Utils;
@@ -23,13 +22,15 @@ public sealed class UpdateProfilePhotoHandler : PhotosHandlerBase
 {
     private readonly IPhotoRepository _photoRepository;
     private readonly IUserRepository _userRepository;
+    private readonly UserSerializer _userSerializer;
 
-    public UpdateProfilePhotoHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IContactsRepository contactsRepository, IPhotoRepository photoRepository, IUserRepository userRepository, IUpdatesService updates,
+    public UpdateProfilePhotoHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IContactsRepository contactsRepository, IPhotoRepository photoRepository, IUserRepository userRepository, UserSerializer userSerializer, IUpdatesService updates,
         ILogger log)
         : base(unitOfWork, authorizationRepository, contactsRepository, photoRepository, userRepository, updates, log)
     {
         _photoRepository = photoRepository;
         _userRepository = userRepository;
+        _userSerializer = userSerializer;
 
     }
 
@@ -46,10 +47,6 @@ public sealed class UpdateProfilePhotoHandler : PhotosHandlerBase
             var input = (InputPhotoView)new UpdateProfilePhoto(q.AsSpan()).Id;
             if (input.Is(out InputPhotoEmpty _))
             {
-                // TDLib deletes the CURRENT profile photo through
-                // photos.updateProfilePhoto(inputPhotoEmpty) (never deletePhotos),
-                // so this branch removes the photo and promotes the next most
-                // recent one.
                 long? currentId = GetCurrentPhotoId(user);
                 var ownedRows = _photoRepository.GetProfilePhotos(identity.Value.UserId);
                 try
@@ -84,10 +81,10 @@ public sealed class UpdateProfilePhotoHandler : PhotosHandlerBase
                     if (promotedRow != null)
                     {
                         using TLPhoto promoted = CopyPhoto(promotedRow.Value);
-                        return BuildPhotoResult(promoted, cleared);
+                        return BuildPhotoResult(identity.Value.UserId, promoted, cleared, _userSerializer);
                     }
                     using TLPhoto empty = PhotoEmpty.Builder().Id(0).Build();
-                    return BuildPhotoResult(empty, cleared);
+                    return BuildPhotoResult(identity.Value.UserId, empty, cleared, _userSerializer);
                 }
                 finally
                 {
@@ -126,6 +123,6 @@ public sealed class UpdateProfilePhotoHandler : PhotosHandlerBase
 
             await PushUserInvalidation(identity.Value.UserId);
             using TLPhoto resultPhoto = CopyPhoto(canonical.Value);
-            return BuildPhotoResult(resultPhoto, updatedUser);
+            return BuildPhotoResult(identity.Value.UserId, resultPhoto, updatedUser, _userSerializer);
         }
 }

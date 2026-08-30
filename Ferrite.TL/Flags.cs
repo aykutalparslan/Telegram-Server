@@ -14,10 +14,6 @@ public struct Flags
         _value = unchecked((uint)value);
     }
     private uint _value;
-    // Some schemas use the flags word as a value in its own right rather than
-    // only as presence bits — tde2e's e2e.chainGroupParticipant stores its
-    // permission mask there, and bits outside the known set are load-bearing
-    // because the reference rejects a group state that sets them.
     public readonly int ToInt() => unchecked((int)_value);
     public bool this[int n]
     {

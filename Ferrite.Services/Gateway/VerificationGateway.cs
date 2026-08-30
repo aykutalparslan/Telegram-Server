@@ -16,45 +16,44 @@ public class VerificationGateway : IVerificationGateway
     
     public ValueTask<string> SendNotification(string phone)
     {
-        return ValueTask.FromResult(PrintCode(GetCode().ToString()));
+        return ValueTask.FromResult(PrintCode(GetCode().ToString(), phone));
     }
 
     public ValueTask<string> SendCodeViaCall(string phone)
     {
-        return ValueTask.FromResult(PrintCode(GetCode().ToString()));
+        return ValueTask.FromResult(PrintCode(GetCode().ToString(), phone));
     }
 
     public ValueTask<string> SendCodeViaFlashCall(string phone)
     {
-        return ValueTask.FromResult(PrintCode(GetCode().ToString()));
+        return ValueTask.FromResult(PrintCode(GetCode().ToString(), phone));
     }
 
     public ValueTask<string> SendCodeViaMissedCall(string phone)
     {
-        return ValueTask.FromResult(PrintCode(GetCode().ToString()));
+        return ValueTask.FromResult(PrintCode(GetCode().ToString(), phone));
     }
 
     public ValueTask<string> SendEmail(string phone)
     {
-        return ValueTask.FromResult(PrintCode(GetCode().ToString()));
+        return ValueTask.FromResult(PrintCode(GetCode().ToString(), phone));
     }
 
     public ValueTask<string> SendSms(string phone)
     {
-        return ValueTask.FromResult(PrintCode(GetCode().ToString()));
+        return ValueTask.FromResult(PrintCode(GetCode().ToString(), phone));
     }
 
     public ValueTask<SentCodeType> Resend(string phone, string code)
     {
-        PrintCode(code);
+        PrintCode(code, phone);
         return ValueTask.FromResult(SentCodeType.Sms);
     }
 
-    private string PrintCode(string code)
+    private string PrintCode(string code, string phone)
     {
-        string codeStr = code;
-        Console.WriteLine($"Verification code is ==> {codeStr}");
-        return codeStr;
+        Console.WriteLine($"Verification code is ==> {code} for {phone}");
+        return code;
     }
 
     private int GetCode()

@@ -12,14 +12,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.GroupCallMedia;
 
-/// <summary>
-/// Authenticated HTTP/JSON adapter to the pinned mediasoup group-call worker
-///. It owns request/response marshalling, the pinned
-/// protocol version header, bounded retries for idempotent operations, and the
-/// unavailable/rejected/conflict/timeout failure taxonomy. It never persists ICE
-/// credentials or DTLS fingerprints. Its lifecycle owns the bounded reconnecting
-/// disconnect-event stream consumed by the durable reconciliation runtime.
-/// </summary>
 public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
 {
     private const int MaxParticipants = 10_000;
@@ -118,7 +110,6 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        // Join is not idempotent: a blind retry could double-allocate a transport.
         using var httpRequest = Build(HttpMethod.Post,
             ParticipantPath(request.CallId, request.ParticipantId),
             BuildJoinBody(request.Payload));
@@ -146,8 +137,6 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
         GroupCallMediaJoinRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        // Like JoinAsync, never retried: a blind retry could double-allocate the
-        // screen-share transport.
         using var httpRequest = Build(HttpMethod.Post,
             ParticipantPath(request.CallId, request.ParticipantId) + "/presentation",
             BuildJoinBody(request.Payload));
@@ -274,9 +263,6 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
             return ParseViewerSources(document.RootElement);
         }, cancellationToken);
 
-    /// <summary>
-    /// Forwards a worker-originated mapping change to every subscriber.
-    /// </summary>
     internal void DispatchSourcesChanged(GroupCallMediaSourcesChangedEvent changed)
     {
         Action<GroupCallMediaSourcesChangedEvent>[] handlers;
@@ -290,9 +276,6 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
         }
     }
 
-    /// <summary>
-    /// Forwards a worker-originated disconnect to every subscriber.
-    /// </summary>
     internal void DispatchDisconnect(GroupCallMediaDisconnectEvent disconnect)
     {
         Action<GroupCallMediaDisconnectEvent>[] handlers;
@@ -367,10 +350,6 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
         }
     }
 
-    /// <summary>
-    /// One NDJSON worker event line. Both event families are keyed by the same
-    /// <c>reason</c> field, so the reason decides which subscriber list gets it.
-    /// </summary>
     internal void DispatchEvent(string line)
     {
         if (IsSourcesChangedReason(ReadEventReason(line)))
@@ -665,14 +644,6 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
         return new GroupCallVideoAnswer(endpoint, serverSource, codecs, extensions);
     }
 
-    /// <summary>
-    /// Read the per-viewer source map. The worker exposes two fields with two
-    /// distinct shapes, matching its own accessors: <c>viewerMedia</c> carries the
-    /// structured audio+video map (<c>getViewerMedia</c>), while the flat
-    /// <c>viewerSources</c> stays audio-only (<c>getViewerSources</c>) so the Task
-    /// 0 audio fixtures replay unchanged. Neither field is ever ambiguous, and a
-    /// response carrying <c>viewerMedia</c> wins.
-    /// </summary>
     private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, GroupCallViewerSources>>
         ParseViewerSources(JsonElement root)
     {
@@ -757,8 +728,6 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
             groupsElement.ValueKind != JsonValueKind.Array ||
             groupsElement.GetArrayLength() == 0)
         {
-            // A video stream Ferrite cannot address is not serveable; reject the
-            // whole response rather than publish a participant with no sources.
             throw Unmappable($"'{name}' has no source groups");
         }
 

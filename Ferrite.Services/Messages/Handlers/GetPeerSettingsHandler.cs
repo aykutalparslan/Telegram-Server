@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -63,10 +62,6 @@ public sealed class GetPeerSettingsHandler : MessagesHandlerBase
                         .GenerateError(400, "PEER_ID_INVALID"u8);
                 }
 
-                // The report/add/block bar is the private-chat default for a
-                // stranger, and a dismissed bar stays dismissed. Both rules live
-                // in ModerationStore because `users.userFull` answers the same
-                // question for the pinned client.
                 suggestReportSpam = await _moderation
                     .ShouldOfferPrivateActionBarAsync(currentUserId, peerId);
             }
@@ -114,7 +109,7 @@ public sealed class GetPeerSettingsHandler : MessagesHandlerBase
             var userVector = new Vector();
             if (peer.Type == TLPeer.PeerType.PeerUser)
             {
-                AppendUsers(ref userVector, new[] { peerId });
+                AppendUsers(currentUserId, ref userVector, new[] { peerId });
             }
 
             return MessagesPeerSettings.Builder()

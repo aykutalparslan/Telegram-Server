@@ -10,18 +10,24 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class RenameStickerSetHandler : StickerHandlerBase
 {
-    public RenameStickerSetHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerSetEditor _editor;
+
+    public RenameStickerSetHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerSetEditor store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _editor = store;
+    }
 
     [TLFunction(Constructors.baseLayer_RenameStickerSet)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
     {
         var request = (RenameStickerSet)q;
-        var set = StickerStore.ReadInputSet(request.Get_StickersetView());
+        var set = StickerInput.ReadInputSet(request.Get_StickersetView());
         string title = Encoding.UTF8.GetString(request.Title);
         long? userId = await GetUserIdAsync(authKeyId);
         return userId.HasValue
-            ? await Store.RenameAsync(userId.Value, set.Id, set.AccessHash,
+            ? await _editor.RenameAsync(userId.Value, set.Id, set.AccessHash,
                 set.ShortName, title) : AuthError();
     }
 }

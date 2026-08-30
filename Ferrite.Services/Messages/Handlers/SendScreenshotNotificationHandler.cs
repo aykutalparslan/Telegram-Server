@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -12,14 +11,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Records that the caller screenshotted a private conversation. A screenshot
-/// notification is an ordinary private service message, so it is written into
-/// both per-owner boxes with their own local ids and pts, and the peer receives
-/// updateNewMessage. The result must contain exactly one new message and one
-/// updateMessageID for the request's random id, because the pinned client
-/// otherwise treats the send as failed and schedules getDifference.
-/// </summary>
 public sealed class SendScreenshotNotificationHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -80,8 +71,6 @@ public sealed class SendScreenshotNotificationHandler
                 return Error("PEER_ID_INVALID");
             }
         }
-        // A screenshot notification tells the other side something happened, so a
-        // self dialog has no peer to notify and no service message to record.
         if (peerUserId == userId)
         {
             return Error("PEER_ID_INVALID");
@@ -98,8 +87,6 @@ public sealed class SendScreenshotNotificationHandler
         StoredMessageWrite callerWrite = await _messages.PutPrivateServiceMessageAsync(
             userId, authKeyId, peerUserId, userId, outgoing: true, actionBytes, date,
             callerReplyTo);
-        // The peer's copy of the screenshotted message has a different local id, so
-        // the reply pointer is not carried across boxes.
         StoredMessageWrite peerWrite = await _messages.PutPrivateServiceMessageAsync(
             peerUserId, null, userId, userId, outgoing: false, actionBytes, date);
         long logicalId = await _messages.CreateMessageCopyAsync(userId, callerWrite.Id);
@@ -132,7 +119,7 @@ public sealed class SendScreenshotNotificationHandler
 
         _log.Debug($"📸 SendScreenshotNotification user:{userId} peer:{peerUserId} " +
                    $"id:{callerWrite.Id} pts:{callerWrite.Pts}");
-        return _fanout.BuildUpdates(updateBytes, new[] { userId, peerUserId },
+        return _fanout.BuildUpdates(userId, updateBytes, new[] { userId, peerUserId },
             Array.Empty<byte[]>(), date, seq);
     }
 

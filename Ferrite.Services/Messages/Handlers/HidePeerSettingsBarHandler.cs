@@ -10,13 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// The dismiss branch of pinned TDLib's `UpdatePeerSettingsQuery`
-/// (`DialogManager.cpp:647`). Unlike `messages.reportSpam` this records no
-/// report; it only remembers that the caller dismissed the bar, which
-/// `messages.getPeerSettings` then observes. Dismissing the caller's own dialog
-/// is accepted: it is a viewer-local preference, not an accusation.
-/// </summary>
 public sealed class HidePeerSettingsBarHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;

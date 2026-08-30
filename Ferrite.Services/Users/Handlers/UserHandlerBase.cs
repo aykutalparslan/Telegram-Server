@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -19,11 +18,12 @@ public abstract class UserHandlerBase
     private readonly IPhotoRepository _photoRepository;
     private readonly IUserRepository _userRepository;
     private readonly IUserStatusRepository _userStatusRepository;
+    private readonly UserSerializer _userSerializer;
 
     protected readonly IUnitOfWork _unitOfWork;
     protected readonly ProfileStore? _profiles;
 
-    protected UserHandlerBase(IUnitOfWork unitOfWork, IAppInfoRepository appInfoRepository, INotifySettingsRepository notifySettingsRepository, IPhotoRepository photoRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository,
+    protected UserHandlerBase(IUnitOfWork unitOfWork, IAppInfoRepository appInfoRepository, IContactsRepository contactsRepository, INotifySettingsRepository notifySettingsRepository, IPhotoRepository photoRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository,
         ProfileStore? profiles = null)
     {
         _appInfoRepository = appInfoRepository;
@@ -31,24 +31,25 @@ public abstract class UserHandlerBase
         _photoRepository = photoRepository;
         _userRepository = userRepository;
         _userStatusRepository = userStatusRepository;
+        _userSerializer = new UserSerializer(userRepository, userStatusRepository, contactsRepository);
 
         _unitOfWork = unitOfWork;
         _profiles = profiles;
     }
 
     protected async ValueTask<List<byte[]>> GetUsersFromRepo(
-        List<InputUserRequest> requests, long? selfUserId)
+        List<InputUserRequest> requests, long selfUserId)
     {
         List<byte[]> result = new();
         foreach (var request in requests)
         {
-            long userId = request.Self ? selfUserId ?? 0 : request.UserId;
+            long userId = request.Self ? selfUserId : request.UserId;
             if (userId == 0)
             {
                 continue;
             }
 
-            using var user = await GetUserInternal(userId, selfUserId);
+            using var user = await GetUserInternal(selfUserId, userId);
             if (user != null)
             {
                 result.Add(user.Value.AsSpan().ToArray());
@@ -174,13 +175,6 @@ public abstract class UserHandlerBase
             .Build();
     }
 
-    /// <summary>
-    /// The `settings` a `userFull` carries ARE the private chat's action bar for
-    /// pinned TDLib, so the offer decision belongs to
-    /// <see cref="ModerationStore.ShouldOfferPrivateActionBarAsync"/> rather than
-    /// to a self check here: a bar the caller has already dismissed or reported
-    /// must not come back on the next full-info reload.
-    /// </summary>
     protected static TLPeerSettings GeneratePeerSettings(bool offerActionBar) =>
         offerActionBar
             ? PeerSettings.Builder()
@@ -216,19 +210,13 @@ public abstract class UserHandlerBase
         return deviceType;
     }
 
-    protected async ValueTask<TLUser?> GetUserInternal(long userId,
-        long? viewerUserId = null)
+    protected async ValueTask<TLUser?> GetUserInternal(long viewerUserId, long userId)
     {
-        using var user = _userRepository.GetUser(userId);
-        if (user == null) return null;
-        TLUserStatus status = await _userStatusRepository
-            .GetUserStatusAsync(userId);
-        TLUser withStatus = user.Value.AsUser().Clone()
-            .Status(status.AsSpan()).Build();
-        if (_profiles is null || viewerUserId is null) return withStatus;
+        if (await _userSerializer.GetAsync(viewerUserId, userId) is not { } withStatus) return null;
+        if (_profiles is null) return withStatus;
         using (withStatus)
         {
-            return await _profiles.HydrateUserAsync(viewerUserId.Value, userId,
+            return await _profiles.HydrateUserAsync(viewerUserId, userId,
                 withStatus);
         }
     }

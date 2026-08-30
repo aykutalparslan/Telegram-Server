@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -130,7 +129,6 @@ public sealed class ImportChatInviteHandler : MessagesHandlerBase
                 return ErrorUpdates("INVITE_REQUEST_SENT");
             }
 
-            // Usage counting plus the importer row for messages.getChatInviteImporters.
             _invites.PutStoredInvite(invite, invite.Revoked, invite.RequestNeeded, invite.ExpireDate,
                 invite.UsageLimit, invite.Usage + 1, invite.Title);
             using (TLChatInviteImporterInfo importer = ChatInviteImporterInfo.Builder()

@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -110,7 +109,7 @@ public sealed class DeleteChannelHandler : ChannelsHandlerBase
         var chatVector = new Vector();
         chatVector.AppendTLObject(forbiddenBytes);
         var userVector = new Vector();
-        AppendUser(ref userVector, currentUserId);
+        AppendUser(currentUserId, ref userVector, currentUserId);
 
         _log.Debug($"📣 DeleteChannel user:{currentUserId} channel:{id}");
         return Ferrite.TL.baseLayer.Updates.Builder()

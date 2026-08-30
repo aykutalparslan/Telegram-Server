@@ -10,8 +10,14 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class GetFavedStickersHandler : StickerHandlerBase
 {
-    public GetFavedStickersHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerCollectionStore _collections;
+
+    public GetFavedStickersHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerCollectionStore store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _collections = store;
+    }
 
     [TLFunction(Constructors.baseLayer_GetFavedStickers)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
@@ -19,6 +25,6 @@ public sealed class GetFavedStickersHandler : StickerHandlerBase
         long hash = ((GetFavedStickers)q).Hash;
         long? userId = await GetUserIdAsync(authKeyId);
         return userId.HasValue
-            ? await Store.GetFavedAsync(userId.Value, hash) : AuthError();
+            ? await _collections.GetFavedAsync(userId.Value, hash) : AuthError();
     }
 }

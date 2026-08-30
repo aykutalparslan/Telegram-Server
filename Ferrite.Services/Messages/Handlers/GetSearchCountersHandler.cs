@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -11,16 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// How many messages of one conversation each requested filter matches. The
-/// counts come from the SAME predicate the search itself uses, so a count can
-/// never disagree with the page it describes.
-///
-/// One counter is answered per requested filter, in the requested order, echoing
-/// the filter back: pinned TDLib asks one filter at a time and rejects a response
-/// whose single entry does not carry the filter it sent
-/// (`MessagesManager.cpp:1125-1130`).
-/// </summary>
 public sealed class GetSearchCountersHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -69,8 +58,6 @@ public sealed class GetSearchCountersHandler
             Span<byte> bytes = requested.ReadTLObject();
             (TLMessagesFilter.MessagesFilterType type, bool missedOnly) =
                 MessageSearchService.ReadFilter((MessagesFilterView)bytes);
-            // The echoed filter has to outlive the request view, so it is
-            // copied out rather than referenced.
             filters.Add(new RequestedFilter(bytes.ToArray(), type, missedOnly));
         }
 

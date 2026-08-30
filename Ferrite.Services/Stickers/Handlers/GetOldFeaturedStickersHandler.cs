@@ -10,8 +10,9 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class GetOldFeaturedStickersHandler : StickerHandlerBase
 {
-    public GetOldFeaturedStickersHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository,
-        StickerStore store) : base(unitOfWork, authorizationRepository, store) { }
+    public GetOldFeaturedStickersHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository)
+        : base(unitOfWork, authorizationRepository) { }
 
     [TLFunction(Constructors.baseLayer_GetOldFeaturedStickers)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
@@ -23,6 +24,6 @@ public sealed class GetOldFeaturedStickersHandler : StickerHandlerBase
         }
         long hash = request.Hash;
         return await GetUserIdAsync(authKeyId) is not null
-            ? StickerStore.EmptyFeatured(hash) : AuthError();
+            ? StickerSetCatalog.EmptyFeatured(hash) : AuthError();
     }
 }

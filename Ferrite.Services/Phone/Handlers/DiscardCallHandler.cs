@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -16,14 +15,16 @@ public sealed class DiscardCallHandler : PhoneCallHandlerBase
 {
     private readonly CallTerminator _terminator;
     private readonly IUpdatesContextFactory _updatesContextFactory;
+    private readonly UserSerializer _userSerializer;
 
-    public DiscardCallHandler(IUnitOfWork unitOfWork, IBlockedPeersRepository blockedPeersRepository, IAuthorizationRepository authorizationRepository, IUserRepository userRepository, ICallRegistry registry,
+    public DiscardCallHandler(IUnitOfWork unitOfWork, IBlockedPeersRepository blockedPeersRepository, IAuthorizationRepository authorizationRepository, IUserRepository userRepository, UserSerializer userSerializer, ICallRegistry registry,
         IUpdatesService updates, IMTProtoTime time, CallTerminator terminator,
         IUpdatesContextFactory updatesContextFactory)
         : base(unitOfWork, blockedPeersRepository, authorizationRepository, userRepository, registry, updates, time)
     {
         _terminator = terminator;
         _updatesContextFactory = updatesContextFactory;
+        _userSerializer = userSerializer;
     }
 
     [TLFunction(Constructors.baseLayer_DiscardCall)]
@@ -50,8 +51,6 @@ public sealed class DiscardCallHandler : PhoneCallHandlerBase
             case CallRegistryStatus.Ok:
                 break;
             case CallRegistryStatus.AlreadyDiscarded:
-                // Idempotent: return the discarded update again without a second
-                // fan-out or call-log entry.
                 return await BuildUpdatesAsync(result.Call!, authKeyId, userId,
                     new List<byte[]> { DiscardedUpdate(result.Call!) });
             case CallRegistryStatus.NotFound:
@@ -82,9 +81,8 @@ public sealed class DiscardCallHandler : PhoneCallHandlerBase
             updatesVector.AppendTLObject(update);
         }
 
-        var users = BuildParticipantUsers(call.CallerUserId, call.CalleeUserId);
-        // `Updates` alone binds to the inherited IUpdatesService field, so the
-        // TL builder must be qualified.
+        var users = BuildParticipantUsers(userId, call.CallerUserId, call.CalleeUserId,
+            _userSerializer);
         return Ferrite.TL.baseLayer.Updates.Builder()
             .UpdatesProperty(updatesVector)
             .Users(users)

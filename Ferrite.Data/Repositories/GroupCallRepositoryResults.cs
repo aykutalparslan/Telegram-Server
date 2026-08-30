@@ -2,6 +2,7 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using TLDto = Ferrite.TL.baseLayer.dto;
+using Ferrite.Data.Models;
 
 namespace Ferrite.Data.Repositories;
 
@@ -12,11 +13,6 @@ public enum GroupCallPersistenceState
     Discarded = 2,
 }
 
-// dto.groupCallState.peer_type / dto.groupCallParticipantState.peer_type. Group
-// calls are hosted by a basic group or a channel only, so this is deliberately
-// narrower than Ferrite.Data.PeerType and does not share its numbering.
-// None marks an E2E conference call, which has no host peer at all; see the
-// dto.groupCallState comment in baseLayer.tl for how a peerless row is indexed.
 public enum GroupCallPeerType
 {
     None = -1,
@@ -78,11 +74,6 @@ public enum GroupCallRecoveryStatus
     CallNotActive,
 }
 
-/// <summary>
-/// Result of one startup/worker-restart transport reconciliation. Participant
-/// rows are updated inside the repository lock and are not returned as owned TL
-/// values because startup has no live request that could consume them.
-/// </summary>
 public sealed record GroupCallRecoveryResult(GroupCallRecoveryStatus Status,
     int StaleParticipants, int Version, int MediaEpoch);
 
@@ -128,14 +119,6 @@ public enum GroupCallParticipantEditStatus
     CallNotFound,
 }
 
-/// <summary>
-/// One participant edit as nullable overrides: null leaves the stored value
-/// untouched, a value replaces it. Flag fields accept false to CLEAR the stored
-/// flag, which the generated builders cannot express through Clone(), so the row
-/// is rebuilt field by field. <see cref="ClearRaiseHand"/> exists because
-/// raise_hand_rating is an optional scalar whose absence — not zero — means the
-/// hand is down.
-/// </summary>
 public sealed record GroupCallParticipantEditSpec
 {
     public bool? Muted { get; init; }
@@ -156,20 +139,10 @@ public sealed record GroupCallParticipantPage(
     IReadOnlyList<TLDto.TLGroupCallParticipantState> Participants,
     string? NextOffset);
 
-/// <summary>
-/// The only two tde2e sub-chains a conference call has. Sub-chain 0 carries the
-/// validated blocks; sub-chain 1 carries the commit/reveal broadcasts, whose
-/// semantics are enforced client-side. Anything else is a client error.
-/// </summary>
 public static class GroupCallSubChain
 {
     public const int Blocks = 0;
     public const int Broadcast = 1;
 }
 
-/// <summary>
-/// One tde2e append attempt. <c>Committed == false</c> means the expected height
-/// lost a race, and <see cref="Height"/> is then the head that actually won so
-/// the caller can rebuild against it instead of forking.
-/// </summary>
 public readonly record struct GroupCallChainAppendResult(bool Committed, int Height);

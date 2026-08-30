@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -62,7 +61,6 @@ public sealed class EditTitleHandler : ChannelsHandlerBase
             actionBytes = action.AsSpan().ToArray();
         }
 
-        // Public channels are indexed for contacts.search; keep the title current.
         string username = ReadChannelUsername(updatedChannelBytes);
         if (username.Length > 0)
         {

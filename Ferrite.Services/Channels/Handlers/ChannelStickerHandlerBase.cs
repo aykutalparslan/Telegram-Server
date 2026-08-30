@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -51,7 +50,7 @@ public abstract class ChannelStickerHandlerBase
     {
         if (input.Is(out InputStickerSetEmpty _))
             return new StickerSetInput(true, null, null, null);
-        var value = StickerStore.ReadInputSet(input);
+        var value = StickerInput.ReadInputSet(input);
         return new StickerSetInput(false, value.Id, value.AccessHash,
             value.ShortName);
     }

@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -40,7 +39,6 @@ public sealed class DeleteMessagesHandler : ChannelsHandlerBase
     public async Task<Ferrite.TL.baseLayer.messages.TLAffectedMessages> Handle(
         long authKeyId, TLBytes q)
     {
-        // Resolve the channel + requested ids off the ref-struct request before any await.
         var requestedIds = new List<int>();
         var request = (ChannelsDeleteMessages)q;
         long? channelId = ResolveInputChannelId(request.Get_ChannelView());
@@ -74,9 +72,6 @@ public sealed class DeleteMessagesHandler : ChannelsHandlerBase
             return ErrorAffectedMessages("CHANNEL_INVALID"u8);
         }
 
-        // Creator/admins with the delete_messages right delete any post; every other
-        // active member may still delete their OWN posts. Posts the caller cannot
-        // delete are skipped rather than failing the request.
         var participant = await _chatParticipantsRepository
             .GetParticipantAsync(id, currentUserId);
         if (participant == null || !IsActiveParticipant(participant.Value))
@@ -90,7 +85,6 @@ public sealed class DeleteMessagesHandler : ChannelsHandlerBase
 
         var channelBox = new ChannelMessageBox(_counterFactory, id);
 
-        // Only count posts that actually existed so the channel pts_count stays exact.
         var deletedIds = new List<int>();
         var loggedMessages = new List<byte[]>();
         foreach (int messageId in requestedIds)
@@ -115,9 +109,6 @@ public sealed class DeleteMessagesHandler : ChannelsHandlerBase
             }
             await _channelMessagesRepository.DeleteMessageAsync(id, messageId);
             deletedIds.Add(messageId);
-            // Only a deletion performed with the delete-messages right is an
-            // administrative act. A member removing their own post is not, and
-            // recording it would put every ordinary self-delete in the admin log.
             if (canDeleteOthers)
             {
                 loggedMessages.Add(messageBytes);
@@ -157,8 +148,6 @@ public sealed class DeleteMessagesHandler : ChannelsHandlerBase
             .Pts(pts).PtsCount(deletedIds.Count).Build();
     }
 
-    // What `q` matches a deleted post on: its own text. A service message carries
-    // none, so it contributes nothing rather than a placeholder.
     private static string ReadMessageSearchText(byte[] messageBytes)
     {
         var message = (Ferrite.TL.baseLayer.Message)messageBytes.AsSpan();

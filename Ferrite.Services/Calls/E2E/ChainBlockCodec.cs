@@ -8,13 +8,8 @@ using Ferrite.TL.e2eChain.e2e;
 
 namespace Ferrite.Services.Calls.E2E;
 
-// Reads a client-supplied block into plain records the validator can hold
-// across awaits, and derives the two byte strings the protocol depends on.
 public static class ChainBlockCodec
 {
-    // e2e.chainBlock lays out `signature:int512` immediately after the 4-byte
-    // constructor id, so the signature window is always Raw[4..68]. The
-    // generated GetOffset agrees; this is asserted by a schema test.
     private const int SignatureOffset = 4;
     private const int SignatureLength = 64;
     private const int MinimumBlockLength = SignatureOffset + SignatureLength;
@@ -62,9 +57,6 @@ public static class ChainBlockCodec
             block = new ChainBlockValue
             {
                 Raw = raw,
-                // Block::calc_hash: sha256 of the serialization AS RECEIVED,
-                // signature included. A height of -1 hashes to zero, but that
-                // is the synthetic genesis block and never arrives on the wire.
                 Hash = SHA256.HashData(raw),
                 Signature = parsed.Signature.ToArray(),
                 PrevBlockHash = parsed.PrevBlockHash.ToArray(),
@@ -78,17 +70,11 @@ public static class ChainBlockCodec
         }
         catch (Exception)
         {
-            // Any malformed length, unknown nested constructor or truncated
-            // vector is a rejected block, not a server fault.
             error = ChainValidationError.InvalidBlock;
             return false;
         }
     }
 
-    // The reference signs `serialize_boxed(block)` with the signature field
-    // zeroed (utils.h:117-134). Zeroing the window inside Raw reproduces that
-    // without rebuilding the block, which is the point: a rebuild could differ
-    // in padding and would verify against nothing.
     public static byte[] SerializeWithZeroSignature(ChainBlockValue block)
     {
         var buffer = (byte[])block.Raw.Clone();
@@ -96,7 +82,6 @@ public static class ChainBlockCodec
         return buffer;
     }
 
-    // Same layout rule for the two sub-chain 1 broadcast constructors.
     public static byte[] SerializeWithZeroSignature(ReadOnlySpan<byte> broadcast)
     {
         var buffer = broadcast.ToArray();
@@ -104,20 +89,6 @@ public static class ChainBlockCodec
         return buffer;
     }
 
-    /// <summary>
-    /// A stored block in the form the server must hand back. tde2e distinguishes
-    /// a block a client built from a block a server served by the leading
-    /// constructor id alone: the server form is the real id PLUS ONE
-    /// (Blockchain::from_local_to_server). A client refuses to apply a block
-    /// carrying an unincremented id with "Trying to apply local block, not from
-    /// server", which surfaces only as a call that silently never becomes
-    /// encrypted. It applies to both sub-chains, and the stored bytes must stay
-    /// in the received form because that is what the hash and signature cover.
-    ///
-    /// The incremented value is deliberately NOT a constructor id any schema
-    /// knows, so no generated type can express it; like the trie, this framing
-    /// marker is tde2e's own, not TL.
-    /// </summary>
     public static byte[] ToServerForm(ReadOnlySpan<byte> localBlock)
     {
         var buffer = localBlock.ToArray();
@@ -182,8 +153,6 @@ public static class ChainBlockCodec
         return true;
     }
 
-    // The persisted head reads these back with the same reader, so a block and a
-    // restored chain can never disagree about what a group state means.
     private static bool TryReadGroupState(Span<byte> span,
         out ChainGroupStateValue groupState) =>
         ChainValueCodec.TryReadGroupState(span, out groupState);

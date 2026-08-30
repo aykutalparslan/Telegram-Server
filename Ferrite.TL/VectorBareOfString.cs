@@ -6,10 +6,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.TL;
 
-// A tde2e bare vector of TL bytes: an int32 count followed by count TL-encoded
-// byte strings, with no 1cb5c415 constructor. Backs e2e.chain.sharedKey's
-// dest_header, which the reference serializes with
-// TlStoreVector<TlStoreString>.
 public ref struct VectorBareOfString
 {
     private Span<byte> _buff;

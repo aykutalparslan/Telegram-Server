@@ -12,6 +12,25 @@ public sealed class InstallThemeHandler : ThemeHandlerBase
     public InstallThemeHandler(ThemeStore store, ProfileStore profiles)
         : base(store, profiles) { }
 
+    [TLFunction(Constructors.layer105_AccountInstallTheme)]
+    public async Task<TLBytes> HandleLayer105(long authKeyId, TLBytes q)
+    {
+        using var current = ToCurrentInstallThemeRequest(q);
+        return await Handle(authKeyId, current);
+    }
+
+    private static TLBytes ToCurrentInstallThemeRequest(TLBytes q)
+    {
+        var sent = new TL.layer105.account.AccountInstallTheme(q.AsSpan());
+        var builder = InstallTheme.Builder().Dark(sent.Dark);
+        if (sent.Flags[1])
+        {
+            builder = builder.Format(sent.Format).Theme(sent.Theme);
+        }
+        using var current = builder.Build();
+        return current.TLBytes!.Value;
+    }
+
     [TLFunction(Constructors.baseLayer_InstallTheme)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
     {

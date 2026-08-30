@@ -226,7 +226,7 @@ dto.remoteSession#f68e6111 session_id:long node_id:bytes = dto.RemoteSession;
 // Every optional field is a typed handshake value. `stage` is 1 after req_pq,
 // 2 after req_DH_params and 3 after set_client_DH_params.
 dto.authSessionState#dc7261e9 flags:# p:flags.0?int q:flags.1?int new_nonce:flags.2?bytes temp_aes_key:flags.3?bytes temp_aes_iv:flags.4?bytes temp_auth_key:flags.5?true temp_auth_key_expires_in:flags.6?int valid_until:flags.7?int g:flags.8?int a:flags.9?bytes g_a:flags.10?bytes auth_key:flags.11?bytes node_id:bytes stage:int nonce:bytes server_nonce:bytes = dto.AuthSessionState;
-dto.mtprotoMessage#be932ba2 flags:# data:flags.0?bytes nonce:flags.1?bytes session_id:long is_response:Bool is_content_related:Bool message_type:int message_id:long quick_ack:int = dto.MTProtoMessage;
+dto.mtprotoMessage#36478d0e flags:# data:flags.0?bytes nonce:flags.1?bytes recipient_user_id:flags.2?long pts:flags.3?int session_id:long is_response:Bool is_content_related:Bool message_type:int message_id:long quick_ack:int = dto.MTProtoMessage;
 
 
 inputPeerPhotoFileLocationLegacy#27d69997 flags:# big:flags.0?true peer:InputPeer volume_id:long local_id:int = InputFileLocation;

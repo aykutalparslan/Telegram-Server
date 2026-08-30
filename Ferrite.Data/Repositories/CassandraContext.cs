@@ -25,6 +25,9 @@ public sealed class CassandraContext : ICassandraContext, IDisposable
         replication.Add("replication_factor", "1");
         _session.CreateKeyspaceIfNotExists(_keySpace, replication);
     }
+
+    public bool TableExists(string keyspace, string table) =>
+        _cluster.Metadata.GetTable(keyspace, table) != null;
     
     public void Enqueue(Statement statement)
     {

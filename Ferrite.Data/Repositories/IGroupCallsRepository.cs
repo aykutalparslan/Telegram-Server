@@ -9,11 +9,6 @@ public interface IGroupCallsRepository
 {
     ValueTask<GroupCallCreateResult> TryCreateCallAsync(TLDto.TLGroupCallState call,
         CancellationToken cancellationToken = default);
-    /// <summary>
-    /// Creates a peerless E2E conference call. The one active call per peer rule
-    /// is a peer rule and a conference has none, so several by one creator
-    /// coexist; dedup keys on (creator_user_id, random_id).
-    /// </summary>
     ValueTask<GroupCallCreateResult> TryCreateConferenceCallAsync(
         TLDto.TLGroupCallState call, CancellationToken cancellationToken = default);
     ValueTask<TLDto.TLGroupCallState?> GetCallAsync(long callId,
@@ -52,30 +47,15 @@ public interface IGroupCallsRepository
         CancellationToken cancellationToken = default);
     ValueTask<GroupCallLeaveResult> TryLeaveParticipantAsync(long callId, long userId,
         CancellationToken cancellationToken = default);
-    /// <summary>
-    /// Applies one moderation/local-control edit to an active participant row.
-    /// Commits exactly one call-version increment when anything changed; a spec
-    /// that reproduces the stored row byte for byte is NoChange and versionless.
-    /// </summary>
     ValueTask<GroupCallParticipantEditResult> TryEditParticipantAsync(long callId,
         long userId, GroupCallParticipantEditSpec edit,
         CancellationToken cancellationToken = default);
-    /// <summary>
-    /// Sets or clears a participant's screen-share endpoint. A null endpoint
-    /// clears it. Commits exactly one call-version increment, like every other
-    /// durable participant mutation.
-    /// </summary>
     ValueTask<GroupCallParticipantEditResult> TrySetParticipantPresentationAsync(
         long callId, long userId, string? presentationEndpoint,
         CancellationToken cancellationToken = default);
     ValueTask<bool> TryTouchParticipantActiveDateAsync(long callId, long userId,
         int activeDate, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// How many non-left participants are currently joined with video. This backs
-    /// <c>groupCall.unmuted_video_count</c>, which the client compares against the
-    /// limit to decide whether it may still turn its camera on.
-    /// </summary>
     ValueTask<int> CountActiveVideoParticipantsAsync(long callId,
         CancellationToken cancellationToken = default);
     ValueTask<TLDto.TLGroupCallParticipantState?> GetParticipantAsync(long callId,

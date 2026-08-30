@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -13,12 +12,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.toggleGroupCallStartSubscription. The preference belongs only to the
-/// invoking viewer: it never mutates the canonical call row or fans an update to
-/// another member. The repository checks that the call is still scheduled in the
-/// same critical section that writes the viewer row.
-/// </summary>
 public sealed class ToggleGroupCallStartSubscriptionHandler : GroupCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;

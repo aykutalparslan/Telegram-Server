@@ -3,11 +3,6 @@
 
 namespace Ferrite.TL;
 
-/// <summary>
-/// Declares the layer and constructor used to dispatch a TL handler or service
-/// method. The composition root discovers these declarations and registers the
-/// corresponding function under its dispatch key.
-/// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
 public sealed class TLFunctionAttribute : Attribute
 {

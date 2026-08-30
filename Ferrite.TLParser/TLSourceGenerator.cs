@@ -391,9 +391,11 @@ public static class ObjectReader
                 continue;
             }
 
+            var qualified = "Ferrite.TL." + GetNamespace(combinator.ContainingNamespace ?? "",
+                combinator) + "." + combinator.Identifier;
             sb.Append(@"
-        _objectReaders.Add(unchecked((int)0x" + combinator.Name + @"), " + combinator.Identifier + @".Read);
-        _sizeReaders.Add(unchecked((int)0x" + combinator.Name + @"), " + combinator.Identifier + @".ReadSize);");
+        _objectReaders.Add(unchecked((int)0x" + combinator.Name + @"), " + qualified + @".Read);
+        _sizeReaders.Add(unchecked((int)0x" + combinator.Name + @"), " + qualified + @".ReadSize);");
         }
 
         sb.Append(@"
@@ -505,6 +507,9 @@ public static class Constructors
             sb.ToString());
     }
 
+    private static string BoxedTypeUsing(string nameSpace) =>
+        nameSpace.StartsWith("layer") ? "using Ferrite.TL.baseLayer;\n" : "";
+
     private GeneratedSource GenerateFunctionSource(CombinatorDeclarationSyntax combinator, string nameSpace)
     {
         var typeName = combinator.Identifier;
@@ -519,7 +524,7 @@ using System.Buffers;
 using System.Runtime.InteropServices;
 using Ferrite.Utils;
 using DotNext.Buffers;
-
+" + BoxedTypeUsing(nameSpace) + @"
 namespace Ferrite.TL" + (nameSpace.Length > 0 ? "." + nameSpace : "") + @";
 
 public ref struct " + typeName + @"
@@ -594,10 +599,6 @@ public ref struct " + typeName + @"
             sourceBuilder.ToString());
     }
 
-    // Emitted only when a type has a nested boxed field. Retains the parent
-    // Memory<byte> alongside the span so Get_<Field>()/Get_<Field>View() can slice
-    // zero-copy instead of copying the whole parent buffer. Distinct from the
-    // _memory owner and the _mem copy cache.
     private static void GenerateBackingMemory(StringBuilder sb, string typeName)
     {
         sb.Append(@"
@@ -625,7 +626,7 @@ using System.Buffers;
 using System.Runtime.InteropServices;
 using Ferrite.Utils;
 using DotNext.Buffers;
-
+" + BoxedTypeUsing(nameSpace) + @"
 namespace Ferrite.TL" + (nameSpace.Length > 0 ? "." + nameSpace : "") + @";
 
 public ref struct " + typeName + @"
@@ -774,9 +775,6 @@ public readonly struct TL" + typeName + @" : IDisposable
             sourceBuilder.ToString());
     }
 
-    // A zero-copy ref-struct union view over a span. Unlike TL<Type> it owns no
-    // memory and cannot cross an await, so it is the right shape for synchronous
-    // nested-field dispatch: `peer.Is(out InputPeerUser user)` / `peer.Type`.
     private void GenerateUnionView(StringBuilder sb, List<CombinatorDeclarationSyntax> combinators)
     {
         string typeName = combinators[0].Type?.Identifier!;
@@ -838,8 +836,6 @@ public ref struct " + typeName + @"View
         for (var i = 0; i < combinators.Count; i++)
         {
             string constructorName = combinators[i].Identifier!;
-            // Cast from _tlBytes (not _tlBytes.AsSpan()) so the concrete view retains the
-            // backing Memory<byte>, keeping a nested Get_<Field>() off it zero-copy.
             sb.Append(@"
     public " + constructorName + " As" + constructorName + "() => (" + constructorName + ")_tlBytes;");
         }
@@ -1413,7 +1409,6 @@ public ref struct " + typeName + @"View
                 }
                 else if (arg.TypeTerm?.Identifier == "int512")
                 {
-                    // tde2e block/broadcast signatures are a fixed 64-byte field.
                     GenerateFixedSizeProperty(sb, arg, index, 64);
                 }
                 else if (arg.TypeTerm?.Identifier is "bytes" or "string")
@@ -1911,9 +1906,6 @@ public ref struct " + typeName + @"View
                 }
                 else if (arg.TypeTerm?.IsTypeOf == true)
                 {
-                    // A !X query is the terminal field in Telegram invocation wrappers.
-                    // Its constructor can be a streaming request, which is deliberately
-                    // absent from ObjectReader, so the query consumes the remaining bytes.
                     sb.Append(@"
         if(index >= " + index + @") offset = buffer.Length;");
                 }

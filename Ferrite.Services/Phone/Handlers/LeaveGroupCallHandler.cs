@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -14,11 +13,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.leaveGroupCall. Marks the caller's participant row left with exactly one
-/// version increment, tears down its worker transports, and fans one left row out
-/// to the other members.
-/// </summary>
 public sealed class LeaveGroupCallHandler : GroupCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -59,9 +53,6 @@ public sealed class LeaveGroupCallHandler : GroupCallHandlerBase
 
         GroupCallPeerAccess access = resolution.Access!;
 
-        // The source identifies which join the client is abandoning. A source that
-        // belongs to somebody else's row is not a licence to evict them, so it is
-        // reported as "you are not joined" rather than acted on.
         string mediaId;
         using (TLDto.TLGroupCallParticipantState? existing = await _groupCallsRepository.GetParticipantAsync(callId, access.CurrentUserId))
         {
@@ -94,8 +85,6 @@ public sealed class LeaveGroupCallHandler : GroupCallHandlerBase
         using TLDto.TLGroupCallParticipantState participant = left.Participant!.Value;
         using TLDto.TLGroupCallState updatedCall = left.Call!.Value;
 
-        // One teardown removes both transports: the worker owns the screen share as
-        // a second transport on the same participant, so it dies with the camera.
         await ReleaseTransportAsync(callId, mediaId);
         SourceMap.RemoveParticipant(callId, mediaId);
 
@@ -105,8 +94,6 @@ public sealed class LeaveGroupCallHandler : GroupCallHandlerBase
         GroupCallViewer viewer = await BuildViewerAsync(callId, access.CurrentUserId,
             access.CanManageCall);
         var updates = new List<byte[]>(2);
-        // A left row carries no media, so its overlay is the canonical fallback for
-        // every viewer including the leaver.
         using (TLGroupCallParticipant selfRow = GroupCallBuilders.BuildParticipant(
                    participant, viewer, GroupCallParticipantOverlay.None,
                    GroupCallParticipantDecoration.Versioned))
@@ -120,24 +107,16 @@ public sealed class LeaveGroupCallHandler : GroupCallHandlerBase
                   $"source:{source} media:{mediaId} remaining:{participantsCount} " +
                   $"conference:{access.IsConference}");
 
-        // A conference has no chat row to relink and no dialog to name in the call
-        // update; its remaining participants are the whole audience.
         if (access.IsConference)
         {
             updates.Add(BuildConferenceCallUpdateBytes(updatedCall, viewer, videoCount));
             await PushConferenceLeaveAsync(updatedCall, participant, access, videoCount);
-            // Sequenced, like the hosted leave: this result carries no media
-            // credentials of its own, so it has no reason to leave the seq
-            // sequence the way a join answer does.
             return await BuildConferenceResultAsync(authKeyId, access.CurrentUserId,
                 updates);
         }
 
         byte[] chatBytes = ChatLink.SetCallFlags(access.Kind, access.ChatBytes!,
             callActive: true, callNotEmpty: participantsCount > 0);
-        // The participant leave was flushed above, while SetCallFlags is a later
-        // compact-chat write. Persist it before update fan-out so the request does
-        // not return with an uncommitted Cassandra statement.
         await UnitOfWork.SaveAsync();
         updates.Add(BuildCallUpdateBytes(updatedCall, viewer, access.Peer.Id, videoCount));
         await PushLeaveToOtherMembersAsync(updatedCall, participant, access, videoCount);
@@ -198,11 +177,6 @@ public sealed class LeaveGroupCallHandler : GroupCallHandlerBase
             access.CurrentUserId, videoCount);
     }
 
-    /// <summary>
-    /// Best-effort and idempotent: the row is already terminal in Ferrite, so a
-    /// worker that is down must not turn a successful leave into an error the
-    /// client would retry against a row it no longer owns.
-    /// </summary>
     private async Task ReleaseTransportAsync(long callId, string mediaId)
     {
         try

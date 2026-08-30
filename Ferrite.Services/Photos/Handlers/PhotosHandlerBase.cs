@@ -125,8 +125,6 @@ public abstract class PhotosHandlerBase
         long userId = auth.Value.AsAuthInfo().UserId;
         TLUser? stored = _userRepository.GetUser(userId);
         if (stored == null) return null;
-        // The store-read user is byte[]-backed; transfer it into the Identity
-        // instead of copying its bytes into a fresh TLUser.
         return new Identity(userId, stored.Value);
     }
 
@@ -159,20 +157,21 @@ public abstract class PhotosHandlerBase
         return photo.Is(out UserProfilePhoto current) ? current.PhotoId : null;
     }
 
-    protected static TLPhotosPhoto BuildPhotoResult(TLPhoto photo, TLUser user)
+    protected static TLPhotosPhoto BuildPhotoResult(long viewerUserId, TLPhoto photo, TLUser user,
+        UserSerializer userSerializer)
     {
         var users = new Vector();
-        users.AppendTLObject(user.AsSpan());
+        userSerializer.Append(viewerUserId, ref users, user);
         return PhotosPhoto.Builder().Photo(photo.AsSpan()).Users(users).Build();
     }
 
-    protected static TLPhotos BuildPhotos(IReadOnlyCollection<TLBytes> rows,
-        TLUser user, int totalCount, bool sliced)
+    protected static TLPhotos BuildPhotos(long viewerUserId, IReadOnlyCollection<TLBytes> rows,
+        TLUser user, int totalCount, bool sliced, UserSerializer userSerializer)
     {
         var photos = new Vector();
         foreach (var row in rows) photos.AppendTLObject(row.AsSpan());
         var users = new Vector();
-        users.AppendTLObject(user.AsSpan());
+        userSerializer.Append(viewerUserId, ref users, user);
         return sliced
             ? PhotosSlice.Builder().Count(totalCount).Photos(photos).Users(users).Build()
             : Photos.Builder().PhotosProperty(photos).Users(users).Build();

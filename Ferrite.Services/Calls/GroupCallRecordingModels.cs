@@ -32,11 +32,6 @@ public sealed record GroupCallRecordingRequest(long CallId, int Generation,
 public sealed record GroupCallRecordingHealth(bool Healthy, int ActiveRecordings,
     int FinalizedRecordings, long Bytes, string? FfmpegVersion);
 
-/// <summary>
-/// One owned, bounded finalized recording. The stream stays valid until this
-/// value is disposed; HTTP implementations use the callback to release the
-/// response and its linked timeout only after the importer has consumed it.
-/// </summary>
 public sealed class GroupCallRecordingFile : IAsyncDisposable
 {
     private readonly Func<ValueTask>? _dispose;

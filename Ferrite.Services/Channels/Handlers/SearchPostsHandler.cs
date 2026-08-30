@@ -11,16 +11,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Searches the posts of public broadcast channels, the one search that reaches
-/// past every conversation the caller takes part in. Pinned TDLib drives it from
-/// two places: `td_api::searchPublicPosts` fills `query`
-/// (`MessageQueryManager.cpp:566`) and `td_api::searchPublicMessagesByTag` fills
-/// `hashtag` (`:647`).
-///
-/// Paging is the same (date, peer, id) tuple global search uses, anchored by
-/// `offset_rate`.
-/// </summary>
 public sealed class SearchPostsHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -55,8 +45,6 @@ public sealed class SearchPostsHandler
         }
 
         var request = (ChannelsSearchPosts)q;
-        // Pinned TDLib sets exactly one of the two, and the one it sets picks
-        // the matching rule: a tag is matched whole, a query as free text.
         bool byHashtag = request.Flags[0];
         string term = Encoding.UTF8.GetString(byHashtag
             ? request.Hashtag
@@ -69,10 +57,6 @@ public sealed class SearchPostsHandler
         int offsetId = request.OffsetId;
         int limit = request.Limit;
 
-        // An empty term cannot select anything. Both errors are the ones pinned
-        // TDLib turns into an empty result rather than surfacing to the user
-        // (`MessageQueryManager.cpp:617,676`), so refusing here costs the client
-        // nothing.
         if (byHashtag && MessageSearchFilter.StripHashtagMarker(term).Length == 0)
         {
             return (TLMessages)RpcErrorGenerator.GenerateError(400,
@@ -105,8 +89,6 @@ public sealed class SearchPostsHandler
         byte[] flood;
         using (TLSearchPostsFlood row = PublicPostSearchPolicy.BuildFlood())
         {
-            // The row has to outlive the pooled value here, because the slice is
-            // built after this method's remaining await.
             flood = row.AsSpan().ToArray();
         }
         return await _dialogs.BuildPublicPostSearchSliceAsync(userId, selected,

@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -11,15 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Searches every conversation the caller can read at once: their own message box
-/// for private chats and basic groups, plus the shared box of each channel they
-/// are an active participant of.
-///
-/// Paging is by the (date, peer, id) tuple of the last row the client received,
-/// so the answer states `next_rate` explicitly rather than leaving pinned TDLib
-/// to infer the resume date from the page's final message.
-/// </summary>
 public sealed class SearchGlobalHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;

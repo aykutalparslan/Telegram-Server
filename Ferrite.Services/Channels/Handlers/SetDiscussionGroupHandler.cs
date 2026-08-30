@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -14,23 +13,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Links a broadcast channel to a discussion supergroup, or unlinks one.
-///
-/// The linkage is SYMMETRIC and both halves are load-bearing. `linked_chat_id`
-/// lives in each side's durable administration row and `has_link` on each side's
-/// compact channel row, because pinned TDLib derives two separate facts from
-/// them: `channelFull.linked_chat_id` drives the discussion button, while
-/// `get_channel_join_to_send` (`ChatManager.cpp:8443`) reports `join_to_send`
-/// as TRUE for any megagroup WITHOUT a linked channel whatever the stored flag
-/// says. So a one-sided write leaves the supergroup permanently claiming
-/// join-to-send is on.
-///
-/// `inputChannelEmpty` in either position is the unlink route
-/// (`ChatManager.cpp:3580,3610`): an empty group unlinks the named broadcast,
-/// and an empty broadcast unlinks the named group from whatever it is attached
-/// to.
-/// </summary>
 public sealed class SetDiscussionGroupHandler : ChannelPropertyHandlerBase
 {
     private readonly IChannelAdminRepository _channelAdminRepository;
@@ -84,8 +66,6 @@ public sealed class SetDiscussionGroupHandler : ChannelPropertyHandlerBase
         byte[]? groupBytes = null;
         if (groupId is not null)
         {
-            // Pinned TDLib requires administrator + can_pin_messages on the
-            // discussion side (`ChatManager.cpp:3602`), not merely change-info.
             var (currentUserId, channelBytes, error) = await PrepareChannelMutationCore(
                 authKeyId, groupId, creatorOnly: false,
                 ChatAdminRightRequirement.PinMessages);
@@ -105,9 +85,6 @@ public sealed class SetDiscussionGroupHandler : ChannelPropertyHandlerBase
         int date = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
         if (broadcastId is not null && groupId is not null)
         {
-            // A discussion group's history has to be readable by everyone who
-            // arrives from the channel, so a hidden pre-history refuses the link
-            // rather than silently producing a group new members cannot read.
             using (TLChannelAdminState groupState =
                    await LoadAdminStateAsync(groupId.Value, date))
             {
@@ -143,8 +120,6 @@ public sealed class SetDiscussionGroupHandler : ChannelPropertyHandlerBase
             return new BoolTrue();
         }
 
-        // One side named alone is the unlink route: whichever channel was given
-        // is detached from its counterpart, and the counterpart is cleared too.
         long subjectId = broadcastId ?? groupId!.Value;
         long counterpartId = await ReadLinkedChatIdAsync(subjectId);
         if (counterpartId == 0)
@@ -167,8 +142,6 @@ public sealed class SetDiscussionGroupHandler : ChannelPropertyHandlerBase
         return state?.AsChannelAdminState().LinkedChatId ?? 0;
     }
 
-    // Writes ONE side of the linkage: the durable id plus the `has_link` flag
-    // the compact row carries.
     private async Task LinkAsync(long channelId, byte[] channelBytes,
         long linkedChatId, long actorUserId, int date)
     {
@@ -187,8 +160,6 @@ public sealed class SetDiscussionGroupHandler : ChannelPropertyHandlerBase
             previousLinkedChatId, linkedChatId, date);
     }
 
-    // Clears both halves of whatever linkage the named channel is part of, so an
-    // unlink can never leave one side pointing at the other.
     private async Task UnlinkAsync(long channelId, long actorUserId, int date)
     {
         long counterpartId = await ReadLinkedChatIdAsync(channelId);
@@ -222,10 +193,6 @@ public sealed class SetDiscussionGroupHandler : ChannelPropertyHandlerBase
             previousLinkedChatId, 0, date);
     }
 
-    // Both sides of a link change get their own event, because each channel's log
-    // is its own. An unchanged value is NOT recorded: pinned TDLib drops an event
-    // whose prev and new linked chat are equal and logs an error for it
-    // (`DialogEventLog.cpp:265-267`), so recording one would be invisible noise.
     private async Task AppendLinkedChatEventAsync(long channelId, long actorUserId,
         long previousLinkedChatId, long linkedChatId, int date)
     {

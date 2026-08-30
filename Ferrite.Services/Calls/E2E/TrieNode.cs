@@ -5,9 +5,6 @@ using System.Security.Cryptography;
 
 namespace Ferrite.Services.Calls.E2E;
 
-// The reference stores the node kind as std::variant::index(), so these values
-// are part of the hash preimage and the network encoding, not an internal
-// choice (TDLib tde2e/td/e2e/Trie.h:24).
 public enum TrieNodeKind
 {
     Empty = 0,
@@ -16,10 +13,6 @@ public enum TrieNodeKind
     Pruned = 3,
 }
 
-// A persistent trie node. Nodes are treated as immutable by every caller except
-// TryLoad, which materialises a pruned node in place exactly as the reference's
-// const_cast'ing try_load does, so a snapshot-backed subtree is only paid for
-// once.
 public sealed class TrieNode
 {
     private TrieNode()
@@ -77,9 +70,6 @@ public sealed class TrieNode
     public static TrieNode Pruned(byte[] hash, long offset, TrieBitString baseBitString) =>
         new(hash, offset, baseBitString);
 
-    // Materialises a pruned node from the snapshot it was parsed out of. A
-    // pruned node with no offset came from a network proof and can never be
-    // loaded: the peer deliberately withheld that subtree.
     public void TryLoad(ReadOnlySpan<byte> snapshot)
     {
         if (Kind != TrieNodeKind.Pruned) return;
@@ -113,8 +103,6 @@ public sealed class TrieNode
         Hash = loaded.Hash;
     }
 
-    // store_for_hash from Trie.cpp:71-102, then sha256. A pruned node has no
-    // preimage: it carries the hash it stands in for.
     private byte[] ComputeHash()
     {
         var writer = new TrieByteWriter();

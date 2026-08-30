@@ -50,9 +50,6 @@ public sealed class SetCallRatingHandler : PhoneCallHandlerBase
                 "CALL_PEER_INVALID"u8);
         }
 
-        // Ratings are accepted but not persisted; the schema-correct empty
-        // Updates acknowledges the feedback. `Updates` alone binds to the
-        // inherited IUpdatesService field, so the TL builder is qualified.
         return Ferrite.TL.baseLayer.Updates.Builder()
             .UpdatesProperty(new Vector())
             .Users(new Vector())

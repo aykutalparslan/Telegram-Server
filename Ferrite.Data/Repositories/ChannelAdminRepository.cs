@@ -58,9 +58,6 @@ public sealed class ChannelAdminRepository : IChannelAdminRepository
 
     public async ValueTask<bool> DeleteSlowModeStatesAsync(long channelId)
     {
-        // The channel id is the leading key column, so the per-user rows are a
-        // contiguous prefix; each is deleted by its own full key because the
-        // shared storage contract only guarantees prefix ITERATION.
         var userIds = new List<long>();
         await foreach (byte[] bytes in _slowMode.IterateAsync(channelId))
         {

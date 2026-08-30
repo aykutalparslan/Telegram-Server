@@ -11,26 +11,8 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.StatsMethods;
 
-/// <summary>
-/// A supergroup's statistics.
-///
-/// The three "top" lists are the ones that make a supergroup's statistics
-/// different from a broadcast's, and each comes from a row Ferrite already keeps
-/// for another purpose: top posters from the shared message box, top
-/// administrators from the append-only administrative ledger, and top inviters
-/// from the `inviter_id` every membership row records.
-///
-/// Pinned TDLib DROPS a top-list row whose user it has never seen
-/// (`convert_megagroup_stats`, `StatisticsManager.cpp:93-105` filters invalid
-/// ids, and `get_user_id_object` needs the user), so every user any list names
-/// travels in `users`.
-/// </summary>
 public sealed class GetMegagroupStatsHandler : StatsHandlerBase
 {
-    /// <summary>
-    /// How many rows each top list carries. Telegram's own supergroup statistics
-    /// screen shows a short leaderboard rather than the whole membership.
-    /// </summary>
     private const int TopCount = 10;
 
     private static readonly StatsGraphKind[] Graphs =
@@ -45,9 +27,9 @@ public sealed class GetMegagroupStatsHandler : StatsHandlerBase
         StatsGraphKind.GroupWeekdays,
     ];
 
-    public GetMegagroupStatsHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IAuthorizationRepository authorizationRepository, IChannelAdminRepository channelAdminRepository, IChatRepository chatRepository, IUserRepository userRepository,
+    public GetMegagroupStatsHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IAuthorizationRepository authorizationRepository, IChannelAdminRepository channelAdminRepository, IChatRepository chatRepository, UserSerializer userSerializer,
         StatisticsStore statistics, StatsGraphTokens tokens, ILogger log)
-        : base(unitOfWork, chatParticipantsRepository, authorizationRepository, channelAdminRepository, chatRepository, userRepository, statistics, tokens, log)
+        : base(unitOfWork, chatParticipantsRepository, authorizationRepository, channelAdminRepository, chatRepository, userSerializer, statistics, tokens, log)
     {
     }
 
@@ -127,7 +109,7 @@ public sealed class GetMegagroupStatsHandler : StatsHandlerBase
         }
 
         var userVector = new Vector();
-        AppendUsers(ref userVector, topPosters.Select(x => x.UserId)
+        AppendUsers(access.UserId, ref userVector, topPosters.Select(x => x.UserId)
             .Concat(topAdmins.Select(x => x.UserId))
             .Concat(topInviters.Select(x => x.UserId)));
 

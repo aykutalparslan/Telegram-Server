@@ -10,12 +10,6 @@ using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Reports one channel participant's posts as spam, the route pinned TDLib takes
-/// through `ReportChannelSpamQuery` (`ChatManager.cpp:1226`). The accused is a
-/// participant rather than the channel itself, so the report is keyed to the
-/// channel peer and carries the participant as its subject.
-/// </summary>
 public sealed class ReportSpamHandler
 {
     private readonly IChatParticipantsRepository _chatParticipantsRepository;

@@ -19,13 +19,6 @@ public ref struct VectorBare
     }
     public VectorBare(Span<byte> buffer)
     {
-        // A bare vector measures itself only when every element is BOXED, because
-        // measuring means reading a constructor id out of each one. Elements can
-        // also be bare: msg_container's `messages` is Vector<%Message>, whose slots
-        // start with msg_id, and mtproto's Vector<%future_salt> likewise. There is
-        // nothing to look up for those, so the caller's slice IS the length, and
-        // trusting a failed measurement would collapse the vector to its header and
-        // make every read throw at the first element.
         _offset = TryMeasure(buffer, out int measured)
             ? Math.Min(measured, buffer.Length)
             : buffer.Length;
@@ -33,12 +26,6 @@ public ref struct VectorBare
         _position = 4;
     }
 
-    /// <summary>
-    /// Measures a bare vector of boxed elements. Returns false as soon as one
-    /// element cannot be identified, rather than skipping it: an unmeasured element
-    /// contributes zero bytes, which silently produces a length that is short by a
-    /// whole element instead of an obviously wrong one.
-    /// </summary>
     private static bool TryMeasure(Span<byte> data, out int length)
     {
         length = 4;
@@ -92,11 +79,6 @@ public ref struct VectorBare
         int len = 4;
         for (int i = 0; i < count; i++)
         {
-            // The reader is resolved PER ELEMENT unless the caller forces one.
-            // A bare vector of a boxed union carries a different constructor in
-            // every slot — e2e.chainBlock's `changes` mixes changeNoop with
-            // changeSetGroupState — so caching the first element's reader
-            // mis-measures the rest and silently shifts every following field.
             var elementReader = sizeReader ?? ObjectReader.GetObjectSizeReader(
                 MemoryMarshal.Read<int>(data.Slice(offset + len, 4)));
             if (elementReader != null) len += elementReader.Invoke(data, offset + len);
@@ -139,10 +121,6 @@ public ref struct VectorBare
         _position += result.Length;
         return result;
     }
-    // Mirrors Vector.ReadTLObject. Elements of a bare vector of boxed values
-    // still carry their own constructor id, so they can be handed straight to a
-    // generated view, which needs a Span rather than the ReadOnlySpan that
-    // Read returns.
     public Span<byte> ReadTLObject()
     {
         if (_position == _offset)

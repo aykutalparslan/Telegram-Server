@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -11,19 +10,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// The public channels and supergroups the caller CREATED, which is what
-/// `td_api::getCreatedPublicChats` (`Requests.cpp:3251`) asks for. Ownership is
-/// the filter, not administration: an admin of somebody else's public channel
-/// does not spend one of the caller's public-username slots, which is the whole
-/// reason the client asks.
-///
-/// The three flags select which slot pool is being counted:
-/// `by_location` is the location-based supergroup pool, `for_personal` the
-/// channels eligible as a personal profile chat, and `check_limit` is the same
-/// list asked for as a quota check rather than for display
-/// (`ChatManager.cpp:1395-1397`).
-/// </summary>
 public sealed class GetAdminedPublicChannelsHandler : ChannelCatalogueHandlerBase
 {
     private readonly IChannelAdminRepository _channelAdminRepository;
@@ -64,7 +50,6 @@ public sealed class GetAdminedPublicChannelsHandler : ChannelCatalogueHandlerBas
             {
                 continue;
             }
-            // A personal profile chat is a channel, never a group.
             if (forPersonal && !channel.Broadcast)
             {
                 continue;

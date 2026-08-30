@@ -2,6 +2,7 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Chatlists;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer.chatlists;
 
@@ -9,9 +10,13 @@ namespace Ferrite.Services.Handlers.ChatlistMethods;
 
 public sealed class JoinChatlistUpdatesHandler : ChatlistHandlerBase
 {
-    public JoinChatlistUpdatesHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository,
-        ChatlistInviteStore invites) : base(unitOfWork, authorizationRepository, invites)
+    private readonly ChatlistImportStore _imports;
+
+    public JoinChatlistUpdatesHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository,
+        ChatlistImportStore store) : base(unitOfWork, authorizationRepository)
     {
+        _imports = store;
     }
 
     [TLFunction(Constructors.baseLayer_JoinChatlistUpdates)]
@@ -26,7 +31,7 @@ public sealed class JoinChatlistUpdatesHandler : ChatlistHandlerBase
         {
             return RequestError();
         }
-        return await Invites.JoinUpdatesAsync(authKeyId, userId.Value, filterId,
+        return await _imports.JoinUpdatesAsync(authKeyId, userId.Value, filterId,
             peers);
     }
 }

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -13,12 +12,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// How many boosts lift a supergroup's default restrictions for a member.
-/// `set_channel_unrestrict_boost_count` (`ChatManager.cpp:3287-3300`) refuses a
-/// broadcast channel, requires restrict-members rights, and bounds the count to
-/// 0..8; the server enforces the same bound rather than trusting the client's.
-/// </summary>
 public sealed class SetBoostsToUnblockRestrictionsHandler : ChannelPropertyHandlerBase
 {
     private readonly IChannelAdminRepository _channelAdminRepository;

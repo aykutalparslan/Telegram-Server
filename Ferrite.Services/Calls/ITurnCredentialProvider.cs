@@ -9,11 +9,6 @@ namespace Ferrite.Services.Calls;
 public sealed record TurnCredentials(string Username, string Password,
     long ExpiresAtUnix);
 
-/// <summary>
-/// Mints short-lived coturn REST credentials. Discarding a call cannot
-/// instantly revoke an already established external allocation; the TTL,
-/// coturn allocation lifetime, and quotas bound that exposure.
-/// </summary>
 public interface ITurnCredentialProvider
 {
     bool IsEnabled { get; }
@@ -21,10 +16,6 @@ public interface ITurnCredentialProvider
     TurnCredentials? Create(long callId);
 }
 
-/// <summary>
-/// coturn REST authentication: username is "&lt;unix expiry&gt;:call&lt;id&gt;"
-/// and the password is base64(HMAC-SHA1(shared-secret, username)).
-/// </summary>
 public sealed class CoturnRestCredentialProvider : ITurnCredentialProvider
 {
     private readonly CallTurnOptions _options;

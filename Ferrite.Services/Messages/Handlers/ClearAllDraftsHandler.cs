@@ -35,8 +35,6 @@ public sealed class ClearAllDraftsHandler
 
         bool cleared = await _drafts.ClearAllAsync(authKeyId,
             auth.Value.AsAuthInfo().UserId);
-        // Code 500 is the pinned client's retry-storm branch; report the failure
-        // with a code it surfaces instead of resending.
         return cleared
             ? BoolTrue.Builder().Build()
             : (TLBool)RpcErrorGenerator.GenerateError(400,

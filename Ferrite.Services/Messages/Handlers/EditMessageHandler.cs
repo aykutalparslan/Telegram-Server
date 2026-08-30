@@ -2,8 +2,8 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Scheduling;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.dto;
@@ -12,13 +12,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Edits one already sent message. Only the fields whose request flags are
-/// present change; every other field of the stored row survives, including the
-/// ones a generated builder cannot re-set. Common-box messages are edited in all
-/// of their per-owner copies at once, each keeping its own local id, in/out
-/// perspective and pts; a channel post is a single shared row.
-/// </summary>
 public sealed class EditMessageHandler
 {
     private readonly IChatParticipantsRepository _chatParticipantsRepository;
@@ -97,9 +90,6 @@ public sealed class EditMessageHandler
 
         if (edit.QuickReply)
         {
-            // Quick replies are a business product Ferrite does not run. Refusing
-            // at the feature boundary with 403 keeps the branch visible and stays
-            // out of the pinned client's 500-retry path.
             return Error(403, "METHOD_DISABLED");
         }
         if (edit.MessageId <= 0)
@@ -108,11 +98,6 @@ public sealed class EditMessageHandler
         }
         if (edit.Scheduled)
         {
-            // A `schedule_date` edit addresses the SCHEDULE QUEUE, not the message
-            // box: the id names a queue entry. Pinned TDLib reaches this from
-            // `editMessageSchedulingState` with a new date and no content
-            // (`MessagesManager.cpp:23150-23153`), so it must be handled before the
-            // not-modified check that an empty content edit would otherwise fail.
             return await EditScheduledMessageAsync(authKeyId, userId, peer, edit);
         }
         if (!edit.ReplacesText && !edit.ReplacesMedia && !edit.ReplacesReplyMarkup)
@@ -126,11 +111,6 @@ public sealed class EditMessageHandler
         {
             if (PollStore.TryReadInputPoll(edit.InputMedia!, out var pollInput))
             {
-                // The only poll edit the protocol defines is closing the poll the
-                // message already carries; pinned TDLib reaches this path solely
-                // through StopPollQuery (`PollManager.cpp:194-215`). Replacing a
-                // live poll's question or options is not a supported operation,
-                // so it is refused rather than silently rewritten.
                 if (!pollInput.Closed)
                 {
                     return Error(400, "MEDIA_INVALID");
@@ -157,12 +137,6 @@ public sealed class EditMessageHandler
                 pollEdit);
     }
 
-    /// <summary>
-    /// Closes the poll the addressed message carries. Every ballot already cast
-    /// survives, and closing reveals the breakdown to everyone, so the media each
-    /// reader ends up with still differs by which options that reader chose.
-    /// Returns the closed definition plus its ballots, or the protocol error.
-    /// </summary>
     private async Task<(ErrorMessage? Error, PollStore.PollSnapshot Poll,
         IReadOnlyList<PollStore.VoteSnapshot> Votes)> ClosePollAsync(
         PollStore.PollInput requested, MessageIdentity identity)
@@ -173,8 +147,6 @@ public sealed class EditMessageHandler
             return (new ErrorMessage(400, "MESSAGE_ID_INVALID"), default,
                 Array.Empty<PollStore.VoteSnapshot>());
         }
-        // A close names the poll it closes, so a stale client cannot close a poll
-        // that has since been replaced on the same message id.
         if (requested.RequestedId != 0 &&
             requested.RequestedId != stored.Value.PollId)
         {
@@ -196,17 +168,6 @@ public sealed class EditMessageHandler
                 Array.Empty<PollStore.VoteSnapshot>());
     }
 
-    /// <summary>
-    /// Moves or rewrites one entry of the schedule queue. The entry keeps its
-    /// scheduled id, so the client updates the queue row it already has rather than
-    /// gaining a second one, which is what /api/scheduled-messages requires of an
-    /// `updateNewScheduledMessage` with an existing id.
-    ///
-    /// A date that is no longer far enough in the future is NOT silently sent here:
-    /// `messages.sendScheduledMessages` is the method that flushes, and pinned TDLib
-    /// routes a cleared scheduling state there
-    /// (`MessagesManager.cpp:23154-23156`).
-    /// </summary>
     private async Task<TLUpdates> EditScheduledMessageAsync(long authKeyId,
         long userId, DialogPeerKey peer, RequestedEdit edit)
     {
@@ -265,7 +226,7 @@ public sealed class EditMessageHandler
             .IncrementSeq();
         _log.Debug($"⏰ Rescheduled user:{userId} peer:{peer.Type}:{peer.Id} " +
                    $"scheduled:{moved.ScheduledId} at:{moved.SendDate}");
-        return _fanout.BuildUpdates(new[] { updateBytes }, userIds, chats, now, seq);
+        return _fanout.BuildUpdates(userId, new[] { updateBytes }, userIds, chats, now, seq);
     }
 
     private async Task<TLUpdates> EditCommonMessageAsync(long authKeyId, long userId,
@@ -304,14 +265,9 @@ public sealed class EditMessageHandler
             }
             closedPoll = closed.Poll;
             votes = closed.Votes;
-            // Only used to prove the row changes; each copy gets its own below.
             mediaBytes = PollStore.BuildMedia(closedPoll, votes, userId, UnixNow());
         }
 
-        // Self-dialog messages have no recipient to surprise, so Telegram exempts
-        // them from the ordinary edit window. Stopping a poll is exempt for a
-        // different reason: it changes no content a reader already read, and a
-        // poll routinely outlives the 48-hour window its message was sent in.
         bool exemptFromWindow = (peer.Type == TLPeer.PeerType.PeerUser &&
                                  peer.Id == userId) || pollEdit != null;
         string? checkError = CheckEditable(callerCopy.Value.MessageBytes, userId,
@@ -323,8 +279,6 @@ public sealed class EditMessageHandler
         }
 
         int editDate = UnixNow();
-        // Closing a poll reveals the tallies to everyone, but `chosen` stays
-        // personal, so each per-owner copy is rebuilt against its own owner.
         byte[]? PerCopyMedia(StoredMessageLocation location) => pollEdit == null
             ? mediaBytes
             : PollStore.BuildMedia(closedPoll, votes, location.OwnerId, editDate);
@@ -353,7 +307,6 @@ public sealed class EditMessageHandler
                 continue;
             }
 
-            // EnqueueUpdate owns the value it is handed, so this is a transfer.
             await _updates.EnqueueUpdate(copy.OwnerId,
                 BuildEditUpdate(copy.MessageBytes, pts, channel: false));
         }
@@ -374,7 +327,7 @@ public sealed class EditMessageHandler
             .IncrementSeq();
         _log.Debug($"✏️ EditMessage user:{userId} peer:{peer.Type}:{peer.Id} " +
                    $"id:{edit.MessageId} copies:{updated.Count}");
-        return _fanout.BuildUpdates(new[] { callerUpdateBytes }, userIds, chats,
+        return _fanout.BuildUpdates(userId, new[] { callerUpdateBytes }, userIds, chats,
             editDate, seq);
     }
 
@@ -442,8 +395,6 @@ public sealed class EditMessageHandler
             }
             closedPoll = closed.Poll;
             votes = closed.Votes;
-            // A channel post exists once and cannot carry one member's `chosen`
-            // flags, so the shared row stores the neutral, voter-less view.
             mediaBytes = PollStore.BuildMedia(closedPoll, votes, 0, UnixNow());
         }
 
@@ -453,8 +404,6 @@ public sealed class EditMessageHandler
             edit, mediaBytes, out int code);
         if (checkError != null)
         {
-            // A broadcast post the caller neither authored nor may administer is
-            // reported as missing admin rights rather than as a wrong author.
             if (checkError == "MESSAGE_AUTHOR_REQUIRED" && broadcast)
             {
                 return Error(400, "CHAT_ADMIN_REQUIRED");
@@ -481,11 +430,6 @@ public sealed class EditMessageHandler
         List<long> memberIds = await _fanout.GetOtherActiveChannelMemberIdsAsync(
             channelId, userId);
 
-        // A closed poll's results are no longer `min`, and pinned TDLib takes a
-        // non-min result as authoritative for `chosen`
-        // (`PollManager.cpp:1769`). Delivering the neutral shared row to a member
-        // who voted would therefore erase their own answer from their client, so
-        // each member's update carries the poll as that member sees it.
         byte[] ViewerMessageBytes(long viewerId)
         {
             byte[] bytes = updated.Value.MessageBytes;
@@ -515,16 +459,10 @@ public sealed class EditMessageHandler
             .IncrementSeq();
         _log.Debug($"✏️ EditMessage user:{userId} channel:{channelId} " +
                    $"id:{edit.MessageId} pts:{pts} members:{memberIds.Count}");
-        return _fanout.BuildUpdates(new[] { callerUpdateBytes }, new[] { userId },
+        return _fanout.BuildUpdates(userId, new[] { callerUpdateBytes }, new[] { userId },
             new[] { channelBytes }, editDate, seq);
     }
 
-    /// <summary>
-    /// Finishes a live-location edit against the row being edited. Stopping a
-    /// live location carries no position and no period, so the resolved media
-    /// takes the row's last known point and a period equal to the time it was
-    /// actually live. Every other media edit passes through untouched.
-    /// </summary>
     private byte[]? CompleteLiveLocationEdit(byte[]? mediaBytes,
         StoredMessageLocation location)
     {
@@ -544,11 +482,6 @@ public sealed class EditMessageHandler
             message.Date, UnixNow());
     }
 
-    /// <summary>
-    /// Rejects an edit that the caller may not perform or that would change
-    /// nothing. The stored bytes are read synchronously so no ref-struct view
-    /// crosses an await.
-    /// </summary>
     private string? CheckEditable(byte[] storedBytes, long userId,
         DialogPeerKey requestedPeer, bool allowAdministrativeEdit,
         bool exemptFromWindow, RequestedEdit edit, byte[]? mediaBytes,
@@ -590,7 +523,6 @@ public sealed class EditMessageHandler
         {
             return true;
         }
-        // Replacing the text without entities drops the ones the row still holds.
         if (edit.ReplacesText && !edit.ReplacesEntities && message.Flags[7])
         {
             return true;
@@ -677,7 +609,6 @@ public sealed class EditMessageHandler
         return null;
     }
 
-    // Await-safe snapshot of the request; every ref-struct view is read here.
     private sealed record RequestedEdit(int MessageId, byte[] Text, bool ReplacesText,
         byte[] Entities, bool ReplacesEntities, byte[]? InputMedia, bool ReplacesMedia,
         byte[] ReplyMarkup, bool ReplacesReplyMarkup, bool Scheduled,

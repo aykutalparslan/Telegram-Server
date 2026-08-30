@@ -2,6 +2,7 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Chatlists;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer.chatlists;
 
@@ -9,9 +10,13 @@ namespace Ferrite.Services.Handlers.ChatlistMethods;
 
 public sealed class EditExportedInviteHandler : ChatlistHandlerBase
 {
-    public EditExportedInviteHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository,
-        ChatlistInviteStore invites) : base(unitOfWork, authorizationRepository, invites)
+    private readonly ChatlistInviteStore _invites;
+
+    public EditExportedInviteHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository,
+        ChatlistInviteStore store) : base(unitOfWork, authorizationRepository)
     {
+        _invites = store;
     }
 
     [TLFunction(Constructors.baseLayer_EditExportedInvite)]
@@ -33,6 +38,6 @@ public sealed class EditExportedInviteHandler : ChatlistHandlerBase
         }
         string slug = ReadSlug(request.Slug);
         byte[]? title = request.Flags[1] ? request.Title.ToArray() : null;
-        return await Invites.EditAsync(userId.Value, filterId, slug, title, peers);
+        return await _invites.EditAsync(userId.Value, filterId, slug, title, peers);
     }
 }

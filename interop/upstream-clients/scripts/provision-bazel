@@ -1,0 +1,66 @@
+#!/bin/sh
+# Prints the pinned Bazel binary for the iOS build, downloading it into the
+# launcher's toolchain cache when the caller has not supplied one. The digest
+# checked here is the same one build-ios enforces, so a download that does not
+# match it is discarded rather than cached.
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PUBLIC_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
+PIN="$PUBLIC_ROOT/interop/upstream-clients/PIN"
+
+die() {
+  echo "provision-bazel: $*" >&2
+  exit 1
+}
+
+if [ -n "${FERRITE_IOS_BAZEL:-}" ]; then
+  printf '%s\n' "$FERRITE_IOS_BAZEL"
+  exit 0
+fi
+
+for command in awk curl shasum uname; do
+  command -v "$command" >/dev/null 2>&1 || die "required command is missing: $command"
+done
+
+[ -f "$PIN" ] || die "PIN is missing"
+. "$PIN"
+: "${IOS_CANDIDATE_BAZEL:?missing IOS_CANDIDATE_BAZEL}"
+: "${IOS_CANDIDATE_BAZEL_SHA256:?missing IOS_CANDIDATE_BAZEL_SHA256}"
+
+case "$(uname -s)/$(uname -m)" in
+  Darwin/arm64)
+    url=${IOS_BAZEL_URL_DARWIN_ARM64:?missing IOS_BAZEL_URL_DARWIN_ARM64}
+    ;;
+  *)
+    die "the pinned Bazel $IOS_CANDIDATE_BAZEL digest is for Darwin/arm64; set FERRITE_IOS_BAZEL on $(uname -s)/$(uname -m)"
+    ;;
+esac
+
+CACHE=${FERRITE_IOS_TOOLCHAINS:-"$PUBLIC_ROOT/.ferrite/upstream-apps/toolchains"}
+TARGET="$CACHE/bazel-$IOS_CANDIDATE_BAZEL"
+
+if [ -x "$TARGET" ]; then
+  cached=$(shasum -a 256 "$TARGET" | awk '{print $1}')
+  if [ "$cached" = "$IOS_CANDIDATE_BAZEL_SHA256" ]; then
+    printf '%s\n' "$TARGET"
+    exit 0
+  fi
+  rm -f "$TARGET"
+fi
+
+mkdir -p "$CACHE"
+STAGING="$TARGET.partial"
+rm -f "$STAGING"
+
+echo "provision-bazel: downloading Bazel $IOS_CANDIDATE_BAZEL" >&2
+curl -fsSL --retry 3 --retry-delay 5 -o "$STAGING" "$url" || die "could not download $url"
+actual=$(shasum -a 256 "$STAGING" | awk '{print $1}')
+[ "$actual" = "$IOS_CANDIDATE_BAZEL_SHA256" ] || {
+  rm -f "$STAGING"
+  die "Bazel digest is $actual, expected $IOS_CANDIDATE_BAZEL_SHA256"
+}
+
+chmod +x "$STAGING"
+mv "$STAGING" "$TARGET"
+printf '%s\n' "$TARGET"

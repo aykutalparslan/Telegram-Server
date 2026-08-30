@@ -2,8 +2,7 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using DotNext.Buffers;
-using Ferrite.Data;
-using Ferrite.Services;
+using Ferrite.Services.Sessions;
 using Ferrite.Core.Execution;
 using Ferrite.TL;
 using Ferrite.TL.mtproto;
@@ -76,7 +75,7 @@ public class MsgContainerProcessor : ILinkedHandler
 
     private async ValueTask SendMsgsAck(object? sender, TLExecutionContext ctx, IReadOnlyList<long> msgIds)
     {
-        Services.MTProtoMessage message = new Services.MTProtoMessage
+        Services.Transport.MTProtoMessage message = new Services.Transport.MTProtoMessage
         {
             SessionId = ctx.SessionId,
             IsResponse = true,

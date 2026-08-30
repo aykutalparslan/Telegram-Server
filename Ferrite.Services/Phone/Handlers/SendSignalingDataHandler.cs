@@ -40,8 +40,6 @@ public sealed class SendSignalingDataHandler : PhoneCallHandlerBase
             return (TLBool)RpcErrorGenerator.GenerateError(400, "CALL_PEER_INVALID"u8);
         }
 
-        // Signaling only flows once the call is fully negotiated and between the
-        // two bound devices.
         if (snapshot.State != CallSessionState.Confirmed ||
             snapshot.CalleeAuthKeyId is not long calleeAuthKey)
         {
@@ -72,8 +70,6 @@ public sealed class SendSignalingDataHandler : PhoneCallHandlerBase
             return (TLBool)RpcErrorGenerator.GenerateError(400, "DATA_INVALID"u8);
         }
 
-        // Forward the opaque payload unchanged to the other bound device; the
-        // bytes are never parsed or stored.
         TLUpdate update = UpdatePhoneCallSignalingData.Builder()
             .PhoneCallId(callId)
             .Data(data)

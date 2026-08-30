@@ -14,7 +14,7 @@ using CryptoPasswordSrpChallenge = Ferrite.Crypto.PasswordSrpChallenge;
 using TLAccountPassword = Ferrite.TL.baseLayer.account.TLPassword;
 using TLAuthorization = Ferrite.TL.baseLayer.auth.TLAuthorization;
 
-namespace Ferrite.Services;
+namespace Ferrite.Services.Account;
 
 public interface IAccountPasswordManager
 {
@@ -35,22 +35,10 @@ public interface IAccountPasswordManager
     ValueTask<TLTmpPassword> GetTemporaryPasswordAsync(long authKeyId,
         TLInputCheckPasswordSRP password, int period);
 
-    /// <summary>
-    /// Verifies a 2FA proof WITHOUT completing an authorization or issuing
-    /// anything, for the methods that merely need the caller re-authenticated
-    /// before an irreversible action. `channels.editCreator` is the first.
-    /// </summary>
     ValueTask<PasswordVerificationStatus> VerifyPasswordAsync(long authKeyId,
         TLInputCheckPasswordSRP password);
 }
 
-/// <summary>
-/// The outcome of a standalone 2FA proof check. The three failures are kept
-/// apart because pinned TDLib reads them as different things: `PasswordMissing`
-/// is what `can_transfer_ownership` maps to `CanTransferOwnershipResult::
-/// PasswordNeeded` (`DialogParticipantManager.cpp:2957-2979`), while
-/// `ProofInvalid` is the ordinary wrong-password answer.
-/// </summary>
 public enum PasswordVerificationStatus
 {
     Success,

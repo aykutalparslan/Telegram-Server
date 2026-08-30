@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -13,13 +12,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.toggleGroupCallRecord. Recording is a call-only manager setting, so it
-/// preserves the participant version and publishes viewer-correct
-/// updateGroupCall rows. The coordinator owns the long-running worker/import
-/// transition and makes repeated desired states GROUPCALL_NOT_MODIFIED, which
-/// pinned TDLib maps to success.
-/// </summary>
 public sealed class ToggleGroupCallRecordHandler : GroupCallHandlerBase
 {
     private const int MaxTitleLength = 64;

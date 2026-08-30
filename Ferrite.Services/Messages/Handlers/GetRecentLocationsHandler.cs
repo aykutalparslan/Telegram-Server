@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -11,12 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Returns the still-running live locations of one dialog, newest first. A
-/// stopped live location is stored with its period shortened to the time it was
-/// actually live, so one `date + period > now` rule answers both "stopped" and
-/// "expired" and no separate stop marker has to be persisted.
-/// </summary>
 public sealed class GetRecentLocationsHandler
 {
     private readonly IChatParticipantsRepository _chatParticipantsRepository;
@@ -91,8 +84,6 @@ public sealed class GetRecentLocationsHandler
             return MessagesNotModified.Builder().Count(live.Count).Build();
         }
 
-        // The selection is already limited, so the pagination pass must not
-        // narrow it again.
         var query = new HistoryQuery(0, 0, 0, live.Count, 0, 0);
         return channelId > 0
             ? await _dialogs.BuildChannelMessagesAsync(userId, channelId, live, query,

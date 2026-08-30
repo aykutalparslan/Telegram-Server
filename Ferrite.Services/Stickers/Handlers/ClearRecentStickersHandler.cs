@@ -10,8 +10,14 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class ClearRecentStickersHandler : StickerHandlerBase
 {
-    public ClearRecentStickersHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerCollectionStore _collections;
+
+    public ClearRecentStickersHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerCollectionStore store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _collections = store;
+    }
 
     [TLFunction(Constructors.baseLayer_ClearRecentStickers)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
@@ -19,7 +25,7 @@ public sealed class ClearRecentStickersHandler : StickerHandlerBase
         bool attached = ((ClearRecentStickers)q).Attached;
         long? userId = await GetUserIdAsync(authKeyId);
         return userId.HasValue
-            ? await Store.ClearRecentAsync(userId.Value, authKeyId, attached)
+            ? await _collections.ClearRecentAsync(userId.Value, authKeyId, attached)
             : AuthError();
     }
 }

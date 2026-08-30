@@ -15,16 +15,17 @@ using Ferrite.Core.Execution.Functions.BaseLayer;
 using Ferrite.Core.Framing;
 using Ferrite.Core.RequestChain;
 using Ferrite.Crypto;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.GroupCallMedia;
-using Ferrite.Services;
 using Ferrite.Services.Calls;
+using Ferrite.Services.Chatlists;
 using Ferrite.Services.Calls.E2E;
 using Ferrite.Services.Gateway;
 using Ferrite.Services.Phone.Handlers;
 using Ferrite.Services.SecretChats;
 using Ferrite.Services.SecretChats.Handlers;
+using Ferrite.Services.Scheduling;
+using Ferrite.Services.Sessions;
 using Ferrite.Services.Stats;
 using Ferrite.TL;
 using Ferrite.Transport;
@@ -75,10 +76,6 @@ public class ServerBuilder
         builder.Register(_ => new DataCenter(1, options.PublicAddress,
                 options.Port, false))
             .As<IDataCenter>().SingleInstance();
-        // Bind and advertised call-media endpoints stay separate from the
-        // MTProto DataCenter address. The development default binds an
-        // ephemeral port; only an empty advertised address falls back to the
-        // server's public address.
         CallMediaRelayOptions callMedia = options.CallMedia
             ?? new CallMediaRelayOptions();
         if (callMedia.AdvertisedAddress.Length == 0)
@@ -382,6 +379,9 @@ public class ServerBuilder
         builder.RegisterType<TransportErrorFeature>().As<ITransportErrorFeature>().SingleInstance();
         builder.RegisterType<WebSocketFeature>().As<IWebSocketFeature>();
         builder.RegisterType<ProtoTransport>();
+        builder.RegisterType<MessageIdGenerator>().As<IMessageIdGenerator>().SingleInstance();
+        builder.RegisterType<ReceivedMessageIdRegistry>()
+            .As<IReceivedMessageIdRegistry>().SingleInstance();
         builder.RegisterType<MTProtoSession>().As<IMTProtoSession>();
         builder.RegisterType<MTProtoTransportDetector>().As<ITransportDetector>();
         builder.RegisterType<SocketConnectionListener>().As<IConnectionListener>();
@@ -390,10 +390,6 @@ public class ServerBuilder
 
     internal static void RegisterApiLayers(ContainerBuilder builder)
     {
-        // Bespoke protocol handlers self-declare their FunctionKey at class level.
-        // Business handlers in Ferrite.Services declare it on Handle; the generic
-        // adapter below supplies CurrentAuthKeyId and the rpc_result envelope so
-        // method orchestration never moves into Ferrite.Core.
         Type[] handlerTypes = typeof(ITLFunction).Assembly.GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false }
                         && t.GetCustomAttribute<TLFunctionAttribute>() is not null)
@@ -444,9 +440,6 @@ public class ServerBuilder
             .As(DisabledMethods.Keys.Select(k => new KeyedService(k, typeof(ITLFunction))).ToArray())
             .SingleInstance();
 
-        // The deferred bucket is empty, and Autofac refuses a
-        // registration that exposes no service at all, so the 501 fallback is
-        // only registered while something still needs it.
         if (NotImplementedMethods.Keys.Length > 0)
         {
             builder.RegisterType<NotImplementedFunc>()
@@ -535,10 +528,6 @@ public class ServerBuilder
             .As<ISecretChatTransitionRepair>().SingleInstance();
         builder.RegisterType<SecretChatAuthKeyCleanup>()
             .As<ISecretChatAuthKeyCleanup>().SingleInstance();
-        // 1:1 call collaborators. CallMediaRelayOptions and
-        // CallTurnOptions instances come from the structured server options in
-        // BuildContainer; no PhoneService aggregate or manual function key is
-        // registered — phone.* handlers register through the assembly scan.
         builder.RegisterInstance(TimeProvider.System).As<TimeProvider>()
             .SingleInstance();
         builder.RegisterInstance(new CallRegistryOptions()).SingleInstance();
@@ -578,13 +567,7 @@ public class ServerBuilder
         groupCallRecording.Validate();
         builder.RegisterInstance(groupCallRecording).AsSelf().SingleInstance();
         builder.RegisterType<GroupCallActivityTracker>().AsSelf().SingleInstance();
-        // Live per-viewer SSRC mappings. Deliberately in-memory: the worker
-        // re-derives them on every join, so a persisted snapshot would outlive the
-        // transports it names.
         builder.RegisterType<GroupCallMediaSourceMap>().AsSelf().SingleInstance();
-        // The tde2e conference chain: the authoritative validator and ordering
-        // server for E2E conference calls, plus the join half both
-        // createConferenceCall and joinGroupCall's flags.3 branch run.
         builder.RegisterType<GroupCallChainService>()
             .As<IGroupCallChainService>().AsSelf().SingleInstance();
         builder.RegisterType<ConferenceJoinOperation>().AsSelf().SingleInstance();
@@ -639,11 +622,22 @@ public class ServerBuilder
         builder.RegisterType<ScheduledMessageSender>().AsSelf().SingleInstance();
         builder.RegisterType<ScheduledMessageFlusher>().AsSelf().SingleInstance();
         builder.RegisterType<ScheduledMessageRuntime>().AsSelf().SingleInstance();
+        builder.RegisterType<UserSerializer>().AsSelf().SingleInstance();
         builder.RegisterType<UpdateFanout>().AsSelf().SingleInstance();
+        builder.RegisterType<DeliveredPtsRecorder>().AsSelf().SingleInstance();
         builder.RegisterType<DialogOrganizationStore>().AsSelf().SingleInstance();
         builder.RegisterType<DialogFilterStore>().AsSelf().SingleInstance();
         builder.RegisterType<ChatlistInviteStore>().AsSelf().SingleInstance();
-        builder.RegisterType<StickerStore>().AsSelf().SingleInstance();
+        builder.RegisterType<ChatlistImportStore>().AsSelf().SingleInstance();
+        builder.RegisterType<StickerSetLookup>().AsSelf().SingleInstance();
+        builder.RegisterType<StickerDocumentIndex>().AsSelf().SingleInstance();
+        builder.RegisterType<StickerAccountStore>().AsSelf().SingleInstance();
+        builder.RegisterType<StickerUpdateNotifier>().AsSelf().SingleInstance();
+        builder.RegisterType<StickerSetCatalog>().AsSelf().SingleInstance();
+        builder.RegisterType<StickerSearchIndex>().AsSelf().SingleInstance();
+        builder.RegisterType<StickerCollectionStore>().AsSelf().SingleInstance();
+        builder.RegisterType<StickerSetEditor>().AsSelf().SingleInstance();
+        builder.RegisterType<EmojiCatalogStore>().AsSelf().SingleInstance();
         builder.RegisterType<StatisticsStore>().AsSelf().SingleInstance();
         builder.RegisterType<StatsGraphTokens>().AsSelf().SingleInstance();
         builder.RegisterType<AccountSettingsStore>().AsSelf().SingleInstance();

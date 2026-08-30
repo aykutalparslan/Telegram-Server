@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -54,7 +53,6 @@ public sealed class JoinChannelHandler : ChannelsHandlerBase
         }
         if (alreadyActive)
         {
-            // Idempotent: the caller is already a member; just echo the channel row.
             return await BuildChannelUpdates(authKeyId, currentUserId, channelBytes,
                 Array.Empty<long>());
         }
@@ -84,7 +82,6 @@ public sealed class JoinChannelHandler : ChannelsHandlerBase
         _log.Debug($"📣 JoinChannel user:{currentUserId} channel:{id} megagroup:{megagroup}");
         if (megagroup)
         {
-            // Megagroups record a join as a messageActionChatAddUser service message.
             byte[] actionBytes;
             {
                 var actionUsers = new VectorOfLong();

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer.channels;
@@ -15,12 +14,12 @@ public sealed class GetForumTopicsByIDHandler
     private readonly IChatParticipantsRepository _chatParticipantsRepository;
     private readonly IChatRepository _chatRepository;
     private readonly IForumTopicsRepository _forumTopicsRepository;
-    private readonly IUserRepository _userRepository;
+    private readonly UserSerializer _userSerializer;
 
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICounterFactory _counterFactory;
 
-    public GetForumTopicsByIDHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IChannelMessagesRepository channelMessagesRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IForumTopicsRepository forumTopicsRepository, IUserRepository userRepository,
+    public GetForumTopicsByIDHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IChannelMessagesRepository channelMessagesRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IForumTopicsRepository forumTopicsRepository, UserSerializer userSerializer,
         ICounterFactory counterFactory)
     {
         _authorizationRepository = authorizationRepository;
@@ -28,7 +27,7 @@ public sealed class GetForumTopicsByIDHandler
         _chatParticipantsRepository = chatParticipantsRepository;
         _chatRepository = chatRepository;
         _forumTopicsRepository = forumTopicsRepository;
-        _userRepository = userRepository;
+        _userSerializer = userSerializer;
 
         _unitOfWork = unitOfWork;
         _counterFactory = counterFactory;
@@ -43,7 +42,7 @@ public sealed class GetForumTopicsByIDHandler
         var topics = request.Topics;
         List<int> topicIds = new List<int>(topics.Count);
         for (int i = 0; i < topics.Count; i++) topicIds.Add(topics[i]);
-        return await ChannelForumTopics.GetAsync(_authorizationRepository, _chatRepository, _chatParticipantsRepository, _channelMessagesRepository, _forumTopicsRepository, _userRepository, _counterFactory,
+        return await ChannelForumTopics.GetAsync(_authorizationRepository, _chatRepository, _chatParticipantsRepository, _channelMessagesRepository, _forumTopicsRepository, _userSerializer, _counterFactory,
             authKeyId, channelId, string.Empty, 0, 0, 0, topicIds.Count, topicIds);
     }
 }

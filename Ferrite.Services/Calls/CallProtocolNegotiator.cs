@@ -12,12 +12,6 @@ public enum CallProtocolError
     VersionOutdated,
 }
 
-/// <summary>
-/// Pure current-client protocol validation and selection. The server-ordered
-/// allow-list is 5.0.0 then 2.7.7; both the v1 and v2 pinned tgcalls stacks
-/// speak the modern reflector grammar, and the negotiated result carries
-/// exactly one library version because the client instantiates index zero.
-/// </summary>
 public static class CallProtocolNegotiator
 {
     public const int ConnectionLayer = 92;
@@ -65,12 +59,6 @@ public static class CallProtocolNegotiator
         return CallProtocolError.VersionOutdated;
     }
 
-    /// <summary>
-    /// Selects the single negotiated protocol from two valid offers. The
-    /// result's UdpP2p flag only records that both parties requested P2P;
-    /// final P2P permission additionally requires bilateral privacy and is
-    /// decided at confirm time.
-    /// </summary>
     public static (CallProtocol? Protocol, CallProtocolError Error) Negotiate(
         CallProtocol callerOffer, CallProtocol calleeOffer,
         CallRegistryOptions options)

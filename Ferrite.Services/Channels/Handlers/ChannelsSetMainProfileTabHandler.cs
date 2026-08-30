@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -14,13 +13,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Stores the tab a channel's profile opens on, surfaced as
-/// `channelFull.main_tab`. Pinned TDLib issues this method from NOWHERE -- it
-/// has no query class and no td_api entry point, the same shape
-/// `account.setMainProfileTab` had in -- so the generated-request
-/// Function/RPC gate is its only real integration by construction.
-/// </summary>
 public sealed class ChannelsSetMainProfileTabHandler : ChannelPropertyHandlerBase
 {
     private readonly IChannelAdminRepository _channelAdminRepository;
@@ -72,10 +64,6 @@ public sealed class ChannelsSetMainProfileTabHandler : ChannelPropertyHandlerBas
         return new BoolTrue();
     }
 
-    // The union is copied out of the request buffer rather than referenced,
-    // because the row outlives the request. An unrecognised arm is refused
-    // instead of stored, so `channelFull.main_tab` can never carry a
-    // constructor the client cannot read.
     private static byte[]? ReadProfileTab(ProfileTabView view)
     {
         if (view.Is(out ProfileTabPosts posts)) return posts.ToReadOnlySpan().ToArray();

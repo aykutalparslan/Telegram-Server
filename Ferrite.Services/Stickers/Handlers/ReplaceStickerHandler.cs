@@ -9,21 +9,27 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class ReplaceStickerHandler : StickerHandlerBase
 {
-    public ReplaceStickerHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerSetEditor _editor;
+
+    public ReplaceStickerHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerSetEditor store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _editor = store;
+    }
 
     [TLFunction(Constructors.baseLayer_ReplaceSticker)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
     {
         var request = (ReplaceSticker)q;
-        var old = StickerStore.ReadInputDocument(request.Get_StickerView());
-        StickerStore.StickerItemInput? replacement = StickerStore.ReadItem(
+        var old = StickerInput.ReadInputDocument(request.Get_StickerView());
+        StickerItemInput? replacement = StickerInput.ReadItem(
             request.Get_NewStickerView());
         if (!old.Id.HasValue || !old.AccessHash.HasValue ||
             !replacement.HasValue) return Invalid("STICKER_ID_INVALID");
         long? userId = await GetUserIdAsync(authKeyId);
         return userId.HasValue
-            ? await Store.ReplaceAsync(userId.Value, old.Id.Value,
+            ? await _editor.ReplaceAsync(userId.Value, old.Id.Value,
                 old.AccessHash.Value, replacement.Value) : AuthError();
     }
 }

@@ -4,6 +4,7 @@
 using System.Text;
 using Ferrite.TL;
 using TLDto = Ferrite.TL.baseLayer.dto;
+using Ferrite.Data.Models;
 
 namespace Ferrite.Data.Repositories;
 
@@ -164,10 +165,6 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
         return builder.Build();
     }
 
-    // Starting a scheduled call clears schedule_date. Generated Clone() builders
-    // can only carry optional fields forward or set them, never remove one, so the
-    // row is rebuilt field-by-field to make the scheduled -> active transition
-    // unambiguous on the wire and in durable state.
     private static TLDto.TLGroupCallState StartScheduledCallRow(
         TLDto.TLGroupCallState call, int startedDate)
     {
@@ -206,9 +203,6 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
         return builder.Build();
     }
 
-    // Generated Clone() builders cannot clear optional fields. Stopping a
-    // recording must remove every active-recording flag while preserving the
-    // monotonic generation, so both transitions rebuild the call row explicitly.
     private static TLDto.TLGroupCallState BuildRecordingCallRow(
         TLDto.TLGroupCallState call, bool start, int startDate,
         long initiatingUserId, string title, bool video, bool portrait,
@@ -292,12 +286,6 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
             .Build();
     }
 
-    // Clone() carries every already-set optional field forward and the generated
-    // builders can only turn flags ON, so an edit that may CLEAR a flag (unmute,
-    // lower a hand, stop video) rebuilds the row field by field: each stored value
-    // is copied unless the spec overrides it, and an override of false/absent
-    // simply never sets the flag. See
-    // generator fix that would collapse this.
     private static TLDto.TLGroupCallParticipantState BuildEditedParticipant(
         TLDto.TLGroupCallParticipantState participant, GroupCallParticipantEditSpec edit)
     {
@@ -377,11 +365,6 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
         return builder.Build();
     }
 
-    // Clone() carries every already-set optional field forward and the generated
-    // builders have no way to unset one, so clearing presentation_endpoint means
-    // rebuilding the row field by field. Every other optional field is copied only
-    // when its flag is set, which keeps an unset field unset.
-    // the generator fix that would collapse this to Clone().ClearPresentationEndpoint().
     private static TLDto.TLGroupCallParticipantState RebuildParticipant(
         TLDto.TLGroupCallParticipantState participant, string? presentationEndpoint)
     {
@@ -467,9 +450,6 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
             view.RandomId);
     }
 
-    // A left participant row keeps its original source in the dto value but is
-    // stored under source key 0, so the by_source index only ever references the
-    // single active row that owns a source.
     private void PutParticipant(TLDto.TLGroupCallParticipantState participant)
     {
         var view = participant.AsGroupCallParticipantState();
@@ -510,12 +490,6 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
         TLDto.TLGroupCallState call, CancellationToken cancellationToken = default) =>
         CreateCallAsync(call, conference: false, cancellationToken);
 
-    /// <summary>
-    /// Creates an E2E conference call, which has no host peer. The one active
-    /// call per peer rule is a peer rule and therefore does not apply, so two
-    /// conference calls by the same creator coexist; dedup keys on
-    /// (creator_user_id, random_id) instead of (peer, random_id).
-    /// </summary>
     public ValueTask<GroupCallCreateResult> TryCreateConferenceCallAsync(
         TLDto.TLGroupCallState call, CancellationToken cancellationToken = default) =>
         CreateCallAsync(call, conference: true, cancellationToken);
@@ -534,8 +508,6 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
                 "A conference row must be created through TryCreateConferenceCallAsync " +
                 "and a hosted row through TryCreateCallAsync.", nameof(call));
         }
-        // A conference row carries creator_user_id in the peer_id column, so the
-        // dedup index and this gate are already keyed by the creator.
         SemaphoreSlim peerGate = GetGate(_peerGates, peerId);
         await peerGate.WaitAsync(cancellationToken);
         try
@@ -581,10 +553,6 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
         }
     }
 
-    // The active-call index is what restart reconciliation iterates, so a
-    // conference has to be in it even though it has no host peer. It is keyed by
-    // the call itself under the reserved peer type, which no chat/channel
-    // selector can ever produce.
     private static (int PeerType, long PeerId) ActiveCallKey(TLDto.TLGroupCallState call)
     {
         var view = call.AsGroupCallState();
@@ -597,9 +565,6 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
         CancellationToken cancellationToken = default) =>
         await GetCallInternalAsync(callId, cancellationToken);
 
-    // The peer selectors answer "which call does this chat or channel host", so
-    // they refuse the reserved conference peer type outright. A conference is
-    // reachable only by call id, which is what makes it peerless.
     private static bool IsHostPeer(int peerType) =>
         peerType is (int)GroupCallPeerType.Chat or (int)GroupCallPeerType.Channel;
 
@@ -692,12 +657,6 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
         }
     }
 
-    // Join-muted, title, and invite rotation are CALL-ONLY settings and must not
-    // consume a participants version: pinned TDLib treats an unseen version as a
-    // participant-list gap and schedules a full resync
-    // (GroupCallManager.cpp on_receive_group_call_version), while a changed
-    // title/mute delivered at the CURRENT version is still applied because the
-    // per-field version checks are >= (GroupCallManager.cpp:5488-5495, 5602-5619).
     public ValueTask<GroupCallMutationResult> TrySetJoinMutedAsync(long callId,
         bool joinMuted, CancellationToken cancellationToken = default) =>
         MutateCallAsync(callId, current =>
@@ -989,11 +948,6 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
                         version, mediaEpoch);
                 }
 
-                // One persisted join/leave consumes one participant version. A
-                // restart invalidates every live transport at once, so advance by
-                // the number of rows atomically changed and move the media epoch
-                // once. Re-running after success finds no active rows and is a
-                // byte-for-byte no-op.
                 var reconciledView = call.Value.AsGroupCallState();
                 TLDto.TLGroupCallState updatedValue = reconciledView.Clone()
                     .ParticipantsCount(0)
@@ -1342,16 +1296,25 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
         CancellationToken cancellationToken = default)
     {
         int count = 0;
-        await foreach (byte[] bytes in _participants
-                           .IterateBySecondaryIndexAsync("by_call_order", callId)
-                           .WithCancellation(cancellationToken))
+        SemaphoreSlim callGate = GetGate(_callGates, callId);
+        await callGate.WaitAsync(cancellationToken);
+        try
         {
-            using var participant = ReadParticipant(bytes);
-            var view = participant.AsGroupCallParticipantState();
-            if (!view.Left && view.VideoJoined)
+            await foreach (byte[] bytes in _participants
+                               .IterateBySecondaryIndexAsync("by_call_order", callId)
+                               .WithCancellation(cancellationToken))
             {
-                count++;
+                using var participant = ReadParticipant(bytes);
+                var view = participant.AsGroupCallParticipantState();
+                if (!view.Left && view.VideoJoined)
+                {
+                    count++;
+                }
             }
+        }
+        finally
+        {
+            callGate.Release();
         }
         return count;
     }
@@ -1389,8 +1352,19 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
     }
 
     public async ValueTask<TLDto.TLGroupCallParticipantState?> GetParticipantAsync(
-        long callId, long userId, CancellationToken cancellationToken = default) =>
-        await GetParticipantInternalAsync(callId, userId, cancellationToken);
+        long callId, long userId, CancellationToken cancellationToken = default)
+    {
+        SemaphoreSlim callGate = GetGate(_callGates, callId);
+        await callGate.WaitAsync(cancellationToken);
+        try
+        {
+            return await GetParticipantInternalAsync(callId, userId, cancellationToken);
+        }
+        finally
+        {
+            callGate.Release();
+        }
+    }
 
     public async ValueTask<TLDto.TLGroupCallParticipantState?> GetParticipantBySourceAsync(
         long callId, int source, CancellationToken cancellationToken = default)
@@ -1399,8 +1373,18 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
         {
             return null;
         }
-        byte[]? bytes = await _participants.GetBySecondaryIndexAsync("by_source", callId,
-            source);
+        SemaphoreSlim callGate = GetGate(_callGates, callId);
+        await callGate.WaitAsync(cancellationToken);
+        byte[]? bytes;
+        try
+        {
+            bytes = await _participants.GetBySecondaryIndexAsync("by_source", callId,
+                source);
+        }
+        finally
+        {
+            callGate.Release();
+        }
         if (bytes == null)
         {
             return null;
@@ -1456,29 +1440,38 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
         int lastJoinDate = 0;
         long lastUserId = 0;
         bool hasMore = false;
-        await foreach (byte[] bytes in _participants
-                           .IterateBySecondaryIndexAsync("by_call_order", callId)
-                           .WithCancellation(cancellationToken))
+        SemaphoreSlim callGate = GetGate(_callGates, callId);
+        await callGate.WaitAsync(cancellationToken);
+        try
         {
-            var participant = ReadParticipant(bytes);
-            var view = participant.AsGroupCallParticipantState();
-            if (view.Left ||
-                (anchored && (view.JoinDate < afterJoinDate ||
-                              (view.JoinDate == afterJoinDate &&
-                               view.UserId <= afterUserId))))
+            await foreach (byte[] bytes in _participants
+                               .IterateBySecondaryIndexAsync("by_call_order", callId)
+                               .WithCancellation(cancellationToken))
             {
-                participant.Dispose();
-                continue;
+                var participant = ReadParticipant(bytes);
+                var view = participant.AsGroupCallParticipantState();
+                if (view.Left ||
+                    (anchored && (view.JoinDate < afterJoinDate ||
+                                  (view.JoinDate == afterJoinDate &&
+                                   view.UserId <= afterUserId))))
+                {
+                    participant.Dispose();
+                    continue;
+                }
+                if (page.Count == limit)
+                {
+                    participant.Dispose();
+                    hasMore = true;
+                    break;
+                }
+                lastJoinDate = view.JoinDate;
+                lastUserId = view.UserId;
+                page.Add(participant);
             }
-            if (page.Count == limit)
-            {
-                participant.Dispose();
-                hasMore = true;
-                break;
-            }
-            lastJoinDate = view.JoinDate;
-            lastUserId = view.UserId;
-            page.Add(participant);
+        }
+        finally
+        {
+            callGate.Release();
         }
         string? nextOffset = hasMore && page.Count > 0
             ? EncodeOffset(lastJoinDate, lastUserId)
@@ -1590,11 +1583,6 @@ public sealed class GroupCallsRepository : IGroupCallsRepository
             await _inviteGate.WaitAsync(cancellationToken);
             try
             {
-                // Invite creation and generation rotation share the call gate.
-                // Store against the generation current at the linearization point,
-                // rather than the generation the handler observed before awaiting
-                // access and persistence work. The invite gate makes the secondary
-                // hash index globally unique across calls at that same point.
                 if (await _invites.GetBySecondaryIndexAsync("by_hash", hash) != null)
                 {
                     return false;

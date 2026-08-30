@@ -10,15 +10,72 @@
       <AdditionalFiles Include="mtproto.tl">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </AdditionalFiles>
-      <None Remove="layer148.tl" />
-      <None Remove="layer150.tl" />
-      <None Remove="dto.tl" />
       <None Remove="baseLayer.tl" />
       <AdditionalFiles Include="baseLayer.tl">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </AdditionalFiles>
       <None Remove="e2eChain.tl" />
       <AdditionalFiles Include="e2eChain.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <!-- Historical layers must be parsed after baseLayer.tl: the generator
+           disambiguates an identifier it has seen before by prefixing the
+           namespace, so a declaration parsed first would rename the current
+           type instead of the older one. -->
+      <None Remove="layer2.tl" />
+      <AdditionalFiles Include="layer2.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <None Remove="layer23.tl" />
+      <AdditionalFiles Include="layer23.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <None Remove="layer51.tl" />
+      <AdditionalFiles Include="layer51.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <None Remove="layer58.tl" />
+      <AdditionalFiles Include="layer58.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <None Remove="layer67.tl" />
+      <AdditionalFiles Include="layer67.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <None Remove="layer95.tl" />
+      <AdditionalFiles Include="layer95.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <None Remove="layer104.tl" />
+      <AdditionalFiles Include="layer104.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <None Remove="layer105.tl" />
+      <AdditionalFiles Include="layer105.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <None Remove="layer107.tl" />
+      <AdditionalFiles Include="layer107.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <None Remove="layer120.tl" />
+      <AdditionalFiles Include="layer120.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <None Remove="layer133.tl" />
+      <AdditionalFiles Include="layer133.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <None Remove="layer135.tl" />
+      <AdditionalFiles Include="layer135.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <None Remove="layer150.tl" />
+      <AdditionalFiles Include="layer150.tl">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </AdditionalFiles>
+      <None Remove="layer214.tl" />
+      <AdditionalFiles Include="layer214.tl">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </AdditionalFiles>
     </ItemGroup>
@@ -28,7 +85,6 @@
     </ItemGroup>
     <ItemGroup>
         <None Remove="mtproto.tl" />
-        <None Remove="layer146.tl" />
     </ItemGroup>
     <ItemGroup>
       <PackageReference Include="DotNext.IO" Version="6.3.0" />

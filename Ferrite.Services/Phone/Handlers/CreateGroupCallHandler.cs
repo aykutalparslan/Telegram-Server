@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -14,12 +13,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.createGroupCall. Starts the one call a basic group or channel may host,
-/// immediately or scheduled. The media room is allocated before the call row is
-/// committed and compensated when the commit does not win, so a persisted call
-/// always has a room and a lost race never leaks one.
-/// </summary>
 public sealed class CreateGroupCallHandler : GroupCallHandlerBase
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -28,8 +21,6 @@ public sealed class CreateGroupCallHandler : GroupCallHandlerBase
 
     private readonly IGroupCallsRepository _groupCallsRepository;
 
-    // Matches pinned TDLib's MAX_TITLE_LENGTH; its client truncates, so a longer
-    // title only reaches Ferrite from a raw client.
     private const int MaxTitleLength = 64;
 
     private readonly IdAllocators _ids;
@@ -80,8 +71,6 @@ public sealed class CreateGroupCallHandler : GroupCallHandlerBase
         }
 
         int now = Now();
-        // A scheduled call must start in the future; TDLib only sets the flag for a
-        // positive start date, so anything at or before now is a raw-client error.
         if (hasScheduleDate && scheduleDate <= now)
         {
             return Error(GroupCallErrors.ScheduleDateInvalid);
@@ -150,8 +139,6 @@ public sealed class CreateGroupCallHandler : GroupCallHandlerBase
             case GroupCallCreateStatus.Created:
                 break;
             case GroupCallCreateStatus.Idempotent:
-                // The same (peer, random_id) already created this call. Replay its
-                // result only: no second room, action message, or fan-out.
                 await ReleaseRoomAsync(scheduled, callId);
                 using (TLDto.TLGroupCallState existing = created.Call!.Value)
                 {
@@ -171,8 +158,6 @@ public sealed class CreateGroupCallHandler : GroupCallHandlerBase
 
         GroupCallViewer viewer = await BuildViewerAsync(callId, access.CurrentUserId,
             access.CanManageCall);
-        // A call this request just created has no participants, so nobody is
-        // publishing video yet.
         byte[] callUpdate = BuildCallUpdateBytes(call, viewer, peer.Id,
             unmutedVideoCount: 0);
         await PushCallUpdateToOtherMembersAsync(call, peer.Id, access.CurrentUserId,
@@ -189,8 +174,6 @@ public sealed class CreateGroupCallHandler : GroupCallHandlerBase
         (TLUpdatesResult)RpcErrorGenerator.GenerateError(400,
             Encoding.UTF8.GetBytes(message));
 
-    // A scheduled call defers media allocation to startScheduledGroupCall,
-    // so there is nothing to release on its failure paths.
     private async Task ReleaseRoomAsync(bool scheduled, long callId)
     {
         if (scheduled)
@@ -268,18 +251,12 @@ public sealed class CreateGroupCallHandler : GroupCallHandlerBase
         return action.AsSpan().ToArray();
     }
 
-    /// <summary>
-    /// The duplicate-random-id answer: the same updateGroupCall the first call
-    /// returned, with no message-box or version side effects.
-    /// </summary>
     private async ValueTask<TLUpdatesResult> BuildReplayResultAsync(long authKeyId,
         GroupCallPeerAccess access, TLDto.TLGroupCallState call)
     {
         long callId = call.AsGroupCallState().Id;
         GroupCallViewer viewer = await BuildViewerAsync(callId, access.CurrentUserId,
             access.CanManageCall);
-        // The first create may be long past, so the replay reports the call's
-        // current video count rather than assuming it is still empty.
         int videoCount = await CountUnmutedVideoAsync(callId);
         byte[] callUpdate = BuildCallUpdateBytes(call, viewer, access.Peer.Id, videoCount);
         return await BuildInvokerResultAsync(authKeyId, access.CurrentUserId,

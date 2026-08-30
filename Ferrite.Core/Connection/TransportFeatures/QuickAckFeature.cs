@@ -4,7 +4,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
 using DotNext.Buffers;
-using Ferrite.Services;
 
 namespace Ferrite.Core.Connection.TransportFeatures;
 

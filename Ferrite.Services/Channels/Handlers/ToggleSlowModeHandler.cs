@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -13,19 +12,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Slow mode spans both rows: `slowmode_enabled` is a flag on the compact
-/// `channel` row that every reader is served, while the delay itself has no home
-/// there and lives in `dto.channelAdminState.slowmode_seconds`.
-///
-/// Turning it OFF drops the whole channel's per-user deadlines rather than
-/// leaving them to expire: with no delay the next send is immediate for
-/// EVERYONE, not merely for whoever had not posted yet.
-///
-/// `set_channel_slow_mode_delay` (`ChatManager.cpp:3671-3696`) accepts only
-/// {0, 10, 30, 60, 300, 900, 3600}, requires a supergroup and gates it on
-/// restrict-members rights.
-/// </summary>
 public sealed class ToggleSlowModeHandler : ChannelPropertyHandlerBase
 {
     private readonly IChannelAdminRepository _channelAdminRepository;

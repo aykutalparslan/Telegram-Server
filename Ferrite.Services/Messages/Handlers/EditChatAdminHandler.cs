@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -98,8 +97,6 @@ public sealed class EditChatAdminHandler : MessagesHandlerBase
                     int newVersion = ReadChatVersion(updatedChatBytes);
                     await _unitOfWork.SaveAsync();
 
-                    // Push the changed participant list (with the bumped chat version) to
-                    // every active member; the Bool result itself carries no state.
                     var refreshed = new List<TLChatParticipantInfo>(context.ActiveParticipants.Count);
                     foreach (var participantInfo in context.ActiveParticipants)
                     {

@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -14,13 +13,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.leaveGroupCallPresentation. Tears down only the screen-share transport
-/// and clears the stored endpoint; the camera join is untouched. Idempotent — a
-/// participant with no live presentation gets an empty, successful answer rather
-/// than an error, because a client that already stopped sharing has nothing to
-/// recover from.
-/// </summary>
 public sealed class LeaveGroupCallPresentationHandler : GroupCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -65,10 +57,6 @@ public sealed class LeaveGroupCallPresentationHandler : GroupCallHandlerBase
             return Error(GroupCallErrors.GroupCallJoinMissing);
         }
 
-        // The worker call comes first and is idempotent: a transport that is
-        // already gone reports false, which is not an error here. The stale screen
-        // mapping goes with it, or every viewer's next row would still carry SSRCs
-        // the worker has stopped forwarding.
         await ReleasePresentationAsync(callId, mediaId);
         SourceMap.RemoveProducerPresentation(callId, mediaId);
 
@@ -77,8 +65,6 @@ public sealed class LeaveGroupCallPresentationHandler : GroupCallHandlerBase
                 presentationEndpoint: null);
         if (stored.Status == GroupCallParticipantEditStatus.NoChange)
         {
-            // Nothing was being shared. The camera join is untouched and the
-            // caller gets an empty result rather than a spurious version step.
             Log.Debug($"📞 leaveGroupCallPresentation call:{callId} " +
                       $"user:{access.CurrentUserId} had no live presentation");
             return await BuildInvokerResultAsync(authKeyId, access.CurrentUserId,
@@ -101,8 +87,6 @@ public sealed class LeaveGroupCallPresentationHandler : GroupCallHandlerBase
 
         GroupCallViewer viewer = await BuildViewerAsync(callId, access.CurrentUserId,
             access.CanManageCall);
-        // The camera mapping this viewer already holds is reused deliberately: only
-        // the presentation half of the row goes away.
         GroupCallParticipantOverlay selfOverlay = BuildOverlay(callId, mediaId, mediaId);
         var updates = new List<byte[]>(2);
         using (TLGroupCallParticipant selfRow = GroupCallBuilders.BuildParticipant(

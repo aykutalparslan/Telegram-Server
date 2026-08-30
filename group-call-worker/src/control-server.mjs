@@ -247,6 +247,13 @@ export function createGroupCallControlServer({
 
       const broadcastMatch = url.pathname.match(
           /^\/broadcast\/([0-9]+)(?:\/(credentials|channels|segments))?$/);
+      if (request.method === 'DELETE' && url.pathname === '/broadcast' &&
+          broadcast) {
+        sendJson(response, 200, {
+          ended: await broadcast.endAllStreams()
+        });
+        return;
+      }
       if (broadcastMatch && broadcast) {
         const callId = parseCallId(broadcastMatch[1]);
         const operation = broadcastMatch[2] ?? '';
@@ -321,6 +328,10 @@ export function createGroupCallControlServer({
       }
 
       const roomMatch = url.pathname.match(/^\/rooms\/([0-9]+)$/);
+      if (request.method === 'DELETE' && url.pathname === '/rooms') {
+        sendJson(response, 200, { ended: await plane.endAllRooms() });
+        return;
+      }
       if (roomMatch) {
         const callId = parseCallId(roomMatch[1]);
         if (request.method === 'PUT') {

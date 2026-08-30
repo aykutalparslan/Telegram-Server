@@ -11,27 +11,8 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.StatsMethods;
 
-/// <summary>
-/// A broadcast channel's statistics, computed from the rows Ferrite stores.
-///
-/// Nothing here is fabricated. Every counter is a count over real membership,
-/// real posts, real view receipts, real reactions and the real public-forward
-/// index, and a figure with no rows behind it is reported as ZERO rather than
-/// invented — most visibly `views_per_story`, `shares_per_story` and
-/// `reactions_per_story`, which are zero because every `stories.*` method is
-/// permanently disabled and no story can exist.
-///
-/// `enabled_notifications` is `0/0` for the same kind of reason: notification
-/// settings are keyed by AUTH KEY rather than by user, so a channel's members
-/// cannot be asked whether they muted it. Pinned TDLib turns `0/0` into 0%
-/// (`get_percentage_value`, `StatisticsManager.cpp:64-71`).
-/// </summary>
 public sealed class GetBroadcastStatsHandler : StatsHandlerBase
 {
-    /// <summary>
-    /// How many recent posts travel with their interaction counters. The client
-    /// shows a short "recent posts" list rather than the whole history.
-    /// </summary>
     private const int RecentPosts = 10;
 
     private static readonly StatsGraphKind[] Graphs =
@@ -50,9 +31,9 @@ public sealed class GetBroadcastStatsHandler : StatsHandlerBase
         StatsGraphKind.ChannelStoryReactionsByEmotion,
     ];
 
-    public GetBroadcastStatsHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IAuthorizationRepository authorizationRepository, IChannelAdminRepository channelAdminRepository, IChatRepository chatRepository, IUserRepository userRepository,
+    public GetBroadcastStatsHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IAuthorizationRepository authorizationRepository, IChannelAdminRepository channelAdminRepository, IChatRepository chatRepository, UserSerializer userSerializer,
         StatisticsStore statistics, StatsGraphTokens tokens, ILogger log)
-        : base(unitOfWork, chatParticipantsRepository, authorizationRepository, channelAdminRepository, chatRepository, userRepository, statistics, tokens, log)
+        : base(unitOfWork, chatParticipantsRepository, authorizationRepository, channelAdminRepository, chatRepository, userSerializer, statistics, tokens, log)
     {
     }
 
@@ -70,23 +51,14 @@ public sealed class GetBroadcastStatsHandler : StatsHandlerBase
         }
         if (access.Megagroup)
         {
-            // One td_api entry point selects between the two answers by the
-            // channel's own kind, so a mismatch is the client asking the wrong
-            // question rather than a permission problem.
             return Error("BROADCAST_REQUIRED");
         }
 
         ChannelStatsSnapshot snapshot = await _statistics.LoadAsync(access.ChannelId);
         int now = UnixNow();
         StatsCounters.Period period = StatsCounters.CurrentPeriod(now);
-        // Every graph is a token the client redeems through stats.loadAsyncGraph,
-        // so the answer itself stays a cheap set of counters. The set owns pooled
-        // memory and must outlive the Build() that reads its spans.
         using StatsGraphSet graphs = _tokens.IssueAll(access.ChannelId, 0, Graphs,
             dark, now);
-        // Issuing a token is a WRITE, and a write left pending when the request's
-        // storage scope ends is an error rather than a lost row. It is flushed
-        // here, before the first ref-struct vector exists.
         await _unitOfWork.SaveAsync();
 
         using TLStatsDateRangeDays range = StatsDateRangeDays.Builder()

@@ -1,0 +1,93 @@
+#!/bin/sh
+# Prints a JDK home for the pinned Android build, downloading the pinned
+# Temurin build into the launcher's toolchain cache when the caller has not
+# supplied one. One public command has to start the applications on a host that
+# was never set up by hand, and a JDK the host happens to carry is not
+# interchangeable with the one the pinned APK digest was produced by.
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PUBLIC_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
+PIN="$PUBLIC_ROOT/interop/upstream-clients/PIN"
+
+die() {
+  echo "provision-jdk: $*" >&2
+  exit 1
+}
+
+if [ -n "${FERRITE_ANDROID_JAVA_HOME:-}" ]; then
+  printf '%s\n' "$FERRITE_ANDROID_JAVA_HOME"
+  exit 0
+fi
+
+for command in awk curl find shasum tar uname; do
+  command -v "$command" >/dev/null 2>&1 || die "required command is missing: $command"
+done
+
+[ -f "$PIN" ] || die "PIN is missing"
+. "$PIN"
+: "${ANDROID_JDK_MAJOR:?missing ANDROID_JDK_MAJOR}"
+: "${ANDROID_JDK_VERSION:?missing ANDROID_JDK_VERSION}"
+
+case "$(uname -s)/$(uname -m)" in
+  Darwin/arm64)
+    url=${ANDROID_JDK_URL_DARWIN_ARM64:?missing ANDROID_JDK_URL_DARWIN_ARM64}
+    digest=${ANDROID_JDK_SHA256_DARWIN_ARM64:?missing ANDROID_JDK_SHA256_DARWIN_ARM64}
+    ;;
+  Darwin/x86_64)
+    url=${ANDROID_JDK_URL_DARWIN_X64:?missing ANDROID_JDK_URL_DARWIN_X64}
+    digest=${ANDROID_JDK_SHA256_DARWIN_X64:?missing ANDROID_JDK_SHA256_DARWIN_X64}
+    ;;
+  Linux/aarch64)
+    url=${ANDROID_JDK_URL_LINUX_ARM64:?missing ANDROID_JDK_URL_LINUX_ARM64}
+    digest=${ANDROID_JDK_SHA256_LINUX_ARM64:?missing ANDROID_JDK_SHA256_LINUX_ARM64}
+    ;;
+  Linux/x86_64)
+    url=${ANDROID_JDK_URL_LINUX_X64:?missing ANDROID_JDK_URL_LINUX_X64}
+    digest=${ANDROID_JDK_SHA256_LINUX_X64:?missing ANDROID_JDK_SHA256_LINUX_X64}
+    ;;
+  *)
+    die "the pin carries no JDK $ANDROID_JDK_MAJOR for $(uname -s)/$(uname -m)"
+    ;;
+esac
+
+CACHE=${FERRITE_ANDROID_TOOLCHAINS:-"$PUBLIC_ROOT/.ferrite/upstream-apps/toolchains"}
+TARGET="$CACHE/temurin-$ANDROID_JDK_VERSION"
+
+report() {
+  [ -x "$1/bin/javac" ] || die "provisioned JDK has no bin/javac: $1"
+  grep -q "^IMPLEMENTOR_VERSION=\"Temurin-$ANDROID_JDK_VERSION\"$" "$1/release" || \
+    die "provisioned JDK is not Temurin-$ANDROID_JDK_VERSION"
+  printf '%s\n' "$1"
+  exit 0
+}
+
+if [ -f "$TARGET/.home" ]; then
+  report "$(cat "$TARGET/.home")"
+fi
+
+mkdir -p "$CACHE"
+STAGING="$TARGET.partial"
+rm -rf "$STAGING"
+mkdir -p "$STAGING"
+ARCHIVE="$STAGING/jdk.tar.gz"
+
+echo "provision-jdk: downloading Temurin $ANDROID_JDK_VERSION" >&2
+curl -fsSL --retry 3 --retry-delay 5 -o "$ARCHIVE" "$url" || \
+  die "could not download $url"
+actual=$(shasum -a 256 "$ARCHIVE" | awk '{print $1}')
+[ "$actual" = "$digest" ] || {
+  rm -rf "$STAGING"
+  die "JDK digest is $actual, expected $digest"
+}
+
+tar -xzf "$ARCHIVE" -C "$STAGING"
+rm -f "$ARCHIVE"
+rm -rf "$TARGET"
+mv "$STAGING" "$TARGET"
+
+javac=$(find "$TARGET" -maxdepth 5 -type f -path '*/bin/javac' | head -1)
+[ -n "$javac" ] || die "the downloaded archive carries no bin/javac"
+home=$(CDPATH= cd -- "$(dirname -- "$(dirname -- "$javac")")" && pwd)
+printf '%s\n' "$home" > "$TARGET/.home"
+report "$home"

@@ -10,8 +10,14 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class SaveRecentStickerHandler : StickerHandlerBase
 {
-    public SaveRecentStickerHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerCollectionStore _collections;
+
+    public SaveRecentStickerHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerCollectionStore store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _collections = store;
+    }
 
     [TLFunction(Constructors.baseLayer_SaveRecentSticker)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
@@ -19,15 +25,15 @@ public sealed class SaveRecentStickerHandler : StickerHandlerBase
         var request = (SaveRecentSticker)q;
         bool attached = request.Attached;
         bool unsave = request.Unsave;
-        var input = StickerStore.ReadInputDocument(request.Get_IdView());
+        var input = StickerInput.ReadInputDocument(request.Get_IdView());
         if (!input.Id.HasValue || !input.AccessHash.HasValue)
             return Invalid("STICKER_ID_INVALID");
         long? userId = await GetUserIdAsync(authKeyId);
         return userId.HasValue
-            ? await Store.SaveCollectionDocumentAsync(userId.Value, authKeyId,
+            ? await _collections.SaveCollectionDocumentAsync(userId.Value, authKeyId,
                 input.Id.Value, input.AccessHash.Value, attached
-                    ? StickerStore.AccountCollection.AttachedRecent
-                    : StickerStore.AccountCollection.Recent, unsave)
+                    ? StickerCollection.AttachedRecent
+                    : StickerCollection.Recent, unsave)
             : AuthError();
     }
 }

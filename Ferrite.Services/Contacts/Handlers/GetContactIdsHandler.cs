@@ -3,7 +3,6 @@
 
 using System.Text;
 using DotNext.Collections.Generic;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -20,7 +19,7 @@ public sealed class GetContactIdsHandler : ContactsHandlerBase
 
     public GetContactIdsHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IContactsRepository contactsRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
         IUpdatesService updates, IUpdatesContextFactory updatesContextFactory)
-        : base(unitOfWork, userRepository, userStatusRepository, search, updates, updatesContextFactory)
+        : base(unitOfWork, contactsRepository, userRepository, userStatusRepository, search, updates, updatesContextFactory)
     {
         _authorizationRepository = authorizationRepository;
         _contactsRepository = contactsRepository;

@@ -21,12 +21,6 @@ namespace Ferrite.Crypto
             int rnd = RandomNumberGenerator.GetInt32(generatedPrimes.Length);
             return generatedPrimes[rnd];
         }
-        /// <summary>
-        /// Implements the basic version of the sieve with the odds-only
-        /// optimization.
-        /// </summary>
-        /// <param name="toInclusive"></param>
-        /// <returns></returns>
         public static int[] SieveOfEratosthenes(int toInclusive)
         {
             if (toInclusive < 2)
@@ -60,12 +54,6 @@ namespace Ferrite.Crypto
             }
             return result.ToArray();
         }
-        /// <summary>
-        /// Implements the segmented version of the sieve.
-        /// </summary>
-        /// <param name="fromInclusive"></param>
-        /// <param name="toInclusive"></param>
-        /// <returns></returns>
         public static int[] SieveOfEratosthenesSegmented(int fromInclusive, int toInclusive)
         {
             List<int> result = new();
@@ -129,13 +117,6 @@ namespace Ferrite.Crypto
         
             return (uint)result;
         }
-        /// <summary>
-        /// Implements the Miller-Rabin primality test algorithm from
-        /// https://en.wikipedia.org/wiki/Miller-Rabin_primality_test
-        /// </summary>
-        /// <param name="n"></param>
-        /// <param name="k"></param>
-        /// <returns></returns>
         public static bool MillerRabin(int n)
         {
             if (n % 2 == 0 || n < 2)
@@ -207,7 +188,6 @@ namespace Ferrite.Crypto
                 max = buff;
             }
 
-            // offset to set min = 0
             BigInteger offset = BigInteger.Negate(min);
             min = 0;
             max = BigInteger.Add(max, offset);
@@ -221,17 +201,12 @@ namespace Ferrite.Crypto
             BigInteger value;
             var bytes = max.ToByteArray();
 
-            // count how many bits of the most significant byte are 0
-            // NOTE: sign bit is always 0 because `max` must always be positive
             byte zeroBitsMask = 0b00000000;
 
             var mostSignificantByte = bytes[bytes.Length - 1];
 
-            // we try to set to 0 as many bits as there are in the most significant byte, starting from the left (most significant bits first)
-            // NOTE: `i` starts from 7 because the sign bit is always 0
             for (var i = 7; i >= 0; i--)
             {
-                // we keep iterating until we find the most significant non-0 bit
                 if ((mostSignificantByte & (0b1 << i)) != 0)
                 {
                     var zeroBits = 7 - i;
@@ -244,12 +219,10 @@ namespace Ferrite.Crypto
             {
                 rng.GetBytes(bytes);
 
-                // set most significant bits to 0 (because `value > max` if any of these bits is 1)
                 bytes[bytes.Length - 1] &= zeroBitsMask;
 
                 value = new BigInteger(bytes);
 
-                // `value > max` 50% of the times, in which case the fastest way to keep the distribution uniform is to try again
             } while (value.CompareTo(max) > 0);
 
             return value;

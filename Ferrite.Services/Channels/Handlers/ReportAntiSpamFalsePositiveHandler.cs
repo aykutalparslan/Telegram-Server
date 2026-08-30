@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -14,18 +13,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Records that an administrator considers one message a false positive of the
-/// aggressive anti-spam filter.
-///
-/// It is an ADMIN report about the filter, not a report about a user, so it is
-/// appended to the same moderation ledger every other report uses rather than
-/// being counted anywhere: Ferrite runs no anti-spam classifier, so there is no
-/// model for the report to correct, and inventing a counter would be a
-/// placeholder. The report is only accepted where the filter is actually on --
-/// reporting a false positive of a filter that is off would record something
-/// that cannot have happened.
-/// </summary>
 public sealed class ReportAntiSpamFalsePositiveHandler : ChannelPropertyHandlerBase
 {
     private readonly IChannelMessagesRepository _channelMessagesRepository;

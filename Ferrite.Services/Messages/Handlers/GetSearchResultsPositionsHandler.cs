@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -11,13 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Where a conversation's matching messages sit in the filtered result list.
-/// Pinned TDLib turns each row into a `messagePosition` and uses the offsets to
-/// jump around a media list without loading it (`MessagesManager.cpp:18566`), so
-/// an offset is the zero-based index in the FULL descending match list, not in
-/// the page that carries it.
-/// </summary>
 public sealed class GetSearchResultsPositionsHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -78,8 +70,6 @@ public sealed class GetSearchResultsPositionsHandler
         for (int index = 0; index < matched.Count; index++)
         {
             MessageSnapshot snapshot = matched[index];
-            // `offset_id` is where the client wants to resume; it sends the id
-            // after the newest known message when it wants the whole list.
             if (offsetId > 0 && snapshot.Id >= offsetId)
             {
                 continue;

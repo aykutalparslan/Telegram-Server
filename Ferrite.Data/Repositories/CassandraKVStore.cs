@@ -94,7 +94,10 @@ public class CassandraKVStore : IKVStore
         }
         sb.Append("));");
         var statement = new SimpleStatement(sb.ToString());
-        _context.Execute(statement);
+        if (!_context.TableExists(_table.Keyspace, _table.Name))
+        {
+            ExecuteSchema(statement);
+        }
         foreach (var sc in _table.SecondaryIndices)
         {
             pcount = 0;
@@ -143,7 +146,23 @@ public class CassandraKVStore : IKVStore
             }
             sb.Append("));");
             statement = new SimpleStatement(sb.ToString());
+            string secondaryTableName = $"{_table.Name}_{sc.Name}";
+            if (!_context.TableExists(_table.Keyspace, secondaryTableName))
+            {
+                ExecuteSchema(statement);
+            }
+        }
+    }
+
+    private void ExecuteSchema(SimpleStatement statement)
+    {
+        try
+        {
             _context.Execute(statement);
+        }
+        catch (TimeoutException)
+        {
+            _context.Execute(new SimpleStatement(statement.QueryString));
         }
     }
 
@@ -232,9 +251,6 @@ public class CassandraKVStore : IKVStore
         return new ValueTask<bool>(true);
     }
 
-    // Deletes the matching main row(s) and every secondary-index row that
-    // references them, mirroring the RocksDB store semantics. Index rows must
-    // be resolved before the main rows are removed.
     private void EnqueueDelete(object[] keys)
     {
         StringBuilder sb = new StringBuilder($"DELETE FROM {_table.Keyspace}.{_table.Name} " +
@@ -428,7 +444,6 @@ public class CassandraKVStore : IKVStore
         return sb.ToString();
     }
 
-    // Index tables store the referenced primary key in pk_-prefixed columns.
     private object[] PrimaryKeyFromIndexRow(Row row)
     {
         List<object> primaryParameters = new();

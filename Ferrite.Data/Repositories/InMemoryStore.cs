@@ -8,10 +8,6 @@ namespace Ferrite.Data.Repositories;
 
 public class InMemoryStore : IVolatileKVStore
 {
-    // We will be using Redis unless we have a really small deployment
-    // in which case this will just do fine however we should still
-    // optimize this in the future
-    // TODO: Benchmark and optimize this
     private readonly ConcurrentDictionary<byte[], (byte[], long)> _dictionary = new(new ArrayEqualityComparer());
     private readonly ConcurrentDictionary<byte[], (SortedList<long, byte[]>, long)> _lists =
         new(new ArrayEqualityComparer());
@@ -201,8 +197,6 @@ public class InMemoryStore : IVolatileKVStore
     public IList<byte[]> ListGet(params object[] keys)
     {
         var primaryKey = MemcomparableKey.Create(_table.FullName, keys);
-        // Reads must not consume the list; only an expired entry is removed. Redis
-        // sorted-set reads are non-destructive and this store mirrors them.
         bool found = _lists.TryGetValue(primaryKey.ArrayValue, out var existing);
         long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
         if (found && (existing.Item2 <= 0 || existing.Item2 > now))

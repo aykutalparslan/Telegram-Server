@@ -10,11 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Remembers which of the senders channels.getSendAs offers the account should
-/// post as in one destination by default. An explicit send_as on a send still
-/// overrides it.
-/// </summary>
 public sealed class SaveDefaultSendAsHandler
 {
     private readonly IChatParticipantsRepository _chatParticipantsRepository;

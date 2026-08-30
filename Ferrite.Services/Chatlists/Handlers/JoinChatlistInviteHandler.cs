@@ -3,6 +3,7 @@
 
 using System.Text;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Chatlists;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer.chatlists;
 
@@ -10,9 +11,13 @@ namespace Ferrite.Services.Handlers.ChatlistMethods;
 
 public sealed class JoinChatlistInviteHandler : ChatlistHandlerBase
 {
-    public JoinChatlistInviteHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository,
-        ChatlistInviteStore invites) : base(unitOfWork, authorizationRepository, invites)
+    private readonly ChatlistImportStore _imports;
+
+    public JoinChatlistInviteHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository,
+        ChatlistImportStore store) : base(unitOfWork, authorizationRepository)
     {
+        _imports = store;
     }
 
     [TLFunction(Constructors.baseLayer_JoinChatlistInvite)]
@@ -27,6 +32,6 @@ public sealed class JoinChatlistInviteHandler : ChatlistHandlerBase
             return RequestError();
         }
         string slug = Encoding.UTF8.GetString(request.Slug);
-        return await Invites.JoinInviteAsync(authKeyId, userId.Value, slug, peers);
+        return await _imports.JoinInviteAsync(authKeyId, userId.Value, slug, peers);
     }
 }

@@ -116,7 +116,9 @@ export function buildRecordingFfmpegArguments({
         '-analyzeduration', '0', '-f', 'ivf', '-i', 'pipe:3');
   }
   args.push('-protocol_whitelist', 'file,udp,rtp',
-      '-fflags', '+genpts+nobuffer', '-f', 'sdp', '-i', sdpPath,
+      '-fflags', '+genpts+nobuffer',
+      '-use_wallclock_as_timestamps', '1', '-reorder_queue_size', '0',
+      '-f', 'sdp', '-i', sdpPath,
       '-filter_complex', filterGraph({
         audioCount, video, portrait, vp9Pipe
       }), '-map', '[aout]', '-c:a', 'aac', '-b:a', '96k', '-ar', '48000',

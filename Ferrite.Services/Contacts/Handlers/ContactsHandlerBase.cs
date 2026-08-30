@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -16,17 +15,19 @@ public abstract class ContactsHandlerBase
 {
     private readonly IUserRepository _userRepository;
     private readonly IUserStatusRepository _userStatusRepository;
+    private readonly UserSerializer _userSerializer;
 
     protected readonly IUnitOfWork _unitOfWork;
     protected readonly ISearchEngine _search;
     protected readonly IUpdatesService _updates;
     protected readonly IUpdatesContextFactory _updatesContextFactory;
 
-    protected ContactsHandlerBase(IUnitOfWork unitOfWork, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
+    protected ContactsHandlerBase(IUnitOfWork unitOfWork, IContactsRepository contactsRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
         IUpdatesService updates, IUpdatesContextFactory updatesContextFactory)
     {
         _userRepository = userRepository;
         _userStatusRepository = userStatusRepository;
+        _userSerializer = new UserSerializer(userRepository, userStatusRepository, contactsRepository);
 
         _unitOfWork = unitOfWork;
         _search = search;
@@ -129,14 +130,11 @@ public abstract class ContactsHandlerBase
         return result;
     }
 
-    protected async ValueTask<TLUser?> GetUserInternal(long userId)
-    {
-        using var user = _userRepository.GetUser(userId);
-        if (user == null) return null;
-        var status = await _userStatusRepository
-            .GetUserStatusAsync(user.Value.AsUser().Id);
-        return user.Value.AsUser().Clone().Status(status.AsSpan()).Build();
-    }
+    protected ValueTask<TLUser?> GetUserInternal(long viewerUserId, long userId) =>
+        _userSerializer.GetAsync(viewerUserId, userId);
+
+    protected ValueTask<TLUser> WithStatus(long viewerUserId, TLUser user) =>
+        _userSerializer.WithStatusAsync(viewerUserId, user);
 
     protected static List<long> ToInputUserIds(Vector inputUsers, long selfUserId)
     {

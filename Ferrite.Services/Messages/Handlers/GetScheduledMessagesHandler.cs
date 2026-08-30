@@ -3,18 +3,13 @@
 
 using System.Text;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Scheduling;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Answers with the named entries of one dialog's scheduled queue, in the order the
-/// request asked for them. Ids the queue does not hold are skipped rather than
-/// reported: a client that has already flushed or deleted an entry must not have its
-/// whole query fail.
-/// </summary>
 public sealed class GetScheduledMessagesHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;

@@ -3,6 +3,7 @@
 
 using System.Text;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Chatlists;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.dto;
@@ -14,15 +15,13 @@ public abstract class ChatlistHandlerBase
     private readonly IAuthorizationRepository _authorizationRepository;
 
     protected readonly IUnitOfWork UnitOfWork;
-    protected readonly ChatlistInviteStore Invites;
 
-    protected ChatlistHandlerBase(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository,
-        ChatlistInviteStore invites)
+    protected ChatlistHandlerBase(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository)
     {
         _authorizationRepository = authorizationRepository;
 
         UnitOfWork = unitOfWork;
-        Invites = invites;
     }
 
     protected async ValueTask<long?> GetUserIdAsync(long authKeyId)

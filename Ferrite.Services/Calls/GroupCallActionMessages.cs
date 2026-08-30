@@ -1,18 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 
 namespace Ferrite.Services.Calls;
 
-// The service messages a group call writes into its hosting peer's message box.
-// A basic group fans out per-member copies (each with its own id and pts, only the
-// actor's outgoing); a channel writes one row into the single channel box. Both
-// paths reuse MessageStore's writers, so group calls cannot drift from the pts/id
-// semantics the rest of the message surface uses.
 public sealed class GroupCallActionMessages
 {
     private readonly IChannelMessagesRepository _channelMessagesRepository;
@@ -36,8 +30,6 @@ public sealed class GroupCallActionMessages
         _fanout = fanout;
     }
 
-    // messageActionGroupCall covers both ends of an immediate call: no duration
-    // while it is running, and the elapsed seconds once it has been discarded.
     public static TLMessageAction BuildCallAction(TLInputGroupCall call,
         int? duration = null)
     {
@@ -71,18 +63,6 @@ public sealed class GroupCallActionMessages
             .Build();
     }
 
-    /// <summary>
-    /// Writes one group-call action into the hosting peer's box, delivers it live
-    /// to the other members, and returns the invoker's Updates result carrying the
-    /// updated chat/channel row. Callers pass the row they already mutated so the
-    /// client sees call_active/call_not_empty in the same result.
-    /// <paramref name="leadingCallerUpdates"/> is placed ahead of the message
-    /// updates in the invoker's result; the lifecycle handlers use it for the
-    /// viewer-correct updateGroupCall that TDLib reads the new call id from, and
-    /// which must be seen before the action message that references the call.
-    /// Invite actions pass <c>peerStateChanged:false</c> because they write only a
-    /// message and must not spuriously refresh the compact chat/channel row.
-    /// </summary>
     public Task<TLUpdates> EmitAsync(long authKeyId, long actorUserId,
         GroupCallPeerKind kind, long peerId, byte[] chatBytes, byte[] actionBytes,
         IReadOnlyList<byte[]>? leadingCallerUpdates = null,
@@ -128,8 +108,6 @@ public sealed class GroupCallActionMessages
 
         await _unitOfWork.SaveAsync();
 
-        // Lifecycle actions changed call_active/call_not_empty, so members that
-        // are not the invoker need an updateChat to re-read the compact row.
         if (peerStateChanged)
         {
             await _fanout.PushUpdateChatAsync(chatId,
@@ -138,7 +116,7 @@ public sealed class GroupCallActionMessages
         IEnumerable<long> resultUserIds = relatedUserIds == null
             ? memberIds
             : memberIds.Concat(relatedUserIds);
-        return await _fanout.CompleteBasicGroupServiceResultAsync(
+        return await _fanout.CompleteBasicGroupServiceResultAsync(actorUserId,
             resultUserIds.Distinct().ToArray(), liveUpdates, callerUpdateBytes,
             chatBytes, sharedUpdateBytes: null, date);
     }
@@ -186,7 +164,7 @@ public sealed class GroupCallActionMessages
         IEnumerable<long> resultUserIds = relatedUserIds == null
             ? new[] { actorUserId }
             : relatedUserIds.Prepend(actorUserId);
-        return _fanout.BuildUpdates(callerUpdateBytes, resultUserIds,
+        return _fanout.BuildUpdates(actorUserId, callerUpdateBytes, resultUserIds,
             new[] { channelBytes }, date, seq);
     }
 }

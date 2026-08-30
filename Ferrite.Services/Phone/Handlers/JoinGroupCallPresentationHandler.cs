@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -14,12 +13,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.joinGroupCallPresentation. A screen share is a SECOND transport on an
-/// existing camera join: it allocates no participant of its
-/// own, never collides with the canonical audio source, and the camera join
-/// survives it entirely.
-/// </summary>
 public sealed class JoinGroupCallPresentationHandler : GroupCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -62,8 +55,6 @@ public sealed class JoinGroupCallPresentationHandler : GroupCallHandlerBase
 
         GroupCallPeerAccess access = resolution.Access!;
 
-        // A screen share extends an existing join; there is nothing to attach it
-        // to without one.
         string? mediaId = await GetMediaIdAsync(callId, access.CurrentUserId);
         if (mediaId == null)
         {
@@ -105,8 +96,6 @@ public sealed class JoinGroupCallPresentationHandler : GroupCallHandlerBase
         {
             stored.Participant?.Dispose();
             stored.Call?.Dispose();
-            // Everything after the media call compensates: the client must never
-            // be left with a live screen-share transport Ferrite has no row for.
             await ReleasePresentationAsync(callId, mediaId);
             return Error(stored.Status == GroupCallParticipantEditStatus.NotJoined
                 ? GroupCallErrors.GroupCallJoinMissing
@@ -119,16 +108,12 @@ public sealed class JoinGroupCallPresentationHandler : GroupCallHandlerBase
         byte[] connectionParams = GroupCallJoinPayloadCodec.BuildConnectionParams(
             joined.Transport);
         var updates = new List<byte[]>(3);
-        // The presentation flag is how the client tells this credential set apart
-        // from the camera one it already holds, so it leads the result.
         using (TLUpdate connection = GroupCallBuilders.BuildConnectionUpdate(
                    connectionParams, presentation: true))
         {
             updates.Add(connection.AsSpan().ToArray());
         }
 
-        // A repeated presentation join re-issues credentials without a version
-        // step, so there is no participant row to publish for it.
         if (stored.Status == GroupCallParticipantEditStatus.Updated)
         {
             using TLDto.TLGroupCallParticipantState participant = stored.Participant!.Value;
@@ -163,12 +148,6 @@ public sealed class JoinGroupCallPresentationHandler : GroupCallHandlerBase
         (TLUpdatesResult)RpcErrorGenerator.GenerateError(400,
             Encoding.UTF8.GetBytes(message));
 
-    /// <summary>
-    /// The endpoint every viewer's presentation row is keyed to. The worker states
-    /// it in the video half of the answer; when a room has other viewers it also
-    /// appears in their mappings, which is the fallback for a worker that answers
-    /// without a video section.
-    /// </summary>
     private static string? ResolvePresentationEndpoint(GroupCallMediaJoinResult joined,
         string producerMediaId)
     {
@@ -189,11 +168,6 @@ public sealed class JoinGroupCallPresentationHandler : GroupCallHandlerBase
         return null;
     }
 
-    /// <summary>
-    /// What the sharer sees of its own screen: the endpoint the worker assigned,
-    /// against the source groups it just advertised. Its camera row is left to the
-    /// mapping it already has, since this join does not touch it.
-    /// </summary>
     private static GroupCallViewerSources? BuildSelfSources(GroupCallMediaJoinResult joined,
         GroupCallJoinPayload payload, string? endpoint)
     {
@@ -223,8 +197,6 @@ public sealed class JoinGroupCallPresentationHandler : GroupCallHandlerBase
                 GroupCallViewer viewer = await BuildViewerAsync(callId, memberId,
                     canManage);
                 string? viewerMediaId = await GetMediaIdAsync(callId, memberId);
-                // Carries the member's stored local mute/volume for the sharer: a
-                // non-min row overwrites the client's local state.
                 GroupCallParticipantOverlay overlay = await BuildMemberOverlayAsync(
                     callId, memberId, viewerMediaId, sharerUserId, producerMediaId);
                 using TLGroupCallParticipant row = GroupCallBuilders.BuildParticipant(

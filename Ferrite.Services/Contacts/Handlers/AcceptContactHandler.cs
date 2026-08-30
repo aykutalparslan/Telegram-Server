@@ -3,7 +3,6 @@
 
 using System.Text;
 using DotNext.Collections.Generic;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -21,7 +20,7 @@ public sealed class AcceptContactHandler : ContactsHandlerBase
 
     public AcceptContactHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IContactsRepository contactsRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
         IUpdatesService updates, IUpdatesContextFactory updatesContextFactory)
-        : base(unitOfWork, userRepository, userStatusRepository, search, updates, updatesContextFactory)
+        : base(unitOfWork, contactsRepository, userRepository, userStatusRepository, search, updates, updatesContextFactory)
     {
         _authorizationRepository = authorizationRepository;
         _contactsRepository = contactsRepository;
@@ -52,7 +51,7 @@ public sealed class AcceptContactHandler : ContactsHandlerBase
                 return UserIdInvalidUpdates();
             }
 
-            var contactUser = await GetUserInternal(contactUserId.Value);
+            var contactUser = await GetUserInternal(ownerUserId, contactUserId.Value);
             if (contactUser == null)
             {
                 return UserIdInvalidUpdates();

@@ -13,14 +13,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Core.Calls;
 
-/// <summary>
-/// In-process modern tgcalls UDP reflector. It speaks only the current
-/// 12-byte-prefix grammar: a 16-byte peer tag whose first 12 bytes identify
-/// the allocation, the 40-byte hello/self-info exchange, and the
-/// destination/sender/length data framing. Payloads are opaque encrypted
-/// bytes and are forwarded unchanged; there is no legacy tag-flip, side tag,
-/// RelayMode, or TCP branch.
-/// </summary>
 public sealed class TelegramCallReflector : ICallMediaRelay, IDisposable
 {
     private const int PeerTagLength = 16;
@@ -88,7 +80,6 @@ public sealed class TelegramCallReflector : ICallMediaRelay, IDisposable
             }
             catch
             {
-                // Roll back the partial start so a later retry can bind again.
                 socket.Dispose();
                 throw;
             }
@@ -174,8 +165,6 @@ public sealed class TelegramCallReflector : ICallMediaRelay, IDisposable
 
             if (!_allocationsByCallId.TryAdd(callId, key))
             {
-                // One live allocation per call: reuse the existing credential
-                // so duplicate confirms cannot mint a second one.
                 _allocations.TryRemove(key, out _);
                 return _allocationsByCallId.TryGetValue(callId, out RelayTagKey existing) &&
                        _allocations.TryGetValue(existing, out RelayAllocation? current)
@@ -297,8 +286,6 @@ public sealed class TelegramCallReflector : ICallMediaRelay, IDisposable
                 await SendSelfInfo(socket, buffer, source, ct);
             }
 
-            // A special packet that is not a self-info request is a keepalive:
-            // the route was learned and nothing is forwarded.
             return;
         }
 
@@ -379,7 +366,6 @@ public sealed class TelegramCallReflector : ICallMediaRelay, IDisposable
         int date = checked((int)_timeProvider.GetUtcNow().ToUnixTimeSeconds());
         BinaryPrimitives.WriteInt32LittleEndian(span[32..], date);
         request.AsSpan(32, 8).CopyTo(span[36..]);
-        // 44..52 stay zero; 52..56 is the IPv4-mapped-IPv6 prefix 00 00 FF FF.
         span[54] = 0xFF;
         span[55] = 0xFF;
         source.Address.TryWriteBytes(span.Slice(56, 4), out _);
@@ -449,7 +435,6 @@ public sealed class TelegramCallReflector : ICallMediaRelay, IDisposable
             {
                 if (_routes.TryGetValue(participantTag, out ParticipantRoute? route))
                 {
-                    // Safe NAT rebinding: the newest observed source wins.
                     route.Endpoint = endpoint;
                     route.LastActivityTicks = nowTicks;
                     return;

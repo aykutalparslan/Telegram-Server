@@ -10,14 +10,20 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class CheckShortNameHandler : StickerHandlerBase
 {
-    public CheckShortNameHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerSetEditor _editor;
+
+    public CheckShortNameHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerSetEditor store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _editor = store;
+    }
 
     [TLFunction(Constructors.baseLayer_CheckShortName)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
     {
         string shortName = Encoding.UTF8.GetString(((CheckShortName)q).ShortName);
         return await GetUserIdAsync(authKeyId) is not null
-            ? await Store.CheckShortNameAsync(shortName) : AuthError();
+            ? await _editor.CheckShortNameAsync(shortName) : AuthError();
     }
 }

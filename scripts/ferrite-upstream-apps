@@ -1,0 +1,757 @@
+#!/usr/bin/env python3
+"""Manifest-owned Ferrite/upstream-app conformance lifecycle."""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+import platform
+import re
+import signal
+import shutil
+import socket
+import struct
+import subprocess
+import sys
+import time
+import uuid
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+STATE = Path(os.environ.get(
+    "FERRITE_UPSTREAM_STATE_DIR", ROOT / ".ferrite/upstream-apps"))
+MANIFEST = STATE / "run.json"
+PIN = ROOT / "interop/upstream-clients/PIN"
+EXPECTED_RESOURCES = {
+    "cassandra", "redis", "kafka", "minio", "elasticsearch", "coturn",
+    "group-call-worker", "ferrite-a", "ferrite-b",
+}
+ANDROID_FIRST_PHONE = 15550000001
+IOS_FIRST_PHONE = 15550000101
+
+
+class LifecycleError(RuntimeError):
+    pass
+
+
+def planned_client_phones(android: int, ios: int) -> dict[str, list[str]]:
+    return {
+        "android": [f"+{ANDROID_FIRST_PHONE + index}"
+                    for index in range(android)],
+        "ios": [f"+{IOS_FIRST_PHONE + index}" for index in range(ios)],
+    }
+
+
+def client_launch_command(platform: str, count: int, run_token: str,
+                          run_phones: list[str]) -> list[str]:
+    command = [
+        str(ROOT / f"interop/upstream-clients/scripts/launch-{platform}"),
+        "start", "--count", str(count), "--run-token", run_token,
+        "--ferrite-port", "52222",
+    ]
+    for phone in run_phones:
+        command.extend(("--run-phone", phone))
+    return command
+
+
+def run(command: list[str], *, check: bool = True, cwd: Path = ROOT,
+        env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(command, cwd=cwd, env=env, text=True,
+                            capture_output=True, check=False)
+    if check and result.returncode:
+        detail = (result.stderr or result.stdout).strip()[-4000:]
+        raise LifecycleError(f"{' '.join(command)} failed: {detail}")
+    return result
+
+
+def require_command(name: str) -> None:
+    result = run(["/usr/bin/env", name, "--version"], check=False)
+    if result.returncode:
+        raise LifecycleError(f"required command is unavailable: {name}")
+
+
+def available_java_majors() -> set[int]:
+    majors: set[int] = set()
+    configured_home = os.environ.get("FERRITE_ANDROID_JAVA_HOME")
+    if configured_home:
+        configured_java = Path(configured_home) / "bin/java"
+        if configured_java.is_file() and os.access(configured_java, os.X_OK):
+            result = run([str(configured_java), "-version"], check=False)
+            match = re.search(
+                r'version "(?:(1)[.])?(\d+)', result.stdout + result.stderr)
+            if match:
+                majors.add(int(match.group(2)))
+    if sys.platform == "darwin" and Path("/usr/libexec/java_home").is_file():
+        result = run(["/usr/libexec/java_home", "-V"], check=False)
+        listing = result.stdout + result.stderr
+        majors.update(int(value) for value in re.findall(
+            r"^\s+(\d+)(?:[.]|\s)", listing, flags=re.MULTILINE))
+        return majors
+    java = shutil.which("java")
+    if not java:
+        return majors
+    result = run([java, "-version"], check=False)
+    match = re.search(r'version "(?:(1)[.])?(\d+)', result.stdout + result.stderr)
+    if match:
+        majors.add(int(match.group(2)))
+    return majors
+
+
+def jdk_pin_key() -> str | None:
+    machine = platform.machine()
+    if sys.platform == "darwin":
+        return {"arm64": "DARWIN_ARM64", "x86_64": "DARWIN_X64"}.get(machine)
+    if sys.platform.startswith("linux"):
+        return {"aarch64": "LINUX_ARM64", "x86_64": "LINUX_X64"}.get(machine)
+    return None
+
+
+def jdk_is_provisionable(pins: dict[str, str]) -> bool:
+    key = jdk_pin_key()
+    return bool(key and pins.get(f"ANDROID_JDK_URL_{key}")
+                and pins.get(f"ANDROID_JDK_SHA256_{key}"))
+
+
+def android_sdk_root() -> Path | None:
+    candidates = [
+        os.environ.get("ANDROID_SDK_ROOT"),
+        os.environ.get("ANDROID_HOME"),
+        str(Path.home() / "Library/Android/sdk") if sys.platform == "darwin" else None,
+        str(Path.home() / "Android/Sdk") if sys.platform.startswith("linux") else None,
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).is_dir():
+            return Path(candidate).resolve()
+    return None
+
+
+def android_avd_configs() -> list[Path]:
+    configured = os.environ.get("ANDROID_AVD_HOME")
+    root = Path(configured) if configured else Path.home() / ".android/avd"
+    return sorted(root.glob("*.avd/config.ini")) if root.is_dir() else []
+
+
+def preflight_android_host(pins: dict[str, str]) -> list[str]:
+    problems: list[str] = []
+    host = "Darwin" if sys.platform == "darwin" else "Linux" if sys.platform.startswith("linux") else sys.platform
+    supported = pins.get("ANDROID_SUPPORTED_HOSTS", "").split(",")
+    if host not in supported:
+        problems.append(f"unsupported host {host}; supported hosts: {','.join(supported)}")
+    jdk_major = int(pins["ANDROID_JDK_MAJOR"])
+    compile_sdk = pins["ANDROID_COMPILE_SDK"]
+    build_tools = pins["ANDROID_BUILD_TOOLS"]
+    ndk = pins["ANDROID_NDK"]
+    emulator_api = pins["ANDROID_EMULATOR_API"]
+    # The build fetches the pinned JDK itself, so a host without one is only a
+    # problem when the pin carries no JDK it could fetch for this host.
+    if jdk_major not in available_java_majors() and not jdk_is_provisionable(pins):
+        problems.append(
+            f"JDK {jdk_major} is required by the pin and the pin carries no JDK "
+            f"for this host")
+    sdk = android_sdk_root()
+    if sdk is None:
+        problems.append("Android SDK not found via ANDROID_SDK_ROOT, ANDROID_HOME, or the host default")
+        return problems
+    required_paths = {
+        "platform-tools/adb": sdk / "platform-tools/adb",
+        "emulator/emulator": sdk / "emulator/emulator",
+        f"platforms/android-{compile_sdk}": sdk / f"platforms/android-{compile_sdk}",
+        f"build-tools/{build_tools}": sdk / f"build-tools/{build_tools}",
+        f"ndk/{ndk}": sdk / f"ndk/{ndk}",
+    }
+    for label, path in required_paths.items():
+        if not path.exists():
+            problems.append(f"Android SDK component is missing: {label}")
+    sdkmanagers = list((sdk / "cmdline-tools").glob("*/bin/sdkmanager"))
+    if not any(path.is_file() and os.access(path, os.X_OK) for path in sdkmanagers):
+        problems.append("Android SDK command-line tools are missing (cmdline-tools/*/bin/sdkmanager)")
+    system_images = sdk / f"system-images/android-{emulator_api}"
+    if not system_images.is_dir() or not any(path.is_dir() for path in system_images.glob("*/*")):
+        problems.append(f"an Android API {emulator_api} emulator system image is missing")
+    configs = android_avd_configs()
+    if not configs:
+        problems.append("no Android Virtual Device is configured")
+    elif not any(f"android-{emulator_api}" in path.read_text(encoding="utf-8", errors="replace")
+                 for path in configs):
+        problems.append(f"no configured Android Virtual Device uses an API {emulator_api} system image")
+    return problems
+
+
+def preflight_ios_host(pins: dict[str, str]) -> list[str]:
+    problems: list[str] = []
+    if sys.platform != "darwin":
+        return ["iOS instances require a supported macOS host"]
+    for command in ("xcodebuild", "xcrun"):
+        if not shutil.which(command):
+            problems.append(f"required command is unavailable: {command}")
+    if problems:
+        return problems
+    version = run(["xcodebuild", "-version"], check=False)
+    expected = pins.get("IOS_TOOLCHAIN", "").split(",")[0].replace("_", " ")
+    if version.returncode or expected not in version.stdout:
+        actual = version.stdout.splitlines()[0] if version.stdout else "unavailable"
+        problems.append(f"{expected} is required by the pin (detected: {actual})")
+    devices = run(["xcrun", "simctl", "list", "devices", "available"], check=False)
+    if devices.returncode or not re.search(r"^\s+iPhone .+\([0-9A-F-]+\) \(Shutdown|Booted\)$",
+                                           devices.stdout, flags=re.MULTILINE):
+        problems.append("no available iPhone Simulator device is configured")
+    return problems
+
+
+def preflight_capacity(android: int, ios: int) -> None:
+    clients = android + ios
+    required_cpus = max(4, 2 + clients)
+    required_memory_gib = 8 + 2 * clients
+    required_disk_gib = 20 + 5 * clients
+    problems: list[str] = []
+    cpus = os.cpu_count() or 0
+    if cpus < required_cpus:
+        problems.append(f"{required_cpus} logical CPUs required; detected {cpus}")
+    memory_bytes = 0
+    if sys.platform == "darwin":
+        result = run(["sysctl", "-n", "hw.memsize"], check=False)
+        if result.returncode == 0 and result.stdout.strip().isdigit():
+            memory_bytes = int(result.stdout.strip())
+    elif Path("/proc/meminfo").is_file():
+        match = re.search(r"^MemTotal:\s+(\d+) kB", Path("/proc/meminfo").read_text(),
+                          flags=re.MULTILINE)
+        if match:
+            memory_bytes = int(match.group(1)) * 1024
+    if memory_bytes and memory_bytes < required_memory_gib * 1024 ** 3:
+        problems.append(f"{required_memory_gib} GiB RAM required; detected {memory_bytes / 1024 ** 3:.1f} GiB")
+    free_disk = shutil.disk_usage(ROOT).free
+    if free_disk < required_disk_gib * 1024 ** 3:
+        problems.append(f"{required_disk_gib} GiB free disk required; detected {free_disk / 1024 ** 3:.1f} GiB")
+    daemon = run(["docker", "info", "--format", "{{.OSType}}/{{.Architecture}}"], check=False)
+    if daemon.returncode:
+        problems.append("Docker daemon is unavailable")
+    elif not daemon.stdout.strip().startswith("linux/"):
+        problems.append(f"Docker must expose Linux containers; detected {daemon.stdout.strip()}")
+    if problems:
+        raise LifecycleError("capacity/runtime preflight failed:\n- " + "\n- ".join(problems))
+
+
+def read_pin() -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in PIN.read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value
+    return values
+
+
+def preflight_platform(platform: str, count: int, pins: dict[str, str]) -> None:
+    if count == 0:
+        return
+    prefix = platform.upper()
+    problems: list[str] = []
+    digest = pins.get(f"{prefix}_PATCH_SHA256")
+    patch_dir = ROOT / f"interop/upstream-clients/patches/{platform}"
+    build = ROOT / f"interop/upstream-clients/scripts/build-{platform}"
+    launch = ROOT / f"interop/upstream-clients/scripts/launch-{platform}"
+    if (not digest or not patch_dir.is_dir()
+            or not build.is_file() or not os.access(build, os.X_OK)
+            or not launch.is_file() or not os.access(launch, os.X_OK)):
+        problems.append("reviewed public provisioning patch digest/build/launch boundary is not published")
+    patches = sorted(patch_dir.glob("*.patch")) if patch_dir.is_dir() else []
+    if digest and len(patches) != 1:
+        problems.append(
+            f"expected exactly one reviewed {platform} patch, found {len(patches)}")
+    elif digest and hashlib.sha256(patches[0].read_bytes()).hexdigest() != digest:
+        problems.append(f"{platform} patch digest does not match PIN")
+    if problems:
+        raise LifecycleError(
+            f"{platform} count {count} requested; preflight failed:\n- "
+            + "\n- ".join(problems))
+    problems = (preflight_android_host(pins) if platform == "android"
+                else preflight_ios_host(pins))
+    if problems:
+        raise LifecycleError(
+            f"{platform} count {count} requested; preflight failed:\n- "
+            + "\n- ".join(problems))
+
+
+def validated_launch_instances(platform: str, count: int, run_token: str,
+                               result: dict[str, Any]) -> list[dict[str, Any]]:
+    if result.get("status") != "running":
+        raise LifecycleError(
+            f"{platform} launcher did not report running status")
+    if result.get("run_token") != run_token:
+        raise LifecycleError(
+            f"{platform} launcher returned a foreign run token")
+    instances = result.get("instances")
+    if not isinstance(instances, list) or len(instances) != count:
+        raise LifecycleError(
+            f"{platform} launcher returned "
+            f"{len(instances) if isinstance(instances, list) else 0} "
+            f"instances, expected {count}")
+    if platform == "ios":
+        required = {"instance_id", "device_udid", "device_name", "phone"}
+    elif platform == "android":
+        required = {"instance_id", "avd_name", "console_port", "phone"}
+    else:
+        raise LifecycleError(f"unsupported client platform: {platform}")
+    for instance in instances:
+        if not isinstance(instance, dict) or not required.issubset(instance):
+            raise LifecycleError(
+                f"{platform} launcher returned a malformed instance")
+    return instances
+
+
+def collect_client_status(
+    manifest: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, str]]:
+    statuses: dict[str, Any] = {}
+    failures: dict[str, str] = {}
+    sessions = manifest.get("client_sessions", {})
+    for platform, count in manifest.get("requested", {}).items():
+        count = int(count)
+        if count == 0:
+            continue
+        session = sessions.get(platform, {})
+        expected_token = session.get("run_token")
+        helper = ROOT / f"interop/upstream-clients/scripts/launch-{platform}"
+        result = run([str(helper), "status"], check=False)
+        if result.returncode:
+            failures[platform] = (result.stderr or result.stdout).strip()[-4000:]
+            continue
+        try:
+            value = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            failures[platform] = "launcher returned malformed status JSON"
+            continue
+        if value.get("run_token") != expected_token:
+            failures[platform] = "launcher status returned a foreign run token"
+        elif value.get("requested") != count or value.get("ready") != count:
+            failures[platform] = (
+                f"launcher status reported {value.get('ready')}/"
+                f"{value.get('requested')}, expected {count}/{count}")
+        else:
+            statuses[platform] = value
+    return statuses, failures
+
+
+def docker_ids(kind: str) -> set[str]:
+    command = ["docker", kind, "ls"]
+    if kind == "container":
+        command.append("--all")
+    command.append("--quiet")
+    result = run(command, check=False)
+    if result.returncode:
+        raise LifecycleError(result.stderr.strip() or f"docker {kind} ls failed")
+    return {value for value in result.stdout.splitlines() if value}
+
+
+def inspect_container(container_id: str) -> dict[str, Any] | None:
+    result = run(["docker", "inspect", container_id], check=False)
+    if result.returncode:
+        return None
+    return json.loads(result.stdout)[0]
+
+
+def resource_name(container: dict[str, Any]) -> str:
+    labels = container.get("Config", {}).get("Labels", {}) or {}
+    generated = labels.get("com.microsoft.developer.usvc-dev.name", "")
+    for expected in sorted(EXPECTED_RESOURCES, key=len, reverse=True):
+        if generated == expected or generated.startswith(expected + "-"):
+            return expected
+    return ""
+
+
+def port_ready(port: int) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=1):
+            return True
+    except OSError:
+        return False
+
+
+ABRIDGED = 0xEF
+TRANSPORT_ERROR_404 = struct.pack("<i", -404)
+
+
+def mtproto_ready(port: int, timeout: float = 3.0) -> bool:
+    """Require an answered MTProto frame, not only the published TCP port.
+
+    Docker's published-port proxy keeps accepting while the container is off its
+    network. A plain abridged frame carrying an auth_key_id the node cannot know
+    draws the -404 transport error and stores nothing, so only the node answers.
+    """
+    frame = bytes([ABRIDGED, 2]) + os.urandom(8)
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=timeout) as connection:
+            connection.settimeout(timeout)
+            connection.sendall(frame)
+            reply = b""
+            while len(reply) < 5:
+                chunk = connection.recv(5 - len(reply))
+                if not chunk:
+                    return False
+                reply += chunk
+            return reply == bytes([1]) + TRANSPORT_ERROR_404
+    except OSError:
+        return False
+
+
+def cql_ready() -> bool:
+    """Require Cassandra's native protocol, not only its published TCP port."""
+    try:
+        with socket.create_connection(("127.0.0.1", 19042), timeout=2) as connection:
+            connection.settimeout(2)
+            connection.sendall(bytes([0x04, 0, 0, 0, 0x05, 0, 0, 0, 0]))
+            header = b""
+            while len(header) < 9:
+                chunk = connection.recv(9 - len(header))
+                if not chunk:
+                    return False
+                header += chunk
+            return header[4] == 0x06
+    except OSError:
+        return False
+
+
+def http_ready(url: str, bearer: str | None = None) -> bool:
+    headers = {}
+    if bearer:
+        headers = {
+            "authorization": "Bearer " + bearer,
+            "x-ferrite-groupcall-protocol": "1",
+        }
+    try:
+        with urllib.request.urlopen(
+                urllib.request.Request(url, headers=headers), timeout=3) as response:
+            return 200 <= response.status < 300
+    except (OSError, urllib.error.URLError):
+        return False
+
+
+def graph_readiness() -> dict[str, bool]:
+    return {
+        "cassandra": cql_ready(),
+        "redis": port_ready(16379),
+        "kafka": port_ready(19092),
+        "minio": http_ready("http://127.0.0.1:19000/minio/health/ready"),
+        "elasticsearch": http_ready("http://127.0.0.1:19200/_cluster/health"),
+        "coturn": port_ready(3478),
+        "group-call-worker": http_ready(
+            "http://127.0.0.1:9090/health", "ferrite-dev-groupcall-secret"),
+        "ferrite-a": mtproto_ready(52222),
+        "ferrite-b": mtproto_ready(52223),
+    }
+
+
+"""The first start after a source change builds the Ferrite container image,
+which takes far longer than starting a cached one. The budget covers that cold
+build; a warm graph still returns as soon as both nodes accept a connection."""
+GRAPH_TIMEOUT = int(os.environ.get("FERRITE_GRAPH_TIMEOUT", "1200"))
+
+
+def wait_for_graph(process: subprocess.Popen[str], timeout: int = GRAPH_TIMEOUT) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise LifecycleError(f"AppHost exited with {process.returncode}; inspect its log")
+        if all(graph_readiness().values()):
+            return
+        time.sleep(2)
+    raise LifecycleError(
+        f"AppHost did not expose both Ferrite nodes within {timeout} seconds")
+
+
+def current_commit() -> tuple[str, bool]:
+    commit = run(["git", "rev-parse", "HEAD"]).stdout.strip()
+    dirty = bool(run(["git", "status", "--porcelain"], check=False).stdout.strip())
+    return commit, dirty
+
+
+def write_manifest(value: dict[str, Any]) -> None:
+    STATE.mkdir(parents=True, exist_ok=True)
+    temporary = MANIFEST.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(MANIFEST)
+
+
+def read_manifest() -> dict[str, Any]:
+    if not MANIFEST.is_file():
+        raise LifecycleError(f"no active manifest at {MANIFEST}")
+    return json.loads(MANIFEST.read_text(encoding="utf-8"))
+
+
+def process_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except PermissionError:
+        # A sandboxed status command may be unable to signal an AppHost that
+        # the approved `up` command launched outside the sandbox. EPERM still
+        # proves that the process exists.
+        return True
+    except ProcessLookupError:
+        return False
+
+
+def owned_resources(before_containers: set[str], before_volumes: set[str]) -> tuple[list[dict[str, Any]], list[str]]:
+    containers: list[dict[str, Any]] = []
+    for container_id in sorted(docker_ids("container") - before_containers):
+        inspected = inspect_container(container_id)
+        if not inspected:
+            continue
+        logical = resource_name(inspected)
+        if logical:
+            containers.append({
+                "id": inspected["Id"],
+                "name": inspected["Name"].lstrip("/"),
+                "resource": logical,
+                "image": inspected.get("Image", ""),
+            })
+    volumes = sorted(docker_ids("volume") - before_volumes)
+    return containers, volumes
+
+
+def signal_group(pid: int, number: int) -> None:
+    try:
+        os.killpg(pid, number)
+    except OSError:
+        pass
+
+
+def terminate_manifest(manifest: dict[str, Any], *, remove_file: bool) -> None:
+    sessions = manifest.get("client_sessions", {})
+    for platform in ("ios", "android"):
+        session = sessions.get(platform)
+        if not isinstance(session, dict):
+            continue
+        token = session.get("run_token")
+        helper = ROOT / f"interop/upstream-clients/scripts/launch-{platform}"
+        if helper.is_file() and isinstance(token, str):
+            run([str(helper), "stop", "--run-token", token], check=False)
+    pid = int(manifest.get("server", {}).get("pid", 0))
+    if pid and process_alive(pid):
+        # Signalling is best effort: a group that is already gone, or that this
+        # process may no longer signal, must not strand the containers below.
+        signal_group(pid, signal.SIGINT)
+        deadline = time.monotonic() + 45
+        while process_alive(pid) and time.monotonic() < deadline:
+            time.sleep(0.5)
+        if process_alive(pid):
+            signal_group(pid, signal.SIGTERM)
+    for container in manifest.get("server", {}).get("containers", []):
+        inspected = inspect_container(container["id"])
+        if inspected and resource_name(inspected) == container.get("resource"):
+            run(["docker", "rm", "--force", container["id"]], check=False)
+    for volume in manifest.get("server", {}).get("volumes", []):
+        run(["docker", "volume", "rm", volume], check=False)
+    if remove_file:
+        MANIFEST.unlink(missing_ok=True)
+
+
+def command_up(android: int, ios: int) -> None:
+    if MANIFEST.exists():
+        raise LifecycleError("an active run manifest already exists; use status or down")
+    if android < 0 or ios < 0:
+        raise LifecycleError("client counts must be nonnegative")
+    if android > 8 or ios > 8:
+        raise LifecycleError("client counts must not exceed 8 per platform")
+    require_command("docker")
+    require_command("dotnet")
+    pins = read_pin()
+    preflight_capacity(android, ios)
+    preflight_platform("android", android, pins)
+    preflight_platform("ios", ios, pins)
+    for platform, count in (("android", android), ("ios", ios)):
+        if count > 0:
+            build = ROOT / f"interop/upstream-clients/scripts/build-{platform}"
+            run([str(build)])
+    for port in (3478, 9090, 16379, 19000, 19001, 19042, 19092, 19094,
+                 19200, 52222, 52223):
+        if port_ready(port):
+            raise LifecycleError(f"required loopback port is already in use: {port}")
+
+    run(["dotnet", "build", "Ferrite.sln", "-m:1", "--nologo"])
+    before_containers = docker_ids("container")
+    before_volumes = docker_ids("volume")
+    run_id = "fh-" + uuid.uuid4().hex[:12]
+    bridge_token = uuid.uuid4().hex
+    phones = planned_client_phones(android, ios)
+    run_phones = phones["android"] + phones["ios"]
+    STATE.mkdir(parents=True, exist_ok=True)
+    log_path = STATE / f"{run_id}-apphost.log"
+    log_stream = log_path.open("w", encoding="utf-8")
+    environment = dict(os.environ)
+    environment.update({
+        "FERRITE_APPHOST_RUN_ID": run_id,
+        # The repository contains very large generated upstream-client build
+        # trees. Host configuration reload watches recurse through them before
+        # Aspire creates its first resource, so live runs disable reload just as
+        # production hosts normally do.
+        "DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE": "false",
+        "ASPNETCORE_URLS": "http://127.0.0.1:18888",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://127.0.0.1:18889",
+        "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL": "http://127.0.0.1:18890",
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true",
+    })
+    process = subprocess.Popen(
+        ["dotnet", "run", "--project", "Ferrite.AppHost/Ferrite.AppHost.csproj",
+         "--no-build", "--no-restore"], cwd=ROOT, env=environment,
+        stdin=subprocess.DEVNULL, stdout=log_stream, stderr=subprocess.STDOUT,
+        text=True, start_new_session=True)
+    commit, dirty = current_commit()
+    manifest: dict[str, Any] = {
+        "schema": 1,
+        "run_id": run_id,
+        "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "ferrite": {"commit": commit, "dirty": dirty},
+        "pin_sha256": hashlib.sha256(PIN.read_bytes()).hexdigest(),
+        "bridge_token": bridge_token,
+        "requested": {"android": android, "ios": ios},
+        "planned_phones": phones,
+        "client_sessions": {},
+        "clients": [],
+        "server": {"pid": process.pid, "log": str(log_path),
+                   "endpoints": ["127.0.0.1:52222", "127.0.0.1:52223"],
+                   "containers": [], "volumes": []},
+    }
+    write_manifest(manifest)
+    try:
+        wait_for_graph(process)
+        containers, volumes = owned_resources(before_containers, before_volumes)
+        resources = {item["resource"] for item in containers}
+        missing = EXPECTED_RESOURCES - resources
+        if missing:
+            raise LifecycleError("AppHost manifest is missing resources: " + ", ".join(sorted(missing)))
+        manifest["server"]["containers"] = containers
+        manifest["server"]["volumes"] = volumes
+        manifest["status"] = "starting-clients"
+        write_manifest(manifest)
+        launches: dict[str, subprocess.Popen[str]] = {}
+        for platform, count in (("android", android), ("ios", ios)):
+            if count == 0:
+                continue
+            manifest["client_sessions"][platform] = {
+                "run_token": bridge_token,
+                "status": "starting",
+            }
+            write_manifest(manifest)
+            launches[platform] = subprocess.Popen(
+                client_launch_command(platform, count, bridge_token,
+                                      run_phones),
+                cwd=ROOT, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True,
+            )
+        launch_results: dict[str, dict[str, Any]] = {}
+        launch_failures: list[str] = []
+        for platform, launched in launches.items():
+            stdout, stderr = launched.communicate()
+            if launched.returncode:
+                detail = (stderr or stdout).strip()[-4000:]
+                launch_failures.append(f"{platform} launch failed: {detail}")
+                continue
+            try:
+                launch_results[platform] = json.loads(stdout)
+            except json.JSONDecodeError as error:
+                launch_failures.append(
+                    f"{platform} launcher returned malformed JSON: {error}")
+        if launch_failures:
+            raise LifecycleError("\n".join(launch_failures))
+        for platform, count in (("android", android), ("ios", ios)):
+            if count == 0:
+                continue
+            result = launch_results[platform]
+            instances = validated_launch_instances(
+                platform, count, bridge_token, result)
+            for instance in instances:
+                manifest["clients"].append({
+                    **instance,
+                    "platform": platform,
+                    "run_token": bridge_token,
+                })
+            manifest["client_sessions"][platform]["status"] = "running"
+            write_manifest(manifest)
+        manifest["status"] = "running"
+        write_manifest(manifest)
+    except (Exception, KeyboardInterrupt):
+        containers, volumes = owned_resources(before_containers, before_volumes)
+        manifest["server"]["containers"] = containers
+        manifest["server"]["volumes"] = volumes
+        write_manifest(manifest)
+        terminate_manifest(manifest, remove_file=False)
+        raise
+    finally:
+        log_stream.close()
+    print(json.dumps(manifest, indent=2))
+
+
+def command_status() -> None:
+    if not MANIFEST.is_file():
+        print(json.dumps({"status": "inactive", "manifest": str(MANIFEST)},
+                         indent=2))
+        return
+    manifest = read_manifest()
+    containers = []
+    for item in manifest.get("server", {}).get("containers", []):
+        inspected = inspect_container(item["id"])
+        containers.append({
+            "resource": item["resource"], "name": item["name"],
+            "running": bool(inspected and inspected.get("State", {}).get("Running")),
+        })
+    readiness = graph_readiness()
+    client_status, client_failures = collect_client_status(manifest)
+    value = {
+        "run_id": manifest.get("run_id"),
+        "status": manifest.get("status"),
+        "server_process_running": process_alive(int(manifest["server"]["pid"])),
+        "endpoints_ready": {
+            str(port): mtproto_ready(port) for port in (52222, 52223)},
+        "dependencies_ready": {
+            name: ready for name, ready in readiness.items()
+            if not name.startswith("ferrite-")
+        },
+        "containers": containers,
+        "clients": manifest.get("clients", []),
+        "client_status": client_status,
+        "client_failures": client_failures,
+    }
+    print(json.dumps(value, indent=2))
+    if not value["server_process_running"] or not all(readiness.values()) or \
+            not all(item["running"] for item in containers) or client_failures:
+        raise LifecycleError("one or more manifest-owned resources are not healthy")
+
+
+def command_down() -> None:
+    if not MANIFEST.is_file():
+        print("no manifest-owned run is active")
+        return
+    manifest = read_manifest()
+    terminate_manifest(manifest, remove_file=True)
+    print(f"stopped manifest-owned run {manifest.get('run_id')}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    subcommands = parser.add_subparsers(dest="command", required=True)
+    up = subcommands.add_parser("up")
+    up.add_argument("--android", type=int, required=True)
+    up.add_argument("--ios", type=int, required=True)
+    subcommands.add_parser("status")
+    subcommands.add_parser("down")
+    args = parser.parse_args()
+    if args.command == "up":
+        command_up(args.android, args.ios)
+    elif args.command == "status":
+        command_status()
+    else:
+        command_down()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except LifecycleError as error:
+        print(f"ferrite-upstream-apps: {error}", file=sys.stderr)
+        raise SystemExit(1)

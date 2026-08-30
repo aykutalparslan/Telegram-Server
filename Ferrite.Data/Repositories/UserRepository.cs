@@ -10,9 +10,6 @@ namespace Ferrite.Data.Repositories;
 
 public class UserRepository : IUserRepository
 {
-    // Cassandra rejects an empty clustering-key component. Telegram usernames
-    // cannot contain NUL, so this internal key represents the absent optional
-    // username without changing the stored TL user or any API-visible value.
     private const string NoUsernameKey = "\0";
     private readonly IKVStore _store;
     private readonly IKVStore _storeTtl;
@@ -44,7 +41,7 @@ public class UserRepository : IUserRepository
     {
         var u = user.AsUser();
         return _store.Put(user.AsSpan().ToArray(),
-            u.Id, Encoding.UTF8.GetString(u.Phone),
+            u.Id, PhoneKey(u.Phone),
             UsernameKey(u.Username));
     }
 
@@ -58,7 +55,7 @@ public class UserRepository : IUserRepository
                 ? ""
                 : Encoding.UTF8.GetString(user.Username);
             if (username == oldUsername) return false;
-            string userPhone = Encoding.UTF8.GetString(user.Phone);
+            string userPhone = PhoneKey(user.Phone);
             using var userNew = user.Clone().Username(Encoding.UTF8.GetBytes(username)).Build();
             _store.Delete(user.Id, userPhone, UsernameKey(oldUsername));
             _store.Put(userNew.TLBytes!.Value.AsSpan().ToArray(),
@@ -79,9 +76,9 @@ public class UserRepository : IUserRepository
             if (oldPhone == phone) return false;
             using var userNew = user.Clone().Phone(Encoding.UTF8.GetBytes(phone)).Build();
             string username = UsernameKey(user.Username);
-            _store.Delete(user.Id, oldPhone, username);
+            _store.Delete(user.Id, PhoneKey(oldPhone), username);
             _store.Put(userNew.TLBytes!.Value.AsSpan().ToArray(),
-                user.Id, phone, username);
+                user.Id, PhoneKey(phone), username);
             return true;
         }
 
@@ -101,7 +98,7 @@ public class UserRepository : IUserRepository
 
     public TLUser? GetUser(string phone)
     {
-        var userBytes = _store.GetBySecondaryIndex("by_phone", phone);
+        var userBytes = _store.GetBySecondaryIndex("by_phone", PhoneKey(phone));
         if (userBytes != null)
         {
             return new TLUser(userBytes, 0, userBytes.Length);
@@ -112,7 +109,7 @@ public class UserRepository : IUserRepository
 
     public long? GetUserId(string phone)
     {
-        var userBytes = _store.GetBySecondaryIndex("by_phone", phone);
+        var userBytes = _store.GetBySecondaryIndex("by_phone", PhoneKey(phone));
         if (userBytes != null)
         {
             var user = new User(userBytes);
@@ -137,7 +134,7 @@ public class UserRepository : IUserRepository
 
     public bool DeleteUser(long userId)
     {
-        return _store.Delete(userId); // delete by prefix
+        return _store.Delete(userId);
     }
 
     public bool UpdateAccountTtl(long userId, int accountDaysTtl)
@@ -174,6 +171,21 @@ public class UserRepository : IUserRepository
             throw new InvalidDataException("User-about codec/version mismatch.");
         return Encoding.UTF8.GetString(((TLUserAboutState)value).AsUserAboutState().About);
     }
+
+    private static string PhoneKey(string phone)
+    {
+        Span<char> digits = stackalloc char[phone.Length];
+        int length = 0;
+        foreach (char value in phone)
+        {
+            if (char.IsAsciiDigit(value)) digits[length++] = value;
+        }
+
+        return new string(digits[..length]);
+    }
+
+    private static string PhoneKey(ReadOnlySpan<byte> phone) =>
+        PhoneKey(Encoding.UTF8.GetString(phone));
 
     private static string UsernameKey(ReadOnlySpan<byte> username) =>
         username.Length == 0 ? NoUsernameKey : Encoding.UTF8.GetString(username);

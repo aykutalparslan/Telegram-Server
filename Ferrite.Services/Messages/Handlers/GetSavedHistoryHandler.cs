@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -36,10 +35,11 @@ public sealed class GetSavedHistoryHandler : MessagesHandlerBase
             var auth = await _authorizationRepository.GetAuthorizationAsync(authKeyId);
             long userId = auth.Value.AsAuthInfo().UserId;
             var request = (GetSavedHistory)q;
-            long partnerId = ResolvePeerUserId(request.Get_PeerView(), userId);
+            (TLPeer.PeerType peerType, long peerId) = PeerResolver.ResolveHistoryPeer(
+                request.Get_PeerView(), userId);
             var query = new HistoryQuery(request.OffsetId, request.OffsetDate,
                 request.AddOffset, request.Limit, request.MaxId, request.MinId);
             return await _dialogs.GetHistoryForPeerAsync(userId,
-                TLPeer.PeerType.PeerUser, partnerId, query, "GetSavedHistory");
+                peerType, peerId, query, "GetSavedHistory");
         }
 }

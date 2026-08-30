@@ -4,7 +4,6 @@
 using System.Buffers;
 using Ferrite.Core.Connection.TransportFeatures;
 using Ferrite.Core.Framing;
-using Ferrite.Services;
 
 namespace Ferrite.Core.Connection;
 

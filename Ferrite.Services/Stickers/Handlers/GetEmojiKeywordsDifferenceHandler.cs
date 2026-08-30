@@ -10,8 +10,9 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class GetEmojiKeywordsDifferenceHandler : StickerHandlerBase
 {
-    public GetEmojiKeywordsDifferenceHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository,
-        StickerStore store) : base(unitOfWork, authorizationRepository, store) { }
+    public GetEmojiKeywordsDifferenceHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository)
+        : base(unitOfWork, authorizationRepository) { }
 
     [TLFunction(Constructors.baseLayer_GetEmojiKeywordsDifference)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)

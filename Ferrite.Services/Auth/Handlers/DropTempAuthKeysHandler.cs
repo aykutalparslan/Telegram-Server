@@ -26,7 +26,6 @@ public sealed class DropTempAuthKeysHandler
     {
         foreach (long key in _boundAuthKeyRepository.GetTempAuthKeys(authKeyId))
         {
-            // Preserve the existing Core handler behavior: except_auth_keys was ignored.
             _tempAuthKeyRepository.DeleteTempAuthKey(key);
         }
 

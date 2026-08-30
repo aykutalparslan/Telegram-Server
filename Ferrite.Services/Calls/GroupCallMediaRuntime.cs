@@ -42,12 +42,6 @@ public sealed record GroupCallMediaRuntimeSnapshot(
     public bool IsReady => Status == GroupCallMediaRuntimeStatus.Ready;
 }
 
-/// <summary>
-/// Owns the external SFU lifecycle, readiness polling, and conservative recovery.
-/// Ferrite remains available when this runtime is degraded: create/start/join
-/// operations fail through the media plane, while persisted discovery and admin
-/// discard continue to work.
-/// </summary>
 public sealed class GroupCallMediaRuntime
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -192,11 +186,6 @@ public sealed class GroupCallMediaRuntime
                         if (forceRoomRecovery ||
                             recovery.Status == GroupCallRecoveryStatus.Reconciled)
                         {
-                            // Resetting the idempotent room invalidates any worker
-                            // transports that survived a Ferrite restart. Doing it
-                            // after the durable stale-row mutation means a crash at
-                            // either boundary can safely retry and no old transport
-                            // is presented as live.
                             await _media.EndRoomAsync(callId, cancellationToken);
                             await _media.CreateRoomAsync(callId, cancellationToken);
                         }

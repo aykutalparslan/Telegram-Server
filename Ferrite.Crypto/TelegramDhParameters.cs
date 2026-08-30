@@ -5,9 +5,6 @@ using System.Numerics;
 
 namespace Ferrite.Crypto;
 
-/// <summary>
-/// Shared Telegram Diffie-Hellman parameters used by MTProto and secret chats.
-/// </summary>
 public static class TelegramDhParameters
 {
     public const int SecretChatGenerator = 3;
@@ -31,10 +28,6 @@ public static class TelegramDhParameters
 
     public static ReadOnlySpan<byte> Prime => s_prime;
 
-    /// <summary>
-    /// Validates a client secret-chat public value against Telegram's strong
-    /// interval, inclusive at both boundaries.
-    /// </summary>
     public static bool IsValidSecretChatPublicValue(ReadOnlySpan<byte> value)
     {
         if (value.IsEmpty)

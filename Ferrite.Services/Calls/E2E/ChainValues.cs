@@ -3,8 +3,6 @@
 
 namespace Ferrite.Services.Calls.E2E;
 
-// Permission bits from Blockchain.h:34-40. AllPermissions is the serialized
-// mask; IsParticipant is internal and never appears on the wire.
 public static class ChainPermissionFlags
 {
     public const int AddUsers = 1 << 0;
@@ -21,8 +19,6 @@ public readonly record struct ChainPermissions(int Flags)
     public bool MaySetValue => (Flags & ChainPermissionFlags.SetValue) != 0;
     public bool IsParticipant => (Flags & ChainPermissionFlags.IsParticipant) != 0;
 
-    // A shared key may only be rotated by a participant who can also change the
-    // membership it is encrypted for (Blockchain.h:89-91).
     public bool MayChangeSharedKey => IsParticipant && (MayRemoveUsers || MayAddUsers);
 }
 
@@ -59,9 +55,6 @@ public sealed record ChainGroupStateValue(
         return null;
     }
 
-    // GroupState::get_permissions. A key that is not a participant falls back
-    // to external_permissions and never gets the IsParticipant bit, which is
-    // how "anyone may self-add but only members may rekey" is expressed.
     public ChainPermissions GetPermissions(ReadOnlySpan<byte> publicKey, int limitPermissions)
     {
         limitPermissions &= ChainPermissionFlags.AllPermissions;
@@ -134,10 +127,6 @@ public sealed record ChainChangeSetSharedKeyValue(ChainSharedKeyValue SharedKey)
 public sealed record ChainStateProofValue(
     byte[] KvHash, ChainGroupStateValue? GroupState, ChainSharedKeyValue? SharedKey);
 
-// A parsed block. Raw is the exact serialization the client sent: the hash and
-// the signature preimage are both derived from it, never from a
-// re-serialization, because any padding or flag-normalisation difference would
-// fork the chain silently.
 public sealed class ChainBlockValue
 {
     public required byte[] Raw { get; init; }

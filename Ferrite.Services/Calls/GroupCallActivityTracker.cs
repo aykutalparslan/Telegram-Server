@@ -11,19 +11,12 @@ namespace Ferrite.Services.Calls;
 
 public sealed class GroupCallActivityOptions
 {
-    // How often one participant's active_date may be refreshed. Speaking events
-    // arrive continuously from the media plane; clients only need a coarse
-    // "recently active" signal.
     public TimeSpan ParticipantInterval { get; init; } = TimeSpan.FromSeconds(10);
 
-    // Ceiling on refreshes for a single call inside one window, so a large or
-    // noisy call cannot turn telemetry into unbounded fan-out.
     public TimeSpan CallWindow { get; init; } = TimeSpan.FromSeconds(1);
 
     public int MaxRefreshesPerCallWindow { get; init; } = 10;
 
-    // Bounds the per-participant timestamp map. Reaching it drops the oldest
-    // entries, which at worst lets a participant refresh one interval early.
     public int MaxTrackedParticipants { get; init; } = 10_000;
 }
 
@@ -34,12 +27,6 @@ public enum GroupCallActivityDecision
     CallThrottled,
 }
 
-/// <summary>
-/// Turns media-plane speaking activity into bounded, rate-limited active_date
-/// refreshes. Telemetry is explicitly non-versioned: it never increments the
-/// stored call or participant version, and the rows it emits carry no
-/// <c>versioned</c> flag, so a client that misses one has nothing to recover.
-/// </summary>
 public sealed class GroupCallActivityTracker
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -75,10 +62,6 @@ public sealed class GroupCallActivityTracker
 
     public long CallThrottledCount => Interlocked.Read(ref _throttledCall);
 
-    /// <summary>
-    /// Per-participant then per-call rate limiting. Pure and lock-guarded so the
-    /// bounds can be asserted without any repository or fan-out.
-    /// </summary>
     public GroupCallActivityDecision Evaluate(long callId, long userId)
     {
         long nowTicks = _timeProvider.GetUtcNow().UtcTicks;
@@ -116,14 +99,6 @@ public sealed class GroupCallActivityTracker
         }
     }
 
-    /// <summary>
-    /// Records one speaking report. When the rate limit allows it, touches the
-    /// participant's active_date (a version-free repository mutation) and fans a
-    /// min participant row out to the call's members. Min rows carry no
-    /// viewer-local mute/volume, so each client keeps the state it already holds
-    /// and applies only the fresh active_date. Returns the number of members the
-    /// refresh reached; 0 when throttled or when the call/participant is gone.
-    /// </summary>
     public async Task<int> ReportSpeakingAsync(long callId, long userId,
         CancellationToken cancellationToken = default)
     {
@@ -160,11 +135,6 @@ public sealed class GroupCallActivityTracker
             return 0;
         }
 
-        // The call row is re-read above rather than re-derived: the version carried
-        // here must be the call's CURRENT version, unchanged by this refresh, so a
-        // client never treats telemetry as a versioned gap. The active_date is the
-        // one just written rather than whatever the re-read returned, so a lagging
-        // read can never publish a stale timestamp.
         using TLDto.TLGroupCallParticipantState refreshed = participant.Value
             .AsGroupCallParticipantState().Clone().ActiveDate(activeDate).Build();
         byte[] participantBytes;
@@ -192,9 +162,6 @@ public sealed class GroupCallActivityTracker
         return delivered;
     }
 
-    // A participant row is dropped from a call's tracking when the call ends;
-    // callers invoke this from the discard path so long-lived servers do not
-    // accumulate state for calls that no longer exist.
     public void Forget(long callId)
     {
         lock (_gate)

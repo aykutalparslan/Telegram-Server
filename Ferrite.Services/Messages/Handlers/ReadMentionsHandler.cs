@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -12,15 +11,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Marks every unread mention in one dialog (optionally one forum topic) read.
-/// Only the caller's own state changes: a common-box copy loses its `mentioned`
-/// flag while keeping `media_unread`, so unread voice content survives, and a
-/// channel post gains a per-viewer content-read row instead of being mutated.
-/// The `offset` of the returned affectedHistory is always 0 because the whole
-/// scope is cleared in one pass; the pinned client re-sends the query while the
-/// offset is positive.
-/// </summary>
 public sealed class ReadMentionsHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -87,8 +77,6 @@ public sealed class ReadMentionsHandler
             return Error("PEER_ID_INVALID");
         }
 
-        // One pass over the caller's box: the stored row carries both the mention
-        // flag and the pts its rewrite has to keep.
         int cleared = 0;
         IReadOnlyCollection<TLSavedMessage> saved = await _messageRepository
             .GetMessagesAsync(userId);

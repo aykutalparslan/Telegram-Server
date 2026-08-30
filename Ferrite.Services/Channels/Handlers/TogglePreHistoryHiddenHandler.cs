@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -13,13 +12,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// `enabled` on the wire means PREHISTORY HIDDEN, the inverse of TDLib's
-/// `is_all_history_available`: the query sends
-/// `channels_togglePreHistoryHidden(channel, !is_all_history_available)`
-/// (`ChatManager.cpp:695`). The stored flag follows the wire, not the client's
-/// name for it.
-/// </summary>
 public sealed class TogglePreHistoryHiddenHandler : ChannelPropertyHandlerBase
 {
     private readonly IChannelAdminRepository _channelAdminRepository;

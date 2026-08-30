@@ -33,9 +33,7 @@ public class BoundAuthKeyRepository : IBoundAuthKeyRepository
         using var auth = BoundAuthKey.Builder().AuthKeyId(authKeyId).Build();
         using var temp = BoundTempAuthKey.Builder().TempAuthKeyId(tempAuthKeyId).Build();
         _storeTemp.Put(auth.ToReadOnlySpan().ToArray(), expiresIn, tempAuthKeyId);
-        // each auth key can be bound to a single temp auth key at any given time
         _storeAuth.Put(temp.ToReadOnlySpan().ToArray(), expiresIn, authKeyId);
-        // we need to retrieve a list of keys that was bound to an auth key in the given timeframe
         _storeBound.ListAdd(DateTimeOffset.Now.ToUnixTimeMilliseconds() + (long)expiresIn.TotalMilliseconds,
             temp.ToReadOnlySpan().ToArray(), expiresIn, authKeyId);
         return true;

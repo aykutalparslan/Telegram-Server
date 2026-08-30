@@ -1,0 +1,621 @@
+#!/usr/bin/env python3
+"""Manifest-owned Telegram-iOS Simulator lifecycle for Ferrite conformance."""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import fcntl
+import hashlib
+import json
+import os
+import plistlib
+import re
+import shutil
+import socket
+import stat
+import subprocess
+import sys
+import time
+import zipfile
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[3]
+INPUTS = ROOT / "interop/upstream-clients"
+PIN = INPUTS / "PIN"
+PATCH = INPUTS / "patches/ios/0001-ferrite-conformance.patch"
+IPA = Path(os.environ.get(
+    "FERRITE_IOS_IPA",
+    ROOT / ".ferrite/upstream-apps/artifacts/ios/Telegram.ipa",
+))
+STATE = Path(os.environ.get(
+    "FERRITE_IOS_STATE_DIR",
+    ROOT / ".ferrite/upstream-apps/ios",
+))
+SESSION = STATE / "session.json"
+BUNDLE_ID = "org.ferrite.conformance"
+TOKEN = re.compile(r"^[0-9a-f]{32}$")
+INSTANCE_ID = re.compile(r"^ios-[a-z][a-z0-9-]{0,30}$")
+UDID = re.compile(
+    r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-"
+    r"[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$")
+PHONE = re.compile(r"^[+][0-9]{1,19}$")
+CODE = re.compile(r"Verification code is ==> (\d+) for (\S+)")
+FIRST_PHONE = 15550000101
+FIRST_BRIDGE_PORT = 8891
+CODE_LOCK = ROOT / ".ferrite/upstream-apps/verification-code.lock"
+
+
+class LaunchError(RuntimeError):
+    pass
+
+
+@contextlib.contextmanager
+def verification_code_lock():
+    CODE_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with CODE_LOCK.open("a+", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
+def provisioning_phones(count: int,
+                        requested: list[str]) -> tuple[list[str], list[str]]:
+    own = [f"+{FIRST_PHONE + index}" for index in range(count)]
+    run = requested or own
+    if (len(run) != len(set(run))
+            or any(not PHONE.fullmatch(phone) for phone in run)):
+        raise LaunchError("run phone roster is malformed or contains duplicates")
+    missing = sorted(set(own) - set(run))
+    if missing:
+        raise LaunchError("run phone roster omits iOS identities: "
+                          + ", ".join(missing))
+    return own, run
+
+
+def run(command: list[str], *, check: bool = True,
+        timeout: int = 300,
+        env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise LaunchError(f"{' '.join(command)} timed out after {timeout}s") from error
+    if check and result.returncode:
+        detail = (result.stdout + result.stderr).strip()[-4096:]
+        raise LaunchError(
+            f"{' '.join(command)} exited {result.returncode}: {detail}")
+    return result
+
+
+def simctl(*arguments: str, check: bool = True, timeout: int = 300,
+           env: dict[str, str] | None = None) -> str:
+    return run(
+        ["xcrun", "simctl", *arguments],
+        check=check,
+        timeout=timeout,
+        env=env,
+    ).stdout
+
+
+def read_pin() -> dict[str, str]:
+    if not PIN.is_file():
+        raise LaunchError(f"PIN is absent: {PIN}")
+    values: dict[str, str] = {}
+    for line in PIN.read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value
+    return values
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def candidate_metadata() -> dict[str, Any]:
+    values = read_pin()
+    required = {
+        "LAYER": r"214",
+        "IOS_CANDIDATE_COMMIT": r"[0-9a-f]{40}",
+        "IOS_CANDIDATE_BAZEL": r"8[.]3[.]1",
+        "IOS_CANDIDATE_BAZEL_SHA256": r"[0-9a-f]{64}",
+        "IOS_CANDIDATE_PATCH_SHA256": r"[0-9a-f]{64}",
+    }
+    for key, pattern in required.items():
+        if not re.fullmatch(pattern, values.get(key, "")):
+            raise LaunchError(f"{key} is absent or malformed")
+    if not PATCH.is_file():
+        raise LaunchError(f"candidate patch is absent: {PATCH}")
+    actual = sha256(PATCH)
+    if actual != values["IOS_CANDIDATE_PATCH_SHA256"]:
+        raise LaunchError(
+            "candidate patch digest does not match PIN: "
+            f"{actual} != {values['IOS_CANDIDATE_PATCH_SHA256']}")
+    return {
+        "layer": int(values["LAYER"]),
+        "commit": values["IOS_CANDIDATE_COMMIT"],
+        "bazel": values["IOS_CANDIDATE_BAZEL"],
+        "patch_sha256": actual,
+        "promoted": "IOS_PATCH_SHA256" in values,
+    }
+
+
+def promoted_inputs() -> dict[str, Any]:
+    candidate = candidate_metadata()
+    values = read_pin()
+    expected = values.get("IOS_PATCH_SHA256")
+    if not expected:
+        raise LaunchError(
+            "iOS candidate is not promoted; IOS_PATCH_SHA256 is absent")
+    if expected != candidate["patch_sha256"]:
+        raise LaunchError(
+            f"operative iOS patch digest {expected} does not match candidate")
+    if values.get("IOS_COMMIT") != candidate["commit"]:
+        raise LaunchError(
+            "operative IOS_COMMIT does not match the proven candidate")
+    if not IPA.is_file():
+        raise LaunchError(f"built Simulator IPA is absent: {IPA}")
+    expected_ipa = values.get("IOS_IPA_SHA256")
+    actual_ipa = sha256(IPA)
+    if not expected_ipa or actual_ipa != expected_ipa:
+        raise LaunchError(
+            "public Simulator IPA digest does not match PIN: "
+            f"{actual_ipa} != {expected_ipa}")
+    return {
+        **candidate,
+        "ipa": str(IPA),
+        "ipa_sha256": actual_ipa,
+    }
+
+
+def extract_application(destination: Path) -> Path:
+    state = STATE.resolve()
+    target = destination.resolve()
+    if target.parent != state or target.name != "application":
+        raise LaunchError(
+            f"refusing application extraction outside {state / 'application'}")
+    if destination.is_symlink():
+        raise LaunchError("refusing a symlinked application extraction target")
+    if destination.exists():
+        shutil.rmtree(destination)
+    destination.mkdir(parents=True)
+    with zipfile.ZipFile(IPA) as archive:
+        names = [name for name in archive.namelist()
+                 if name.startswith("Payload/") and ".app/" in name]
+        roots = {name.split("/", 2)[1] for name in names}
+        if len(roots) != 1:
+            raise LaunchError("IPA must contain exactly one Payload app")
+        prefix = f"Payload/{next(iter(roots))}/"
+        for name in names:
+            info = archive.getinfo(name)
+            if name == prefix:
+                # Upstream's IPA includes the application directory itself.
+                # The owned extraction root already represents that entry.
+                continue
+            relative = Path(name.removeprefix(prefix))
+            if (not relative.parts or relative.is_absolute()
+                    or ".." in relative.parts):
+                raise LaunchError("IPA contains an unsafe application path")
+            output = destination / relative
+            if name.endswith("/"):
+                output.mkdir(parents=True, exist_ok=True)
+                continue
+            output.parent.mkdir(parents=True, exist_ok=True)
+            mode = info.external_attr >> 16
+            if stat.S_ISLNK(mode):
+                target = Path(archive.read(name).decode("utf-8"))
+                if target.is_absolute() or ".." in target.parts:
+                    raise LaunchError("IPA contains an unsafe symlink")
+                output.symlink_to(target)
+                continue
+            with archive.open(name) as source, output.open("wb") as sink:
+                shutil.copyfileobj(source, sink)
+            if mode:
+                output.chmod(mode & 0o777)
+    info_path = destination / "Info.plist"
+    if not info_path.is_file():
+        raise LaunchError("IPA application has no Info.plist")
+    with info_path.open("rb") as stream:
+        info = plistlib.load(stream)
+    if info.get("CFBundleIdentifier") != BUNDLE_ID:
+        raise LaunchError(
+            f"IPA bundle id is {info.get('CFBundleIdentifier')!r}, "
+            f"expected {BUNDLE_ID!r}")
+    executable = info.get("CFBundleExecutable")
+    if not executable or not (destination / executable).is_file():
+        raise LaunchError("IPA application executable is absent")
+    path = destination / executable
+    path.chmod(path.stat().st_mode | 0o111)
+    return destination
+
+
+def simulator_profile() -> tuple[str, str]:
+    runtimes = json.loads(simctl("list", "runtimes", "-j"))["runtimes"]
+    available = [item for item in runtimes
+                 if item.get("isAvailable") and
+                 item.get("identifier", "").startswith(
+                     "com.apple.CoreSimulator.SimRuntime.iOS-")]
+    if not available:
+        raise LaunchError("no available iOS Simulator runtime")
+    runtime = max(available, key=lambda item: tuple(
+        int(part) for part in item.get("version", "0").split(".")))
+    types = json.loads(simctl("list", "devicetypes", "-j"))["devicetypes"]
+    phones = [item for item in types
+              if item.get("productFamily") == "iPhone"
+              or item.get("name", "").startswith("iPhone ")]
+    if not phones:
+        raise LaunchError("no iPhone Simulator device type")
+    preferred = next((item for item in phones
+                      if item.get("name") == "iPhone 17 Pro"), phones[0])
+    return preferred["identifier"], runtime["identifier"]
+
+
+@dataclass
+class Instance:
+    instance_id: str
+    device_udid: str
+    device_name: str
+    phone: str
+    bridge_port: int
+    ferrite_port: int
+    peers: list[str]
+
+    def validate_owned(self, token: str) -> None:
+        if not INSTANCE_ID.fullmatch(self.instance_id):
+            raise LaunchError(f"unsafe instance id in session: {self.instance_id!r}")
+        if not UDID.fullmatch(self.device_udid):
+            raise LaunchError(f"unsafe Simulator UDID in session: {self.device_udid!r}")
+        if not PHONE.fullmatch(self.phone):
+            raise LaunchError(f"unsafe phone in session: {self.phone!r}")
+        if (not isinstance(self.bridge_port, int)
+                or isinstance(self.bridge_port, bool)
+                or self.bridge_port < 1 or self.bridge_port > 65535):
+            raise LaunchError(
+                f"unsafe bridge port in session: {self.bridge_port!r}")
+        if (not isinstance(self.ferrite_port, int)
+                or isinstance(self.ferrite_port, bool)
+                or self.ferrite_port < 1 or self.ferrite_port > 65535):
+            raise LaunchError(
+                f"unsafe Ferrite port in session: {self.ferrite_port!r}")
+        if (not isinstance(self.peers, list)
+                or not all(isinstance(peer, str) and PHONE.fullmatch(peer)
+                           for peer in self.peers)
+                or self.phone in self.peers
+                or len(set(self.peers)) != len(self.peers)):
+            raise LaunchError(f"unsafe peers in session: {self.peers!r}")
+        expected = f"ferrite-{self.instance_id}-{token[:8]}"
+        if self.device_name != expected:
+            raise LaunchError(
+                f"refusing non-owned Simulator {self.device_name!r}; "
+                f"expected {expected!r}")
+
+    def environment(self, token: str) -> dict[str, str]:
+        values = {
+            "FERRITE_CONFORMANCE": "1",
+            "FERRITE_HOST": "127.0.0.1",
+            "FERRITE_PORT": str(self.ferrite_port),
+            "FERRITE_BRIDGE_PORT": str(self.bridge_port),
+            "FERRITE_RUN_TOKEN": token,
+            "FERRITE_INSTANCE_ID": self.instance_id,
+            "FERRITE_PHONE": self.phone,
+            "FERRITE_FIRST_NAME": self.instance_id,
+            "FERRITE_LAST_NAME": "",
+            "FERRITE_PEERS": ",".join(self.peers),
+            "FERRITE_API_ID": "11111",
+            "FERRITE_API_HASH": "1" * 32,
+        }
+        environment = dict(os.environ)
+        environment.update({f"SIMCTL_CHILD_{key}": value
+                            for key, value in values.items()})
+        return environment
+
+
+def write_session(value: dict[str, Any]) -> None:
+    STATE.mkdir(parents=True, exist_ok=True)
+    temporary = SESSION.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(SESSION)
+
+
+def load_session() -> tuple[dict[str, Any], list[Instance]]:
+    if not SESSION.is_file():
+        raise LaunchError(f"no active iOS session at {SESSION}")
+    try:
+        value = json.loads(SESSION.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise LaunchError("iOS session manifest is malformed") from error
+    token = value.get("run_token")
+    if not isinstance(token, str) or not TOKEN.fullmatch(token):
+        raise LaunchError("iOS session has an unsafe run token")
+    raw_instances = value.get("instances")
+    if not isinstance(raw_instances, list):
+        raise LaunchError("iOS session has no instance list")
+    try:
+        instances = [Instance(**item) for item in raw_instances]
+    except (TypeError, ValueError) as error:
+        raise LaunchError("iOS session has malformed instances") from error
+    for instance in instances:
+        instance.validate_owned(token)
+    return value, instances
+
+
+def bridge_request(instance: Instance, token: str, payload: dict[str, Any],
+                   *, timeout: float = 30.0) -> dict[str, Any]:
+    request = {**payload, "run_token": token}
+    with socket.create_connection(
+        ("127.0.0.1", instance.bridge_port), timeout=timeout,
+    ) as connection:
+        connection.settimeout(timeout)
+        connection.sendall((json.dumps(request) + "\n").encode())
+        data = b""
+        while b"\n" not in data:
+            chunk = connection.recv(65536)
+            if not chunk:
+                raise LaunchError(
+                    f"{instance.instance_id}: bridge closed without a response")
+            data += chunk
+            if len(data) > 1024 * 1024:
+                raise LaunchError(
+                    f"{instance.instance_id}: bridge response exceeds one MiB")
+    value = json.loads(data.split(b"\n", 1)[0])
+    if value.get("run_token") != token:
+        raise LaunchError(
+            f"{instance.instance_id}: bridge returned a foreign run token")
+    if value.get("ok") is not True:
+        raise LaunchError(
+            f"{instance.instance_id}: bridge failed: {value.get('error')}")
+    return value
+
+
+def await_state(instance: Instance, token: str, expected: str,
+                timeout: float = 600.0) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last: Any = "bridge did not answer"
+    while time.monotonic() < deadline:
+        try:
+            last = bridge_request(instance, token, {"type": "status"})
+            state = last.get("provisioning")
+            if state == expected:
+                return last
+            if state == "FAILED":
+                raise LaunchError(
+                    f"{instance.instance_id}: provisioning failed: "
+                    f"{last.get('provisioning_failure')}")
+        except (ConnectionError, OSError, json.JSONDecodeError) as error:
+            last = str(error)
+        time.sleep(2)
+    raise LaunchError(
+        f"{instance.instance_id}: never reached {expected}; last={last}")
+
+
+def node_container() -> str:
+    result = run([
+        "docker", "ps", "--filter", "name=ferrite-a", "--format", "{{.Names}}",
+    ])
+    names = result.stdout.split()
+    if len(names) != 1:
+        raise LaunchError(
+            f"expected exactly one running ferrite-a container, found {names}")
+    return names[0]
+
+
+def digits(phone: str) -> str:
+    return re.sub(r"\D", "", phone)
+
+
+def issued_codes(container: str) -> list[tuple[str, str]]:
+    result = run(["docker", "logs", container], check=False)
+    return [(code, digits(destination))
+            for code, destination in CODE.findall(result.stdout + result.stderr)]
+
+
+def await_code(container: str, seen: int, phone: str,
+               timeout: float = 120.0) -> str:
+    """Claims the newest code Ferrite addressed to this instance's number.
+
+    Attribution is by destination, which is what a gateway knows. A client
+    resends on its own once its login screen decides the code is late, so a
+    count of codes says nothing about which one this number can use.
+    """
+    wanted = digits(phone)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        fresh = [code for code, destination in issued_codes(container)[seen:]
+                 if destination == wanted]
+        if fresh:
+            return fresh[-1]
+        time.sleep(1)
+    raise LaunchError(f"Ferrite issued no verification code for {phone}")
+
+
+def create_instances(count: int, token: str, ferrite_port: int,
+                     run_phones: list[str]) -> list[Instance]:
+    device_type, runtime = simulator_profile()
+    phones, all_phones = provisioning_phones(count, run_phones)
+    instances: list[Instance] = []
+    for index in range(count):
+        instance_id = f"ios-{chr(ord('a') + index)}"
+        name = f"ferrite-{instance_id}-{token[:8]}"
+        udid = simctl("create", name, device_type, runtime).strip()
+        if not UDID.fullmatch(udid):
+            raise LaunchError(f"simctl returned an unsafe device id: {udid!r}")
+        instances.append(Instance(
+            instance_id=instance_id,
+            device_udid=udid,
+            device_name=name,
+            phone=phones[index],
+            bridge_port=FIRST_BRIDGE_PORT + index,
+            ferrite_port=ferrite_port,
+            peers=[phone for phone in all_phones if phone != phones[index]],
+        ))
+        instances[-1].validate_owned(token)
+        write_session({
+            "schema": 1,
+            "status": "starting",
+            "run_token": token,
+            "inputs": promoted_inputs(),
+            "instances": [asdict(item) for item in instances],
+        })
+    return instances
+
+
+def command_start(count: int, token: str, ferrite_port: int,
+                  run_phones: list[str]) -> None:
+    if SESSION.exists():
+        raise LaunchError("an iOS session already exists; use status or stop")
+    if count < 1 or count > 8:
+        raise LaunchError("iOS instance count must be between 1 and 8")
+    if not TOKEN.fullmatch(token):
+        raise LaunchError("run token must be exactly 32 lowercase hex characters")
+    if ferrite_port < 1 or ferrite_port > 65535:
+        raise LaunchError("Ferrite port is outside 1..65535")
+    inputs = promoted_inputs()
+    for port in range(FIRST_BRIDGE_PORT, FIRST_BRIDGE_PORT + count):
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                raise LaunchError(f"iOS bridge port is already in use: {port}")
+        except ConnectionRefusedError:
+            pass
+        except TimeoutError:
+            pass
+
+    application = extract_application(STATE / "application")
+    instances = create_instances(count, token, ferrite_port, run_phones)
+    value = {
+        "schema": 1,
+        "status": "starting",
+        "run_token": token,
+        "inputs": inputs,
+        "instances": [asdict(item) for item in instances],
+    }
+    try:
+        for instance in instances:
+            simctl("boot", instance.device_udid, check=False)
+            simctl("bootstatus", instance.device_udid, "-b", timeout=480)
+            simctl("uninstall", instance.device_udid, BUNDLE_ID, check=False)
+            simctl("install", instance.device_udid, str(application), timeout=600)
+
+        container = node_container()
+        for instance in instances:
+            with verification_code_lock():
+                seen = len(issued_codes(container))
+                stdout = STATE / f"{instance.instance_id}-stdout.log"
+                stderr = STATE / f"{instance.instance_id}-stderr.log"
+                simctl(
+                    "launch", "--terminate-running-process",
+                    f"--stdout={stdout}", f"--stderr={stderr}",
+                    instance.device_udid, BUNDLE_ID,
+                    env=instance.environment(token),
+                )
+                await_state(instance, token, "AWAITING_CODE")
+                code = await_code(container, seen, instance.phone)
+                bridge_request(instance, token, {
+                    "type": "deliver-code",
+                    "code": code,
+                }, timeout=120)
+
+        statuses = {
+            item.instance_id: await_state(item, token, "READY")
+            for item in instances
+        }
+        value["status"] = "running"
+        value["provisioning"] = statuses
+        write_session(value)
+        print(json.dumps(value, indent=2))
+    except Exception as error:
+        value["status"] = "failed"
+        value["failure"] = str(error)
+        write_session(value)
+        raise
+
+
+def command_status() -> None:
+    value, instances = load_session()
+    devices = json.loads(simctl("list", "devices", "-j"))["devices"]
+    present = {item.get("udid") for group in devices.values() for item in group}
+    statuses: dict[str, Any] = {}
+    failures: list[str] = []
+    for instance in instances:
+        if instance.device_udid not in present:
+            failures.append(f"{instance.instance_id}: Simulator device is absent")
+            continue
+        try:
+            statuses[instance.instance_id] = bridge_request(
+                instance, value["run_token"], {"type": "status"})
+        except (LaunchError, OSError, json.JSONDecodeError) as error:
+            failures.append(str(error))
+    result = {
+        "status": value.get("status"),
+        "run_token": value["run_token"],
+        "requested": len(instances),
+        "ready": sum(item.get("provisioning") == "READY"
+                     for item in statuses.values()),
+        "instances": statuses,
+        "failures": failures,
+    }
+    print(json.dumps(result, indent=2))
+    if failures or result["ready"] != len(instances):
+        raise LaunchError("one or more iOS instances are not READY")
+
+
+def command_stop(expected_token: str | None = None) -> None:
+    value, instances = load_session()
+    token = value["run_token"]
+    if expected_token is not None and expected_token != token:
+        raise LaunchError(
+            "refusing to stop an iOS session owned by a different run token")
+    for instance in instances:
+        instance.validate_owned(token)
+        simctl("terminate", instance.device_udid, BUNDLE_ID, check=False)
+        simctl("shutdown", instance.device_udid, check=False)
+        simctl("delete", instance.device_udid, check=False)
+    SESSION.unlink(missing_ok=True)
+    print(json.dumps({
+        "status": "stopped",
+        "run_token": token,
+        "removed": [item.instance_id for item in instances],
+    }))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("metadata")
+    start = commands.add_parser("start")
+    start.add_argument("--count", type=int, required=True)
+    start.add_argument("--run-token", required=True)
+    start.add_argument("--ferrite-port", type=int, default=52222)
+    start.add_argument("--run-phone", action="append", default=[])
+    commands.add_parser("status")
+    stop = commands.add_parser("stop")
+    stop.add_argument("--run-token")
+    arguments = parser.parse_args()
+    if arguments.command == "metadata":
+        print(json.dumps(candidate_metadata(), indent=2))
+    elif arguments.command == "start":
+        command_start(arguments.count, arguments.run_token,
+                      arguments.ferrite_port, arguments.run_phone)
+    elif arguments.command == "status":
+        command_status()
+    else:
+        command_stop(arguments.run_token)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (LaunchError, OSError, json.JSONDecodeError, zipfile.BadZipFile) as error:
+        print(f"launch-ios: {error}", file=sys.stderr)
+        raise SystemExit(1)

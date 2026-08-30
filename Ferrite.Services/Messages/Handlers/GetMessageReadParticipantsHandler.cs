@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -11,12 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Returns the first-read date recorded for each reader of the caller's recent
-/// outgoing group message. Telegram exposes these receipts only in active basic
-/// groups and megagroups with at most 100 members, and only for seven days after
-/// the message was sent.
-/// </summary>
 public sealed class GetMessageReadParticipantsHandler
 {
     private readonly IChatParticipantsRepository _chatParticipantsRepository;
@@ -251,7 +244,6 @@ public sealed class GetMessageReadParticipantsHandler
             .ToList();
     }
 
-    // Synchronous so the ref-struct vector never crosses an await.
     private static TLBytes BuildResult(IReadOnlyList<(long UserId, int Date)> readers)
     {
         var result = new Vector();

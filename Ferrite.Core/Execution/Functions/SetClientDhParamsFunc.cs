@@ -7,7 +7,6 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using DotNext.Buffers;
 using Ferrite.Crypto;
-using Ferrite.Services;
 using Ferrite.Core.Execution;
 using Ferrite.TL;
 using Ferrite.TL.mtproto;
@@ -61,7 +60,7 @@ public class SetClientDhParamsFunc : ITLFunction
         BigInteger g_b = new BigInteger(clientDhInnerData.GB, true, true);
         BigInteger g = new BigInteger((int)ctx.SessionData["g"]);
         BigInteger a = new BigInteger((byte[])ctx.SessionData["a"], true, true);
-        var authKey = BigInteger.ModPow(g_b, a, prime).ToByteArray(true, true);
+        var authKey = AuthKeyBlock(BigInteger.ModPow(g_b, a, prime));
         ctx.SessionData.Add("auth_key", authKey);
         var authKeySHA1 = SHA1.HashData(authKey);
         var authKeyHash = MemoryMarshal.Cast<byte, long>(authKeySHA1.AsSpan().Slice(12))[0];
@@ -122,5 +121,18 @@ public class SetClientDhParamsFunc : ITLFunction
             var dhGenRetry = new DhGenRetry(sessionNonce, sessionServerNonce, newNonceHash2);
             return dhGenRetry.TLBytes;
         }
+    }
+
+    private static byte[] AuthKeyBlock(BigInteger sharedSecret)
+    {
+        byte[] encoded = sharedSecret.ToByteArray(true, true);
+        if (encoded.Length == 256)
+        {
+            return encoded;
+        }
+
+        var block = new byte[256];
+        encoded.CopyTo(block, 256 - encoded.Length);
+        return block;
     }
 }

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -138,7 +137,7 @@ public sealed class GetUnreadReactionsHandler
             messageVector.AppendTLObject(message);
         }
         var userVector = new Vector();
-        _fanout.AppendUsers(ref userVector, relatedUserIds);
+        _fanout.AppendUsers(userId, ref userVector, relatedUserIds);
         var chatVector = new Vector();
         foreach (byte[] chat in relatedChatBytes)
         {

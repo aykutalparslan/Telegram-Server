@@ -6,8 +6,6 @@ using Ferrite.TL.baseLayer;
 
 namespace Ferrite.Services.Handlers.UploadMethods;
 
-// Ferrite does not expose CDN/hash-based downloads yet. An empty bare vector is
-// the schema-correct baseline for ordinary local uploads.
 public sealed class GetFileHashesHandler
 {
     [TLFunction(Constructors.baseLayer_GetFileHashes)]

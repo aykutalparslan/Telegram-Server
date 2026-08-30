@@ -9,20 +9,26 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class AddStickerToSetHandler : StickerHandlerBase
 {
-    public AddStickerToSetHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerSetEditor _editor;
+
+    public AddStickerToSetHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerSetEditor store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _editor = store;
+    }
 
     [TLFunction(Constructors.baseLayer_AddStickerToSet)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
     {
         var request = (AddStickerToSet)q;
-        var set = StickerStore.ReadInputSet(request.Get_StickersetView());
-        StickerStore.StickerItemInput? item = StickerStore.ReadItem(
+        var set = StickerInput.ReadInputSet(request.Get_StickersetView());
+        StickerItemInput? item = StickerInput.ReadItem(
             request.Get_StickerView());
         if (!item.HasValue) return Invalid("STICKER_INVALID");
         long? userId = await GetUserIdAsync(authKeyId);
         return userId.HasValue
-            ? await Store.AddAsync(userId.Value, set.Id, set.AccessHash,
+            ? await _editor.AddAsync(userId.Value, set.Id, set.AccessHash,
                 set.ShortName, item.Value) : AuthError();
     }
 }

@@ -53,8 +53,6 @@ public sealed class ReceivedCallHandler : PhoneCallHandlerBase
         }
 
         CallSnapshot call = result.Call!;
-        // Notify the initiating caller device that the call was received so it
-        // can start its own ring timeout.
         await PushCallUpdate(call.CallerUserId, BuildWaiting(call),
             UpdateDeliveryScope.ForAuthKey(call.CallerAuthKeyId));
         return BoolTrue.Builder().Build();

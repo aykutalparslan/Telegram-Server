@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -15,8 +14,8 @@ public sealed class GetUsersHandler : UserHandlerBase
 {
     private readonly IAuthorizationRepository _authorizationRepository;
 
-    public GetUsersHandler(IUnitOfWork unitOfWork, IAppInfoRepository appInfoRepository, IAuthorizationRepository authorizationRepository, INotifySettingsRepository notifySettingsRepository, IPhotoRepository photoRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ProfileStore? profiles = null)
-        : base(unitOfWork, appInfoRepository, notifySettingsRepository, photoRepository, userRepository, userStatusRepository, profiles)
+    public GetUsersHandler(IUnitOfWork unitOfWork, IAppInfoRepository appInfoRepository, IAuthorizationRepository authorizationRepository, IContactsRepository contactsRepository, INotifySettingsRepository notifySettingsRepository, IPhotoRepository photoRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ProfileStore? profiles = null)
+        : base(unitOfWork, appInfoRepository, contactsRepository, notifySettingsRepository, photoRepository, userRepository, userStatusRepository, profiles)
     {
         _authorizationRepository = authorizationRepository;
 
@@ -26,15 +25,15 @@ public sealed class GetUsersHandler : UserHandlerBase
     public async ValueTask<TLBytes> Handle(long authKeyId, TLBytes q)
         {
             List<InputUserRequest> requests = GetUserIds(q);
-            long? selfUserId = null;
             var auth = await _authorizationRepository
                 .GetAuthorizationAsync(authKeyId);
-            if (auth != null)
+            if (auth == null)
             {
-                selfUserId = auth.Value.AsAuthInfo().UserId;
+                return RpcErrorGenerator.GenerateError(400, "AUTH_KEY_INVALID"u8);
             }
 
-            List<byte[]> users = await GetUsersFromRepo(requests, selfUserId);
+            List<byte[]> users = await GetUsersFromRepo(requests,
+                auth.Value.AsAuthInfo().UserId);
             var usersVector = new Vector();
             foreach (var user in users)
             {

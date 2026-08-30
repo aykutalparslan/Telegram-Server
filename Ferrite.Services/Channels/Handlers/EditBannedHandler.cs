@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -71,8 +70,6 @@ public sealed class EditBannedHandler : ChannelsHandlerBase
         }
         if (targetRole is (int)ChatParticipantRole.Creator or (int)ChatParticipantRole.Admin)
         {
-            // Admins must be demoted through channels.editAdmin before they can be
-            // restricted or kicked.
             return ErrorUpdates("USER_ADMIN_INVALID"u8);
         }
 
@@ -82,7 +79,6 @@ public sealed class EditBannedHandler : ChannelsHandlerBase
         bool wasActiveMember = targetRole == (int)ChatParticipantRole.Member;
         if (!anyFlag && target == null)
         {
-            // Unbanning a user with no participant row is a no-op.
             return await BuildChannelUpdates(authKeyId, currentUserId, channelBytes,
                 new[] { targetUserId.Value });
         }
@@ -91,10 +87,6 @@ public sealed class EditBannedHandler : ChannelsHandlerBase
             return ErrorUpdates("USER_NOT_PARTICIPANT"u8);
         }
 
-        // A view_messages ban kicks the user out (role Banned); other flags restrict a
-        // member in place, or keep a kicked/left user outside with restrictions. An
-        // all-false rights object unbans: a restricted member becomes a plain member,
-        // a kicked user becomes left (unbanned but not re-joined).
         ChatParticipantRole newRole = kick
             ? ChatParticipantRole.Banned
             : wasActiveMember
@@ -102,11 +94,6 @@ public sealed class EditBannedHandler : ChannelsHandlerBase
                 : ChatParticipantRole.Left;
 
         int date = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
-        // Both sides of the admin-log action, captured around the write. Pinned
-        // TDLib drops the event unless the two name the same user and both parse
-        // as valid participants (`DialogEventLog.cpp:89-101`); a restricted or
-        // banned row is only valid when its `kicked_by` is a real user, which the
-        // shared participant builder supplies.
         byte[] previousParticipant = target != null
             ? BuildChannelParticipantBytes(target.Value, currentUserId)
             : BuildLeftParticipantBytes(targetUserId.Value);
@@ -146,8 +133,6 @@ public sealed class EditBannedHandler : ChannelsHandlerBase
 
         if (kick && wasActiveMember && megagroup)
         {
-            // Megagroups record the kick as a messageActionChatDeleteUser service
-            // message, mirroring leaveChannel/deleteChatUser.
             byte[] actionBytes;
             using (TLMessageAction action = MessageActionChatDeleteUser.Builder()
                        .UserId(targetUserId.Value)

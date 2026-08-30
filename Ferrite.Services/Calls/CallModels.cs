@@ -49,10 +49,6 @@ public sealed record CallCreateRequest(long CallerUserId, long CallerAuthKeyId,
 public sealed record CallDiscardInfo(CallSessionState PriorState, int ReasonConstructor,
     int Duration, long ConnectionId, bool NeedRating, bool NeedDebug, bool LogWritten);
 
-/// <summary>
-/// Immutable view of one registry call session. Byte arrays are shared with
-/// the registry's stored copies and must be treated as read-only.
-/// </summary>
 public sealed record CallSnapshot(
     long CallId,
     long AccessHash,

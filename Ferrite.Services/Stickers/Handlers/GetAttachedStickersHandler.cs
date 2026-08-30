@@ -10,8 +10,14 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class GetAttachedStickersHandler : StickerHandlerBase
 {
-    public GetAttachedStickersHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerSearchIndex _search;
+
+    public GetAttachedStickersHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerSearchIndex store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _search = store;
+    }
 
     [TLFunction(Constructors.baseLayer_GetAttachedStickers)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
@@ -21,7 +27,7 @@ public sealed class GetAttachedStickersHandler : StickerHandlerBase
         InputStickeredMediaView media = ((GetAttachedStickers)q).Get_MediaView();
         if (media.Is(out InputStickeredMediaDocument document))
         {
-            (documentId, accessHash) = StickerStore.ReadInputDocument(
+            (documentId, accessHash) = StickerInput.ReadInputDocument(
                 document.Get_IdView());
             if (!documentId.HasValue || !accessHash.HasValue)
                 return Invalid("STICKER_ID_INVALID");
@@ -31,6 +37,6 @@ public sealed class GetAttachedStickersHandler : StickerHandlerBase
             return Invalid("STICKER_ID_INVALID");
         }
         return await GetUserIdAsync(authKeyId) is not null
-            ? await Store.GetAttachedAsync(documentId, accessHash) : AuthError();
+            ? await _search.GetAttachedAsync(documentId, accessHash) : AuthError();
     }
 }

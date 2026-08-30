@@ -2,6 +2,7 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Chatlists;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer.chatlists;
 
@@ -9,9 +10,13 @@ namespace Ferrite.Services.Handlers.ChatlistMethods;
 
 public sealed class LeaveChatlistHandler : ChatlistHandlerBase
 {
-    public LeaveChatlistHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository,
-        ChatlistInviteStore invites) : base(unitOfWork, authorizationRepository, invites)
+    private readonly ChatlistImportStore _imports;
+
+    public LeaveChatlistHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository,
+        ChatlistImportStore store) : base(unitOfWork, authorizationRepository)
     {
+        _imports = store;
     }
 
     [TLFunction(Constructors.baseLayer_LeaveChatlist)]
@@ -26,6 +31,6 @@ public sealed class LeaveChatlistHandler : ChatlistHandlerBase
         {
             return RequestError();
         }
-        return await Invites.LeaveAsync(authKeyId, userId.Value, filterId, peers);
+        return await _imports.LeaveAsync(authKeyId, userId.Value, filterId, peers);
     }
 }

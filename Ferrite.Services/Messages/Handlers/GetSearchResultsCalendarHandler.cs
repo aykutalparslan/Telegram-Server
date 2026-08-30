@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -11,16 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Groups a conversation's matching messages into calendar periods, one per UTC
-/// month, newest first.
-///
-/// Each period names the message that opens it, and that message MUST also be in
-/// the returned `messages` vector: pinned TDLib looks the id up and drops the
-/// whole day when it cannot find it (`MessagesManager.cpp:7216-7225`). `count` is
-/// the conversation's full count for the filter rather than this page's, because
-/// TDLib stores it as the dialog's message count by index (`:7207`).
-/// </summary>
 public sealed class GetSearchResultsCalendarHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -95,15 +84,10 @@ public sealed class GetSearchResultsCalendarHandler
         (HashSet<long> relatedUserIds, List<byte[]> relatedChatBytes) = await _dialogs
             .ResolveRelatedPeersAsync(userId, target.PeerType, target.PeerId, opening);
 
-        return Build(matched.Count, matched.Count - page.Count, page, periods,
+        return Build(userId, matched.Count, matched.Count - page.Count, page, periods,
             relatedUserIds, relatedChatBytes);
     }
 
-    /// <summary>
-    /// The slice the client asked for. `offset_id` is where the calendar resumes,
-    /// and pinned TDLib sends the id AFTER the newest known message when it wants
-    /// everything, so the bound includes that message.
-    /// </summary>
     private static List<MessageSnapshot> SelectPage(
         IReadOnlyList<MessageSnapshot> matched, int offsetId, int offsetDate)
     {
@@ -168,7 +152,7 @@ public sealed class GetSearchResultsCalendarHandler
             TimeSpan.Zero).ToUnixTimeSeconds();
     }
 
-    private TLSearchResultsCalendar Build(int totalCount, int offsetIdOffset,
+    private TLSearchResultsCalendar Build(long viewerUserId, int totalCount, int offsetIdOffset,
         IReadOnlyList<MessageSnapshot> page, List<Period> periods,
         IEnumerable<long> userIds, IReadOnlyCollection<byte[]> chatBytes)
     {
@@ -188,7 +172,7 @@ public sealed class GetSearchResultsCalendarHandler
         }
 
         var users = new Vector();
-        _fanout.AppendUsers(ref users, userIds);
+        _fanout.AppendUsers(viewerUserId, ref users, userIds);
         var chats = new Vector();
         foreach (byte[] chat in chatBytes)
         {

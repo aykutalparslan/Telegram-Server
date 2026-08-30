@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -85,7 +84,7 @@ public sealed class GetCommonChatsHandler : MessagesHandlerBase
                 chatVector.AppendTLObject(bytes);
             }
 
-            return Chats.Builder()
+            return Ferrite.TL.baseLayer.messages.Chats.Builder()
                 .ChatsProperty(chatVector)
                 .Build();
         }

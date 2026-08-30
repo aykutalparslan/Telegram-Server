@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -14,11 +13,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.inviteToGroupCall. Writes the invite service action into the hosting
-/// peer's ordinary message box. An invite is signaling only: it never creates a
-/// participant row or reserves a media source before the invited user joins.
-/// </summary>
 public sealed class InviteToGroupCallHandler : GroupCallHandlerBase
 {
     private readonly IChatParticipantsRepository _chatParticipantsRepository;

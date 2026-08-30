@@ -17,6 +17,8 @@ public interface IMTProtoSession
     long ServerSalt { get; }
     Dictionary<string, object> SessionData { get; }
     bool TryFetchAuthKey(long authKeyId);
+
+    bool TryResolvePermAuthKeyId();
     int GenerateQuickAck(Span<byte> messageSpan);
     int GenerateSeqNo(bool isContentRelated);
     void RecordSentMessage(long messageId, int sequenceNo, int length, bool contentRelated);
@@ -25,26 +27,16 @@ public interface IMTProtoSession
     bool TryGetSentMessage(long messageId, out MTProtoSentMessage message);
     bool MarkSentMessageAcknowledged(long messageId);
 
-    /// <summary>
-    /// Gets the next Message Identifier (msg_id) for this session.
-    /// </summary>
-    /// <param name="response">If the message is a response to a client message.</param>
-    /// <returns></returns>
     long NextMessageId(bool response);
 
     long CreateNewSession(long sessionId, long firstMessageId);
 
-    /// <summary>
-    /// Checks if the given message Id is valid and adds it to the last N messages list
-    /// </summary>
-    /// <param name="messageId"></param>
-    /// <returns></returns>
-    bool IsValidMessageId(long messageId);
-    bool TryValidateMessageId(long messageId, out int errorCode,
+    bool IsValidMessageId(long sessionId, long messageId);
+    bool TryValidateMessageId(long sessionId, long messageId, out int errorCode,
         bool isContainer = false);
     bool IsValidServerSalt(long serverSalt, out long currentServerSalt);
 
-    Services.MTProtoMessage GenerateSessionCreated(long firstMessageId, long serverSalt);
+    Services.Transport.MTProtoMessage GenerateSessionCreated(long firstMessageId, long serverSalt);
 
     public long SaveCurrentSession(long authKeyId);
 }

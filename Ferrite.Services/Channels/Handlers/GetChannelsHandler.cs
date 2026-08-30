@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -62,10 +61,6 @@ public sealed class GetChannelsHandler : ChannelsHandlerBase
             using var chat = await _chatRepository.GetChatAsync(channelId);
             if (chat is { Type: TLChat.ChatType.Channel })
             {
-                // `creator`/`left` describe THIS caller's relationship to the
-                // channel, and this is the canonical path a client re-reads a
-                // channel row through, so an unhydrated row here silently undoes
-                // the per-viewer answer every other read path gives.
                 chatBytes.Add(await ChannelRows.ForViewerAsync(
                     _chatParticipantsRepository, viewerUserId, channelId,
                     chat.Value.AsSpan().ToArray()));

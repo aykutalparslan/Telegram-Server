@@ -2,6 +2,7 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Chatlists;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer.chatlists;
 
@@ -9,9 +10,13 @@ namespace Ferrite.Services.Handlers.ChatlistMethods;
 
 public sealed class DeleteExportedInviteHandler : ChatlistHandlerBase
 {
-    public DeleteExportedInviteHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository,
-        ChatlistInviteStore invites) : base(unitOfWork, authorizationRepository, invites)
+    private readonly ChatlistInviteStore _invites;
+
+    public DeleteExportedInviteHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository,
+        ChatlistInviteStore store) : base(unitOfWork, authorizationRepository)
     {
+        _invites = store;
     }
 
     [TLFunction(Constructors.baseLayer_DeleteExportedInvite)]
@@ -26,6 +31,6 @@ public sealed class DeleteExportedInviteHandler : ChatlistHandlerBase
             return RequestError();
         }
         string slug = ReadSlug(request.Slug);
-        return await Invites.DeleteAsync(userId.Value, filterId, slug);
+        return await _invites.DeleteAsync(userId.Value, filterId, slug);
     }
 }

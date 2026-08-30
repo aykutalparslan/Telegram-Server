@@ -10,6 +10,8 @@ autom4te.cache/
 *.tar.gz
 tarballs/
 test-results/
+.ferrite/
+interop/upstream-clients/work/
 
 # Mac bundle stuff
 *.dmg

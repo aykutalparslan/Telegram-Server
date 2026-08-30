@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -11,12 +10,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Sets or clears the channel's emoji status. `emojiStatusEmpty` is how a client
-/// REMOVES one, so it is stored as an absent `emoji_status` rather than as a
-/// present empty value — which is why the row is rebuilt through the value
-/// constructor instead of a builder that could only ever set the flag.
-/// </summary>
 public sealed class ChannelsUpdateEmojiStatusHandler : ChannelPropertyHandlerBase
 {
     private readonly IChatRepository _chatRepository;
@@ -39,8 +32,6 @@ public sealed class ChannelsUpdateEmojiStatusHandler : ChannelPropertyHandlerBas
     {
         var request = (ChannelsUpdateEmojiStatus)q;
         long? channelId = ResolveInputChannelId(request.Get_ChannelView());
-        // An empty status is stored as absence, so it is carried as an empty span
-        // rather than as the `emojiStatusEmpty` bytes.
         byte[] statusBytes = request.Get_EmojiStatusView().Constructor ==
                              Constructors.baseLayer_EmojiStatusEmpty
             ? Array.Empty<byte>()
@@ -75,9 +66,6 @@ public sealed class ChannelsUpdateEmojiStatusHandler : ChannelPropertyHandlerBas
         return await CompleteAsync(authKeyId, currentUserId, id, updatedChannelBytes);
     }
 
-    // The stored status as its own bytes, or `emojiStatusEmpty` when the channel
-    // carries none: the action's prev/new fields are not flag-gated, so absence
-    // has to be spelled out rather than left off.
     private static byte[] ReadEmojiStatus(byte[] channelBytes)
     {
         using var stored = new TLChat(channelBytes, 0, channelBytes.Length);

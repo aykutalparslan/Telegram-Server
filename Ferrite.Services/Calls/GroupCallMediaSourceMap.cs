@@ -5,21 +5,6 @@ using System.Collections.Concurrent;
 
 namespace Ferrite.Services.Calls;
 
-/// <summary>
-/// The live per-viewer media mapping for every active call: which rewritten
-/// SSRCs one viewer receives for one producer.
-///
-/// This is deliberately NOT persisted. mediasoup rewrites per-consumer SSRCs
-/// and re-derives them on every join, leave, and presentation
-/// change, so the worker — not the database — is the authority. Persisting a
-/// snapshot would let a restarted worker hand clients SSRCs that no longer
-/// exist. Losing this map instead degrades a participant row to its canonical
-/// source, which is the same fallback a row already takes before its media
-/// mapping arrives.
-///
-/// Keys on both levels are <c>groupCallParticipantState.media_id</c>, the durable
-/// media correlation id; callers translate user ids through the participant rows.
-/// </summary>
 public sealed class GroupCallMediaSourceMap
 {
     private readonly ConcurrentDictionary<long, CallMap> _calls = new();
@@ -30,11 +15,6 @@ public sealed class GroupCallMediaSourceMap
             IReadOnlyDictionary<string, GroupCallViewerSources>> Viewers { get; } = new();
     }
 
-    /// <summary>
-    /// Replaces the whole mapping for one call. The media plane returns the full
-    /// viewer/producer matrix on every join, so a wholesale replace is what keeps
-    /// the map consistent with the worker rather than accumulating stale rows.
-    /// </summary>
     public void Replace(long callId,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, GroupCallViewerSources>>
             viewerSources)
@@ -52,12 +32,6 @@ public sealed class GroupCallMediaSourceMap
         _calls[callId] = map;
     }
 
-    /// <summary>
-    /// What <paramref name="viewerMediaId"/> receives for
-    /// <paramref name="producerMediaId"/>, or null when no mapping exists — which
-    /// makes the builder fall back to the canonical source and omit video rows
-    /// rather than publish SSRCs the viewer cannot receive.
-    /// </summary>
     public GroupCallViewerSources? TryGet(long callId, string? viewerMediaId,
         string? producerMediaId)
     {
@@ -73,11 +47,6 @@ public sealed class GroupCallMediaSourceMap
             : null;
     }
 
-    /// <summary>
-    /// Drops one participant from the map after it leaves. The next join replaces
-    /// the whole call anyway; this keeps a long-lived call from serving a departed
-    /// participant's rows in the meantime.
-    /// </summary>
     public void RemoveParticipant(long callId, string mediaId)
     {
         if (string.IsNullOrEmpty(mediaId) || !_calls.TryGetValue(callId, out CallMap? map))
@@ -100,13 +69,6 @@ public sealed class GroupCallMediaSourceMap
         }
     }
 
-    /// <summary>
-    /// Drops one producer's SCREEN SHARE from every viewer's mapping, leaving its
-    /// camera stream untouched. Tearing down a presentation transport does not
-    /// produce a fresh viewer matrix — the media plane only reports one — so
-    /// without this the next row built for a viewer would still carry screen SSRCs
-    /// the worker has already stopped forwarding.
-    /// </summary>
     public void RemoveProducerPresentation(long callId, string mediaId)
     {
         if (string.IsNullOrEmpty(mediaId) || !_calls.TryGetValue(callId, out CallMap? map))
@@ -131,6 +93,5 @@ public sealed class GroupCallMediaSourceMap
         }
     }
 
-    /// <summary>Releases a call's mapping when the call ends.</summary>
     public void Forget(long callId) => _calls.TryRemove(callId, out _);
 }

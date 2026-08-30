@@ -10,11 +10,16 @@ working default; an unset variable is never an error except where noted.
 | `FERRITE_PUBLIC_ADDRESS` | `10.0.2.2` | address advertised to clients in the datacenter list |
 | `FERRITE_PORT` | `5222` | TCP port for MTProto and WebSocket |
 | `FERRITE_DATA_PATH` | `data` | root directory for local state |
-| `FERRITE_NODE_ID` | generated | stable node GUID; set it explicitly when running more than one node |
+| `FERRITE_NODE_ID` | `node.guid` | stable node GUID; set it explicitly when running more than one node |
 
 `FERRITE_PUBLIC_ADDRESS` must be an address the client can reach. It is what
 Ferrite puts in its datacenter list, not what it binds to, so a wrong value fails
 only after the client reconnects to the advertised address.
+
+Unset, `FERRITE_NODE_ID` falls back to `node.guid` in the working directory and
+generates one there when it is absent. The repository ships a sample `node.guid`
+that the build copies into the output directory and the server image, so every
+node started from that image shares an id until this variable is set.
 
 ## Storage
 

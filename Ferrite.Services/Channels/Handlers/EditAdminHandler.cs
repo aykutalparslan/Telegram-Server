@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -61,8 +60,6 @@ public sealed class EditAdminHandler : ChannelsHandlerBase
             .GetParticipantAsync(id, currentUserId);
         using var target = await _chatParticipantsRepository
             .GetParticipantAsync(id, targetUserId.Value);
-        // Promoting a non-member joins them on promotion (mirroring real Telegram);
-        // demoting one stays an error, and a kicked user must be unbanned first.
         bool targetJoinsOnPromotion = false;
         if (target == null || !IsActiveParticipant(target.Value))
         {
@@ -99,7 +96,6 @@ public sealed class EditAdminHandler : ChannelsHandlerBase
         if (!callerIsCreator && targetRole == (int)ChatParticipantRole.Admin &&
             targetInviterId != currentUserId)
         {
-            // Non-creator admins may only edit the admins they promoted themselves.
             return ErrorUpdates("CHAT_ADMIN_REQUIRED"u8);
         }
 
@@ -119,11 +115,6 @@ public sealed class EditAdminHandler : ChannelsHandlerBase
         }
 
         int date = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
-        // Both sides of the admin-log action, captured around the write. Pinned
-        // TDLib drops the event unless the two name the SAME user and both parse
-        // as valid participants (`DialogEventLog.cpp:108-121`), and a promoted row
-        // is only valid when its `promoted_by` is a real user, which is why the
-        // rows come from the same builder every participant read uses.
         byte[] previousParticipant = target != null
             ? BuildChannelParticipantBytes(target.Value, currentUserId)
             : BuildLeftParticipantBytes(targetUserId.Value);
@@ -165,8 +156,6 @@ public sealed class EditAdminHandler : ChannelsHandlerBase
             }
             if (megagroup)
             {
-                // Members (including the joined target) learn about the promotion-join
-                // from the add-user service message, exactly like inviteToChannel.
                 byte[] actionBytes;
                 {
                     var actionUsers = new VectorOfLong();
@@ -192,8 +181,6 @@ public sealed class EditAdminHandler : ChannelsHandlerBase
             await _fanout.PushChannelServiceMessageAsync(id, currentUserId, joinMessageBytes,
                 joinMessagePts);
         }
-        // The promoted/demoted user's clients refetch their participant state from the
-        // channel row carried in the pushed update.
         await _fanout.EnqueueUpdateChannelAsync(targetUserId.Value, id);
         return result;
     }

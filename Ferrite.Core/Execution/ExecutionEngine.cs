@@ -7,7 +7,6 @@ using Ferrite.Core.Execution.Functions.BaseLayer;
 using Ferrite.Core.Execution.Functions;
 using Ferrite.Crypto;
 using Ferrite.Data.Repositories;
-using Ferrite.Services;
 using Ferrite.Core.Execution;
 using Ferrite.Core.RequestChain;
 using Ferrite.TL;
@@ -77,7 +76,7 @@ public class ExecutionEngine : IExecutionEngine
             return await InvokeCore(unpacked, ctx, layer);
         }
 
-        var authError = await GetAuthError(rpc.Constructor, ctx);
+        var authError = await GetAuthErrorResult(rpc.Constructor, ctx);
         if (authError != null) return authError;
 
         try
@@ -122,7 +121,7 @@ public class ExecutionEngine : IExecutionEngine
     private async ValueTask<TLBytes?> InvokeStreamingCore(ITLStreamingObject rpc,
         TLExecutionContext ctx, int layer)
     {
-        var authError = await GetAuthError(rpc.Constructor, ctx);
+        var authError = await GetAuthErrorResult(rpc.Constructor, ctx);
         if (authError != null) return authError;
 
         try
@@ -258,8 +257,6 @@ public class ExecutionEngine : IExecutionEngine
         }
         catch
         {
-            // Malformed wrappers belong to the normal invocation path, which
-            // already owns its error logging and response behavior.
             return false;
         }
     }
@@ -351,6 +348,13 @@ public class ExecutionEngine : IExecutionEngine
                _time.GetUtcNow().ToUnixTimeSeconds();
     }
 
+    private async ValueTask<TLBytes?> GetAuthErrorResult(int constructor,
+        TLExecutionContext ctx)
+    {
+        if (await GetAuthError(constructor, ctx) is not { } error) return null;
+        using (error) return RpcResultGenerator.Generate(error, ctx.MessageId);
+    }
+
     private async ValueTask<TLBytes?> GetAuthError(int constructor, TLExecutionContext ctx)
     {
         var keyStatus = await _mtproto.GetKeyStatus(ctx.CurrentAuthKeyId);
@@ -358,6 +362,7 @@ public class ExecutionEngine : IExecutionEngine
             keyStatus == KeyStatus.TempUnbound &&
             !IsTempKeyAllowed(constructor))
         {
+            LogAuthDenial("temporary-key-unbound", constructor, ctx, keyStatus);
             return RpcError.Builder()
                 .ErrorCode(401)
                 .ErrorMessage("AUTH_KEY_PERM_EMPTY"u8)
@@ -366,6 +371,7 @@ public class ExecutionEngine : IExecutionEngine
         if (RequiresAuthorization(constructor) &&
             !await _auth.IsAuthorized(ctx.CurrentAuthKeyId))
         {
+            LogAuthDenial("authorization-required", constructor, ctx, keyStatus);
             return RpcError.Builder()
                 .ErrorCode(401)
                 .ErrorMessage("AUTH_KEY_UNREGISTERED"u8)
@@ -373,6 +379,15 @@ public class ExecutionEngine : IExecutionEngine
         }
 
         return null;
+    }
+
+    private void LogAuthDenial(string reason, int constructor,
+        TLExecutionContext ctx, KeyStatus keyStatus)
+    {
+        _log.Debug($"🔑 auth-denied reason={reason} constructor=#{constructor.ToString("x")} " +
+                   $"authKey={ctx.AuthKeyId} permAuthKey={ctx.PermAuthKeyId} " +
+                   $"current={ctx.CurrentAuthKeyId} status={keyStatus} " +
+                   $"session={ctx.SessionId} msgId={ctx.MessageId}");
     }
 
     private bool RequiresAuthorization(int constructor)

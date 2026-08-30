@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -13,18 +12,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Reorders a channel's ACTIVE usernames. The order must be a permutation of
-/// exactly the active set, which is what `Usernames::can_reorder_to`
-/// (`Usernames.cpp:146-163`) checks before the client will even send it; the
-/// server checks it again rather than trusting the caller. Deactivated
-/// usernames keep their own relative order after the active ones.
-///
-/// The answer must be `boolTrue`: `ReorderChannelUsernamesQuery`
-/// (`ChatManager.cpp:295-299`) turns a `boolFalse` into a fabricated
-/// `500 Supergroup usernames weren't updated`, so a refusal has to be a real
-/// error rather than a false result.
-/// </summary>
 public sealed class ChannelsReorderUsernamesHandler : ChannelUsernameHandlerBase
 {
     public ChannelsReorderUsernamesHandler(IUnitOfWork unitOfWork, IChannelMessagesRepository channelMessagesRepository, IAuthorizationRepository authorizationRepository, IChannelAdminLogRepository channelAdminLogRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IMessageRepository messageRepository, IUserRepository userRepository,

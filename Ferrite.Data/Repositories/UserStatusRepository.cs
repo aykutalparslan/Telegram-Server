@@ -35,7 +35,16 @@ public class UserStatusRepository : IUserStatusRepository
 
     public async ValueTask<TLUserStatus> GetUserStatusAsync(long userId)
     {
-        var serialized = await _store.GetAsync(userId);
+        return Interpret(await _store.GetAsync(userId));
+    }
+
+    public TLUserStatus GetUserStatus(long userId)
+    {
+        return Interpret(_store.Get(userId));
+    }
+
+    private static TLUserStatus Interpret(byte[]? serialized)
+    {
         if (serialized == null)
         {
             return new UserStatusEmpty();

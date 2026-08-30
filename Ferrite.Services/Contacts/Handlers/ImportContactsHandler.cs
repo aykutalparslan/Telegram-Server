@@ -3,7 +3,6 @@
 
 using System.Text;
 using DotNext.Collections.Generic;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -21,7 +20,7 @@ public sealed class ImportContactsHandler : ContactsHandlerBase
 
     public ImportContactsHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IContactsRepository contactsRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
         IUpdatesService updates, IUpdatesContextFactory updatesContextFactory)
-        : base(unitOfWork, userRepository, userStatusRepository, search, updates, updatesContextFactory)
+        : base(unitOfWork, contactsRepository, userRepository, userStatusRepository, search, updates, updatesContextFactory)
     {
         _authorizationRepository = authorizationRepository;
         _contactsRepository = contactsRepository;
@@ -69,7 +68,7 @@ public sealed class ImportContactsHandler : ContactsHandlerBase
                     .Build();
                 var imported = _contactsRepository.PutContact(userId,
                     user.Value.AsUser().Id, contactInfo);
-                var contactUser = _userRepository.GetUser(imported.AsImportedContact().UserId);
+                var contactUser = await GetUserInternal(userId, imported.AsImportedContact().UserId);
                 if (contactUser == null)
                 {
                     imported.Dispose();

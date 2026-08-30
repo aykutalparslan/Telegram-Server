@@ -5,9 +5,9 @@ using System.Numerics;
 using System.Text;
 using System.Text.RegularExpressions;
 using Ferrite.Crypto;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Gateway;
+using Ferrite.Services.Scheduling;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.account;
@@ -52,9 +52,6 @@ public sealed class UpdateStatusHandler : AccountHandlerBase
                     await EnqueueUserStatusUpdate(userId, offline, now);
                     if (!offline)
                     {
-                        // A "send when online" scheduled entry has no date to wait
-                        // for, only this transition. Its send date is the reserved
-                        // 2147483646 sentinel, so nothing else would ever flush it.
                         await _scheduledMessages.FlushWhenOnlineAsync(userId);
                     }
                 }

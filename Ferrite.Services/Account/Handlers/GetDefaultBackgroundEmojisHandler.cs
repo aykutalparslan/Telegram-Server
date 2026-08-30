@@ -8,7 +8,7 @@ namespace Ferrite.Services.Handlers.AccountMethods;
 
 public sealed class GetDefaultBackgroundEmojisHandler : EmojiCatalogueHandlerBase
 {
-    public GetDefaultBackgroundEmojisHandler(StickerStore stickers,
+    public GetDefaultBackgroundEmojisHandler(EmojiCatalogStore stickers,
         ProfileStore profiles) : base(stickers, profiles) { }
 
     [TLFunction(Constructors.baseLayer_GetDefaultBackgroundEmojis)]

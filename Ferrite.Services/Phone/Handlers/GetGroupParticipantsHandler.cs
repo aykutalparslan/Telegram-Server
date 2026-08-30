@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -14,13 +13,6 @@ using GroupParticipantsResult = Ferrite.TL.baseLayer.phone.TLGroupParticipants;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.getGroupParticipants. Two distinct modes on one method: naming
-/// <c>ids</c> or <c>sources</c> selects exactly those participants, and naming
-/// neither pages the call in join order. Every row is built for the requesting
-/// account, including the per-viewer video source groups, so a page produced for
-/// one viewer is never valid for another.
-/// </summary>
 public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -29,8 +21,6 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
     private const int DefaultLimit = 100;
     private const int MaxLimit = 200;
 
-    // Bounds a selector query the same way paging is bounded, so neither mode can
-    // be used to pull an unbounded page.
     private const int MaxSelectors = 200;
 
     public GetGroupParticipantsHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IUserRepository userRepository, UpdateFanout fanout,
@@ -48,8 +38,6 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
     [TLFunction(Constructors.baseLayer_GetGroupParticipants)]
     public async ValueTask<GroupParticipantsResult> Handle(long authKeyId, TLBytes q)
     {
-        // Vector, VectorOfInt, and the request view are ref structs, so every
-        // selector is materialized here before the first await.
         var request = (GetGroupParticipants)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
             out long accessHash);
@@ -78,9 +66,6 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
         bool discarded = view.State == (int)GroupCallPersistenceState.Discarded;
 
         bool hasSelectors = userIds.Count > 0 || peers.Count > 0 || sources.Count > 0;
-        // A discarded call keeps no participant rows, so both modes answer with an
-        // empty page rather than reading a table the discard already cleared. The
-        // count and version still travel so a lagging client can reconcile.
         (IReadOnlyList<TLDto.TLGroupCallParticipantState> rows, string? nextOffset) =
             discarded
                 ? (Array.Empty<TLDto.TLGroupCallParticipantState>(), null)
@@ -115,12 +100,6 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
         (GroupParticipantsResult)RpcErrorGenerator.GenerateError(400,
             Encoding.UTF8.GetBytes(message));
 
-    /// <summary>
-    /// Selector mode. The union of ids and sources is deduplicated by user, a
-    /// selector that names nobody is simply omitted rather than erroring, and a
-    /// left row never comes back — the client asked which of these are in the
-    /// call. Selector mode is never paged, so it carries no next offset.
-    /// </summary>
     private async ValueTask<IReadOnlyList<TLDto.TLGroupCallParticipantState>> SelectAsync(
         long callId, IReadOnlyList<long> userIds, IReadOnlyList<GroupCallReferencedPeer> peers,
         IReadOnlyList<int> sources)
@@ -141,9 +120,6 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
             Keep(row);
         }
 
-        // Only a non-user join-as peer needs a scan; it has no index of its own.
-        // The branch stays reserved for a future anonymous/channel join-as scope;
-        // deliberately retained the self-only boundary.
         if (peers.Count > 0)
         {
             GroupCallParticipantPage page = await _groupCallsRepository
@@ -194,11 +170,6 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
         }
     }
 
-    /// <summary>
-    /// Paging mode. An unusable offset is answered with an empty page rather than
-    /// an error, matching the repository's own decode behavior: a client holding a
-    /// stale offset restarts from the beginning instead of getting stuck.
-    /// </summary>
     private async ValueTask<(IReadOnlyList<TLDto.TLGroupCallParticipantState> Rows,
         string? NextOffset)> PageAsync(long callId, string offset, int limit)
     {
@@ -215,12 +186,6 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
         _ => limit,
     };
 
-    /// <summary>
-    /// The requesting account's own mute/volume merged with the media plane's
-    /// mapping FOR THAT ACCOUNT. A viewer with no mapping gets the canonical
-    /// source fallback and no video rows at all, rather than SSRCs it cannot
-    /// receive.
-    /// </summary>
     private async ValueTask<Dictionary<long, GroupCallParticipantOverlay>>
         ReadOverlaysAsync(long callId, long viewerUserId,
             IReadOnlyList<TLDto.TLGroupCallParticipantState> rows)
@@ -273,7 +238,8 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
                 using TLUser? user = _userRepository.GetUser(peer.Id);
                 if (user != null)
                 {
-                    users.Add(user.Value.AsSpan().ToArray());
+                    using TLUser prepared = Fanout.WithStatus(viewerUserId, user.Value);
+                    users.Add(prepared.AsSpan().ToArray());
                 }
                 continue;
             }
@@ -284,10 +250,6 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
         return (users, await Fanout.GetChatBytesForViewerAsync(viewerUserId, chatIds));
     }
 
-    /// <summary>
-    /// Assembles the answer in one synchronous pass; Vector and the generated
-    /// views are ref structs that cannot live across an await.
-    /// </summary>
     private static GroupParticipantsResult BuildResult(
         IReadOnlyList<TLDto.TLGroupCallParticipantState> rows, GroupCallViewer viewer,
         IReadOnlyDictionary<long, GroupCallParticipantOverlay> overlays,
@@ -328,16 +290,6 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
             .Build();
     }
 
-    /// <summary>
-    /// Splits the id selectors into the account ids a participant row is keyed by
-    /// and the non-user join-as peers that need a scan. inputPeerSelf cannot be
-    /// resolved without the caller's account, so it is dropped here and the caller
-    /// simply names itself by id, which is what pinned TDLib sends.
-    ///
-    /// The peers are carried in TLPeer.PeerType numbering because that is what a
-    /// participant row's peer_type uses; GroupCallPeerType numbers the CALL-HOSTING
-    /// peer and does not agree with it.
-    /// </summary>
     private static void ReadIdSelectors(Vector ids, out List<long> userIds,
         out List<GroupCallReferencedPeer> peers)
     {

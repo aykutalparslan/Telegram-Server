@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -13,18 +12,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Activates or deactivates ONE of a channel's usernames, keeping the
-/// reservation either way.
-///
-/// The editable username cannot be toggled. That is not a Ferrite restriction:
-/// `Usernames::can_toggle` (`Usernames.cpp:89-97`) refuses it client-side, and
-/// `Usernames::Usernames` (`Usernames.cpp:38-43`) logs an error and discards the
-/// whole collection if the server ever answers with a disabled editable
-/// username. Ferrite issues no fragment-purchased usernames, so a channel here
-/// normally holds nothing BUT its editable username and the pinned-client route
-/// is expected to be refused before it reaches the server.
-/// </summary>
 public sealed class ChannelsToggleUsernameHandler : ChannelUsernameHandlerBase
 {
     public ChannelsToggleUsernameHandler(IUnitOfWork unitOfWork, IChannelMessagesRepository channelMessagesRepository, IAuthorizationRepository authorizationRepository, IChannelAdminLogRepository channelAdminLogRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IMessageRepository messageRepository, IUserRepository userRepository,

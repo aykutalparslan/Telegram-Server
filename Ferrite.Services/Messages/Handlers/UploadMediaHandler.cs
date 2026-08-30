@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -34,6 +33,24 @@ public sealed class UploadMediaHandler
         _photos = photos;
     }
 
+    [TLFunction(Constructors.layer67_MessagesUploadMedia)]
+    public async ValueTask<TLMessageMedia> HandleLayer67(long authKeyId,
+        TLBytes q)
+    {
+        using var current = ToCurrentUploadMediaRequest(q);
+        return await Handle(authKeyId, current);
+    }
+
+    private static TLBytes ToCurrentUploadMediaRequest(TLBytes q)
+    {
+        var sent = new TL.layer67.messages.MessagesUploadMedia(q.AsSpan());
+        using var current = UploadMedia.Builder()
+            .Peer(sent.Peer)
+            .Media(sent.Media)
+            .Build();
+        return current.TLBytes!.Value;
+    }
+
     [TLFunction(Constructors.baseLayer_UploadMedia)]
     public async ValueTask<TLMessageMedia> Handle(long authKeyId, TLBytes q)
     {
@@ -49,9 +66,6 @@ public sealed class UploadMediaHandler
             var request = (UploadMedia)q;
             long userId = auth.Value.AsAuthInfo().UserId;
             using TLPeer peer = PeerResolver.PeerFromInputPeer(request.Get_PeerView(), userId);
-            // TDLib pre-finalizes album items with messages.uploadMedia for the
-            // eventual destination peer. The actual send path performs membership
-            // and banned-rights checks; uploadMedia only needs a valid peer shape.
             if (GetPeerId(peer) <= 0)
             {
                 return Error(ErrorMessages.PeerIdInvalid);

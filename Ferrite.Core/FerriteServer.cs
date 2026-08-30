@@ -7,9 +7,9 @@ using System.Collections.Generic;
 using System.Net;
 using Autofac;
 using Ferrite.Core.Connection;
-using Ferrite.Data;
-using Ferrite.Services;
 using Ferrite.Services.Calls;
+using Ferrite.Services.Scheduling;
+using Ferrite.Services.Sessions;
 using Ferrite.Core.Execution;
 using Ferrite.Transport;
 using Ferrite.Utils;
@@ -28,6 +28,7 @@ public class FerriteServer : IFerriteServer
     private readonly ILifetimeScope _scope;
     private readonly IConnectionListener _socketListener;
     private readonly IMessagePipe _pipe;
+    private readonly DeliveredPtsRecorder _deliveredPts;
     private Task? _pipeReceiveTask;
     private readonly ISessionService _sessionManager;
     private readonly ISecretChatMaintenance _secretChatMaintenance;
@@ -45,7 +46,6 @@ public class FerriteServer : IFerriteServer
     private readonly ILogger _log;
     private readonly ConcurrentDictionary<MTProtoConnection, byte> _connections =
         new();
-    // Serializes start/stop transitions only; the accept loop runs outside it.
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private volatile ServerState _state = ServerState.Created;
     private CancellationTokenSource? _stopping;
@@ -68,6 +68,7 @@ public class FerriteServer : IFerriteServer
         _callTerminator = _scope.Resolve<CallTerminator>();
         _time = _scope.Resolve<IMTProtoTime>();
         _pipe = _scope.Resolve<IMessagePipe>();
+        _deliveredPts = _scope.Resolve<DeliveredPtsRecorder>();
         _log = _scope.Resolve<ILogger>();
     }
 
@@ -96,9 +97,6 @@ public class FerriteServer : IFerriteServer
         await acceptLoop;
     }
 
-    // Starts every required component before the server accepts TCP
-    // connections. A failure or cancellation mid-startup rolls the already
-    // started components back so the same instance can retry StartAsync.
     private async Task<Task> StartCoreAsync(IPEndPoint endPoint,
         CancellationToken token)
     {
@@ -142,46 +140,31 @@ public class FerriteServer : IFerriteServer
                 await _callMediaRelay.StartAsync(token);
                 rollback.Add(() => _callMediaRelay.StopAsync());
 
-                // Subscribing before the server accepts connections is what keeps a
-                // worker disconnect from being missed between a join and startup.
                 token.ThrowIfCancellationRequested();
                 await _groupCallDisconnects.StartAsync(token);
                 rollback.Add(() => _groupCallDisconnects
                     .StopAsync(CancellationToken.None));
 
-                // Same reason: a codec correction that lands between a join and
-                // startup would otherwise leave every peer on dead SSRCs.
                 token.ThrowIfCancellationRequested();
                 await _groupCallSourcesChanged.StartAsync(token);
                 rollback.Add(() => _groupCallSourcesChanged
                     .StopAsync(CancellationToken.None));
 
-                // SFU health is deliberately non-fatal. The runtime marks stale
-                // transports and reports degraded readiness, while MTProto still
-                // binds so clients can discover/end calls during worker repair.
                 token.ThrowIfCancellationRequested();
                 await _groupCallMediaRuntime.StartAsync(token);
                 rollback.Add(() => _groupCallMediaRuntime
                     .StopAsync(CancellationToken.None));
 
-                // Broadcast has its own health/failure domain. Recovering its
-                // ephemeral stream rooms never prevents MTProto or SFU startup.
                 token.ThrowIfCancellationRequested();
                 await _groupCallBroadcastRuntime.StartAsync(token);
                 rollback.Add(() => _groupCallBroadcastRuntime
                     .StopAsync(CancellationToken.None));
 
-                // Recording recovers durable intents only after the SFU and its
-                // shared RTP tap are ready. Like the other media runtimes, a
-                // worker outage degrades only its own readiness.
                 token.ThrowIfCancellationRequested();
                 await _groupCallRecordingRuntime.StartAsync(token);
                 rollback.Add(() => _groupCallRecordingRuntime
                     .StopAsync(CancellationToken.None));
 
-                // Route receive/ring deadline expiry through the same
-                // terminal/logging path as an explicit discard, with a missed
-                // reason.
                 _callRegistry.SetDeadlineExpiredHandler(OnCallDeadlineExpired);
                 rollback.Add(() =>
                 {
@@ -189,16 +172,11 @@ public class FerriteServer : IFerriteServer
                     return Task.CompletedTask;
                 });
 
-                // The scheduled queue is reconciled and drained before the first
-                // client can connect, so an entry that came due while the server was
-                // down is sent once rather than racing a client's own flush.
                 token.ThrowIfCancellationRequested();
                 await _scheduledMessages.StartAsync(token);
                 rollback.Add(async () => await _scheduledMessages
                     .StopAsync(CancellationToken.None));
 
-                // Messages whose auto-delete time passed while the server was down
-                // are removed before any client can read history and see them again.
                 token.ThrowIfCancellationRequested();
                 await _messageExpiry.StartAsync(token);
                 rollback.Add(async () => await _messageExpiry
@@ -250,9 +228,6 @@ public class FerriteServer : IFerriteServer
 
             if (_state == ServerState.Running)
             {
-                // Stop accepting first, then drain connections, stop hosted
-                // components, cancel and await the pipe task, and only then
-                // dispose the scope everything resolves from.
                 _callRegistry.SetDeadlineExpiredHandler(null);
                 await _socketListener.UnbindAsync(token);
                 if (_acceptLoop is not null)
@@ -387,8 +362,6 @@ public class FerriteServer : IFerriteServer
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // The start token was cancelled; the caller still owns the full
-            // component teardown through StopAsync.
         }
     }
 
@@ -449,8 +422,14 @@ public class FerriteServer : IFerriteServer
                         if (sessionExists &&
                             protoSession.TryGetConnection(out var connection))
                         {
-                            _log.Debug($"==> Session was found ==<");
+                            _log.Debug($"==> delivered to session {message.SessionId} ==<");
                             await connection.SendAsync(message);
+                            await _deliveredPts.RecordAsync(message);
+                        }
+                        else
+                        {
+                            _log.Debug($"==> session {message.SessionId} is not on this node " +
+                                       $"(known:{sessionExists}) ==<");
                         }
                     }
                 }

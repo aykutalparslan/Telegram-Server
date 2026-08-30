@@ -52,9 +52,6 @@ public sealed class CassandraWriteBatchAccessor : IWriteBatchAccessor
     {
         if (scope.Statements.Count == 0) return null;
         if (scope.Statements.Count == 1) return scope.Statements.Dequeue();
-        // Repository writes commonly pair a primary row with secondary-index
-        // rows in other partitions. Keep Cassandra's logged batch semantics so
-        // a coordinator failure cannot leave only part of that logical write.
         var batch = new BatchStatement().SetBatchType(BatchType.Logged);
         while (scope.Statements.TryDequeue(out Statement? statement))
         {

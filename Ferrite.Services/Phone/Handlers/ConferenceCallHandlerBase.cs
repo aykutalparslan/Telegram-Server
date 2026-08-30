@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.Services.Calls.E2E;
@@ -13,12 +12,6 @@ using TLDto = Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// One resolved conference request. A conference has no hosting chat, so there
-/// is no <see cref="GroupCallPeerAccess"/> to speak of: the only membership that
-/// exists is the call's own participant list, and the creator of a call nobody
-/// has joined yet is authorized by the chain instead.
-/// </summary>
 public sealed class ConferenceResolution : IDisposable
 {
     private ConferenceResolution(TLDto.TLGroupCallState? call, long currentUserId,
@@ -38,14 +31,8 @@ public sealed class ConferenceResolution : IDisposable
 
     public bool IsCreator { get; }
 
-    /// <summary>Whether the caller holds an active (non-left) row in the call.</summary>
     public bool IsParticipant { get; }
 
-    /// <summary>
-    /// The call's own access hash. A caller that arrived through an invite message
-    /// never sent one, and the updates it is about to receive have to name the
-    /// call in full, so the resolved value is reported rather than echoed.
-    /// </summary>
     public long AccessHash { get; }
 
     public string? Error { get; }
@@ -60,21 +47,9 @@ public sealed class ConferenceResolution : IDisposable
     public void Dispose() => Call?.Dispose();
 }
 
-/// <summary>
-/// An InputGroupCall as the request carried it, captured before the first await
-/// because the request view is a ref struct. A conference is named either by
-/// (id, access hash) or by the invite message the caller holds: an invitee is
-/// never told the access hash, so the message form is the only way it can reach
-/// the call before it has joined.
-/// </summary>
 public readonly record struct ConferenceCallRef(long CallId, long AccessHash,
     int InviteMsgId);
 
-/// <summary>
-/// Shared mechanics for the peerless conference surface. It deliberately does not
-/// reuse <see cref="GroupCallHandlerBase.ResolveCallAsync"/>: that gate resolves a
-/// hosting chat row and its participant list, and a conference has neither.
-/// </summary>
 public abstract class ConferenceCallHandlerBase : GroupCallHandlerBase
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -100,11 +75,6 @@ public abstract class ConferenceCallHandlerBase : GroupCallHandlerBase
     protected static TLUpdates Error(string message) =>
         (TLUpdates)RpcErrorGenerator.GenerateError(400, Encoding.UTF8.GetBytes(message));
 
-    /// <summary>
-    /// Resolves the calling account without a peer gate. Every conference
-    /// endpoint needs the user id before it can decide anything, and a conference
-    /// has no chat membership to consult.
-    /// </summary>
     protected async ValueTask<long> ResolveUserIdAsync(long authKeyId)
     {
         using var auth = await _authorizationRepository
@@ -112,11 +82,6 @@ public abstract class ConferenceCallHandlerBase : GroupCallHandlerBase
         return auth?.AsAuthInfo().UserId ?? 0;
     }
 
-    /// <summary>
-    /// Reads the InputGroupCall forms a conference method accepts. A slug names a
-    /// call link, which this server does not issue, so it resolves to nothing
-    /// rather than to some other call.
-    /// </summary>
     public static bool TryReadConferenceRef(InputGroupCallView view,
         out ConferenceCallRef reference)
     {
@@ -135,23 +100,12 @@ public abstract class ConferenceCallHandlerBase : GroupCallHandlerBase
         return false;
     }
 
-    /// <summary>
-    /// Resolves a conference call by id and access hash. A hosted call reached
-    /// through a conference method is GROUPCALL_INVALID rather than an access
-    /// error: the two surfaces are disjoint, and reporting anything else would
-    /// tell the caller a call exists under a name it may not use.
-    /// </summary>
     protected ValueTask<ConferenceResolution> ResolveConferenceAsync(long authKeyId,
         long callId, long accessHash, bool requireActive = true,
         CancellationToken cancellationToken = default) =>
         ResolveConferenceAsync(authKeyId, new ConferenceCallRef(callId, accessHash, 0),
             requireActive, cancellationToken);
 
-    /// <summary>
-    /// The same resolution for a call named either way. An invite message is
-    /// resolved against the CALLER'S OWN copy, so it is a capability the server
-    /// itself wrote for this account rather than anything the client asserts.
-    /// </summary>
     protected async ValueTask<ConferenceResolution> ResolveConferenceAsync(long authKeyId,
         ConferenceCallRef reference, bool requireActive = true,
         CancellationToken cancellationToken = default)
@@ -163,9 +117,6 @@ public abstract class ConferenceCallHandlerBase : GroupCallHandlerBase
         }
 
         long callId = reference.CallId;
-        // Only an explicitly named call carries an access hash to check; an invite
-        // message names the call without one, and the hash it resolves to is what
-        // the answer's own InputGroupCall fields will carry back.
         long? presentedHash = callId != 0 ? reference.AccessHash : null;
         if (callId == 0)
         {
@@ -210,13 +161,6 @@ public abstract class ConferenceCallHandlerBase : GroupCallHandlerBase
             isParticipant, accessHash);
     }
 
-    /// <summary>
-    /// The conference an invite service message in this account's own box names,
-    /// or 0 when the message is unknown or is not a conference invitation. A
-    /// declined invitation still resolves: declining stops the ringing, it does
-    /// not withdraw the invitation, and the chain is what decides whether the
-    /// caller may actually rejoin.
-    /// </summary>
     private async ValueTask<long> ReadInvitedCallIdAsync(long userId, int msgId)
     {
         if (msgId == 0)
@@ -243,10 +187,6 @@ public abstract class ConferenceCallHandlerBase : GroupCallHandlerBase
             : 0;
     }
 
-    /// <summary>
-    /// The chain-blocks update for one sub-chain, ready to be added to a result or
-    /// fanned out.
-    /// </summary>
     protected async ValueTask<byte[]> BuildChainBlocksBytesAsync(long callId,
         long accessHash, int subChainId, int offset, int limit,
         CancellationToken cancellationToken = default)
@@ -258,11 +198,6 @@ public abstract class ConferenceCallHandlerBase : GroupCallHandlerBase
         return update.AsSpan().ToArray();
     }
 
-    /// <summary>
-    /// The wire error one chain rejection maps to. A height or hash mismatch is
-    /// the client's cue to refetch the head and rebuild; everything else is a
-    /// block it must not retry unchanged.
-    /// </summary>
     protected static string TranslateChainError(ChainValidationError error) => error switch
     {
         ChainValidationError.HeightMismatch => GroupCallErrors.BlockHeightMismatch,

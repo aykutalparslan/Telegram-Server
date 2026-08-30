@@ -10,8 +10,9 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class GetEmojiURLHandler : StickerHandlerBase
 {
-    public GetEmojiURLHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    public GetEmojiURLHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository)
+        : base(unitOfWork, authorizationRepository) { }
 
     [TLFunction(Constructors.baseLayer_GetEmojiURL)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q) =>

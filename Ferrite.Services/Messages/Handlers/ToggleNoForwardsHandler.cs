@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -12,11 +11,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Restricts or re-allows saving content in a basic group or channel. A private
-/// dialog has no shared row to carry the restriction, and the pinned client
-/// refuses to send one for a user peer.
-/// </summary>
 public sealed class ToggleNoForwardsHandler : MessagesHandlerBase
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -96,7 +90,7 @@ public sealed class ToggleNoForwardsHandler : MessagesHandlerBase
             _log.Debug($"🚫 ToggleNoForwards user:{context.CurrentUserId} " +
                        $"chat:{chatId} enabled:{enabled}");
             using TLUpdate updateChat = UpdateChat.Builder().ChatId(chatId).Build();
-            return _fanout.BuildUpdates(new[] { updateChat.AsSpan().ToArray() },
+            return _fanout.BuildUpdates(context.CurrentUserId, new[] { updateChat.AsSpan().ToArray() },
                 participantIds, new[] { updatedChatBytes }, date, seq);
         }
         finally
@@ -141,7 +135,7 @@ public sealed class ToggleNoForwardsHandler : MessagesHandlerBase
         using TLUpdate updateChannel = UpdateChannel.Builder()
             .ChannelId(channelId)
             .Build();
-        return _fanout.BuildUpdates(new[] { updateChannel.AsSpan().ToArray() },
+        return _fanout.BuildUpdates(userId, new[] { updateChannel.AsSpan().ToArray() },
             new[] { userId }, new[] { updatedChannelBytes }, date, seq);
     }
 }

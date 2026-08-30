@@ -17,10 +17,6 @@ public enum SignalingDecision
     RateLimited,
 }
 
-/// <summary>
-/// Bounds signaling-data throughput per call and records drop metrics. It
-/// never inspects the opaque payload beyond its length.
-/// </summary>
 public sealed class CallSignalingLimiter
 {
     private readonly CallSignalingLimiterOptions _options;

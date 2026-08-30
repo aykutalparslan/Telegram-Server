@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -37,11 +36,6 @@ public sealed class DeleteMessagesHandler : MessagesHandlerBase
             long userId = auth.Value.AsAuthInfo().UserId;
             var userCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, userId);
 
-            // Read the requested ids up front; the request view is a ref struct and cannot
-            // survive the awaits below. revoke (delete for everyone) is parsed but a specific
-            // message id is in the caller's id space and has no stored mapping to the partner's
-            // own id, so the peer copy cannot be removed exactly yet; only the caller copy is
-            // cleared. Cross-peer mapping is deferred.
             var idVector = ((MessagesDeleteMessages)q).Id;
             int count = idVector.Count;
             var deletedIds = new List<int>(count);

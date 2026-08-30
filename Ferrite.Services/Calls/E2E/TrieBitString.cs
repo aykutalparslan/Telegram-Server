@@ -5,8 +5,6 @@ using System.Buffers.Binary;
 
 namespace Ferrite.Services.Calls.E2E;
 
-// Raised when tde2e-encoded input cannot be decoded, or when a change carries a
-// key the reference would reject outright.
 public sealed class ChainCodecException : Exception
 {
     public ChainCodecException(string message) : base(message)
@@ -14,12 +12,6 @@ public sealed class ChainCodecException : Exception
     }
 }
 
-// A growable little-endian writer for the tde2e trie encodings.
-//
-// These encodings are NOT TL constructors: they are the reference's own
-// store_for_hash / store_for_network / store_for_snapshot layouts
-// They are the one deliberate non-TL codec in the server, and the byte layout
-// must match the client's exactly.
 public sealed class TrieByteWriter
 {
     private byte[] _buffer = new byte[256];
@@ -66,8 +58,6 @@ public sealed class TrieByteWriter
         BinaryPrimitives.WriteInt64LittleEndian(_buffer.AsSpan(position), value);
     }
 
-    // td::store(const string&) — the ordinary TL bytes encoding: a short form
-    // below 254, a 0xFE long form above it, then zero padding to 4 bytes.
     public void WriteTlString(ReadOnlySpan<byte> value)
     {
         int written;
@@ -95,7 +85,6 @@ public sealed class TrieByteWriter
     public byte[] ToArray() => _buffer.AsSpan(0, Position).ToArray();
 }
 
-// The reader half of TrieByteWriter.
 public ref struct TrieByteReader
 {
     private readonly ReadOnlySpan<byte> _buffer;
@@ -173,14 +162,6 @@ public ref struct TrieByteReader
     }
 }
 
-// A big-endian bit slice over a shared byte buffer, ported from the tde2e
-// reference BitString. The reference keeps a byte pointer plus begin/end bit
-// offsets and indexes backwards past it; this port keeps the owning array and
-// one absolute begin-bit, which is equivalent and avoids negative indexing.
-//
-// Store below is byte-exact with BitString.cpp:233-267. It feeds the trie node
-// hash preimage, so a wrong mask here produces proofs the client cannot build
-// on, with no local symptom at all.
 public readonly struct TrieBitString
 {
     private readonly byte[]? _data;
@@ -196,7 +177,6 @@ public readonly struct TrieBitString
     public int BitLength { get; }
     public bool HasData => _data != null;
 
-    // Proof key material is padded/truncated to 32 bytes, mirroring to_key().
     public static TrieBitString FromKey(ReadOnlySpan<byte> key)
     {
         var buffer = new byte[32];
@@ -217,9 +197,6 @@ public readonly struct TrieBitString
     private int BeginByte => (_beginBit + 7) / 8;
     private int EndByte => EndBitAbsolute / 8;
     private int BytesSize => EndByte - BeginByte;
-    // Only the within-byte offset is observable in the encoding, which is why
-    // the reference can hand a sibling slice a fresh buffer starting at this
-    // value and still produce identical bytes.
     internal int BeginBitInByte => _beginBit % 8;
     private int EndBitInByte => EndBitAbsolute % 8;
 
@@ -292,10 +269,6 @@ public readonly struct TrieBitString
         }
     }
 
-    // Inverse of Store. `baseString` is the caller's running key buffer, so
-    // sibling slices share storage exactly as fetch_bit_string does: a child's
-    // bits are written into the parent's buffer at the parent's offset, which
-    // is what makes a reconstructed leaf's key_suffix hash identically.
     public static TrieBitString Fetch(ref TrieByteReader reader, TrieBitString baseString)
     {
         uint header = unchecked((uint)reader.ReadInt32());

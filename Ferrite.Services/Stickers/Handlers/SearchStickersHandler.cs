@@ -11,8 +11,14 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class SearchStickersHandler : StickerHandlerBase
 {
-    public SearchStickersHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerSearchIndex _search;
+
+    public SearchStickersHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerSearchIndex store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _search = store;
+    }
 
     [TLFunction(Constructors.baseLayer_SearchStickers)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
@@ -25,7 +31,7 @@ public sealed class SearchStickersHandler : StickerHandlerBase
         int limit = request.Limit;
         long hash = request.Hash;
         return await GetUserIdAsync(authKeyId) is not null
-            ? await Store.SearchDocumentsAsync(emojis, query, emoticon, offset,
+            ? await _search.SearchDocumentsAsync(emojis, query, emoticon, offset,
                 limit, hash)
             : AuthError();
     }

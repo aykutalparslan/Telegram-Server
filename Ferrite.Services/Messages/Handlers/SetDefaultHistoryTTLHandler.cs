@@ -10,10 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Stores the account-wide default auto-delete period. Existing conversations
-/// keep whatever they were given; the default only seeds new ones.
-/// </summary>
 public sealed class SetDefaultHistoryTTLHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;

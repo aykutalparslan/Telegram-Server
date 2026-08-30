@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -133,8 +132,6 @@ public sealed class MigrateChatHandler : MessagesHandlerBase
                     _chatParticipantsRepository.PutParticipant(migratedParticipant);
                 }
 
-                // A migrated megagroup is a newly created channel and therefore gets the
-                // same default permanent invite invariant as channels.createChannel.
                 using (TLChatInviteInfo defaultInvite =
                        ChatInvites.CreateDefaultPermanentInvite(channelId,
                            context.CurrentUserId, date))
@@ -240,9 +237,6 @@ public sealed class MigrateChatHandler : MessagesHandlerBase
 
                 await _unitOfWork.SaveAsync();
 
-                // Both service messages are relevant to every active member. The update
-                // hydration layer includes both compact rows because each migration action
-                // references the peer on the other side of the boundary.
                 foreach (var (participantId, updateBytes) in oldMigrationUpdates)
                 {
                     await _updates.EnqueueUpdate(participantId,
@@ -263,7 +257,7 @@ public sealed class MigrateChatHandler : MessagesHandlerBase
                 resultUpdates.AppendTLObject(channelMigrationUpdateBytes);
 
                 var userVector = new Vector();
-                AppendUsers(ref userVector, context.ActiveParticipants
+                AppendUsers(context.CurrentUserId, ref userVector, context.ActiveParticipants
                     .Select(p => p.AsChatParticipantInfo().UserId));
                 var chatVector = new Vector();
                 chatVector.AppendTLObject(oldChatBytes);
@@ -272,9 +266,7 @@ public sealed class MigrateChatHandler : MessagesHandlerBase
                 _log.Debug($"👥 MigrateChat creator:{context.CurrentUserId} chat:{chatId} " +
                            $"channel:{channelId} users:{context.ActiveParticipants.Count} " +
                            $"oldMaxId:{migratedFromMaxId} channelPts:{channelPts}");
-                // Live enqueues above already advance per-session seq, so keep the direct
-                // RPC result outside the seq sequence (the established group-mutation rule).
-                return Updates.Builder()
+                return Ferrite.TL.baseLayer.Updates.Builder()
                     .UpdatesProperty(resultUpdates)
                     .Users(userVector)
                     .Chats(chatVector)

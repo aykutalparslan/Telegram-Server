@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -13,22 +12,10 @@ using TLDto = Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.checkGroupCall. Answers which of the sources a client believes it is
-/// receiving are still live: the intersection of the requested nonzero sources,
-/// active participant rows, and current worker liveness — with a connect grace,
-/// because a participant that has not finished ICE/DTLS yet has not been dropped.
-///
-/// This endpoint is strictly read-only. It never evicts anybody — a source that
-/// fails the liveness check is simply omitted, and the disconnect grace path owns
-/// the mutation that eventually marks that participant left.
-/// </summary>
 public sealed class CheckGroupCallHandler : GroupCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
 
-    // The client only ever asks about sources it is actually consuming, so this
-    // bounds a raw client rather than a real one.
     private const int MaxSources = 256;
 
     private readonly IGroupCallMediaPlane _media;
@@ -70,9 +57,6 @@ public sealed class CheckGroupCallHandler : GroupCallHandlerBase
         if (resolution.Call!.Value.AsGroupCallState().State !=
             (int)GroupCallPersistenceState.Active)
         {
-            // A call that is not running has no live sources, which is an empty
-            // answer rather than an error: the client is asking exactly so it can
-            // discover that.
             return ToIntVector(Array.Empty<int>());
         }
 
@@ -90,12 +74,6 @@ public sealed class CheckGroupCallHandler : GroupCallHandlerBase
         return ToIntVector(alive);
     }
 
-    /// <summary>
-    /// A source is live when it still owns an active participant row and either
-    /// the worker holds a connected transport for it or it joined recently enough
-    /// to still be connecting. A row that is gone, left, or re-sourced is never
-    /// live, whatever the worker says.
-    /// </summary>
     private async ValueTask<bool> IsSourceAliveAsync(long callId, int source)
     {
         using TLDto.TLGroupCallParticipantState? participant = await _groupCallsRepository.GetParticipantBySourceAsync(callId, source);
@@ -121,28 +99,14 @@ public sealed class CheckGroupCallHandler : GroupCallHandlerBase
         }
         catch (GroupCallMediaException e)
         {
-            // An unreachable worker is not evidence that this participant is gone,
-            // but it is also not evidence that it is live. Reporting it as not
-            // alive only makes the client re-check.
             Log.Warning(e, $"📞 checkGroupCall could not read liveness for " +
                            $"call:{callId} media:{mediaId}");
             return false;
         }
 
-        // The worker has no connected transport for it. That is only evidence of
-        // a drop once the participant has had time to connect: ICE and DTLS
-        // complete after the join answer, and this call fires ten seconds after
-        // every join. Answering "not alive" inside that window makes pinned TDLib
-        // conclude it lost the call and leave. A transport that never arrives is
-        // still evicted by GroupCallDisconnectMonitor.
         return Now() - joinDate < (int)_disconnectOptions.ConnectGrace.TotalSeconds;
     }
 
-    /// <summary>
-    /// Zero is never a valid SSRC and duplicates would only repeat an answer, so
-    /// both are dropped before any lookup happens. Reading the vector is
-    /// synchronous: VectorOfInt is a ref struct.
-    /// </summary>
     private static List<int> ReadSources(VectorOfInt sources)
     {
         var result = new List<int>();

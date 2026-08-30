@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -13,13 +12,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Sets or clears a conversation's auto-delete timer. The period is stored on the
-/// shared conversation row, announced with a `messageActionSetMessagesTTL` service
-/// message, and reported to every side with `updatePeerHistoryTTL`. Only messages
-/// created after the change inherit it: nothing rewrites history, because a client
-/// already holds the rows it was given without a `ttl_period`.
-/// </summary>
 public sealed class SetHistoryTTLHandler : MessagesHandlerBase
 {
     private readonly IChannelMessagesRepository _channelMessagesRepository;
@@ -91,8 +83,6 @@ public sealed class SetHistoryTTLHandler : MessagesHandlerBase
     private async Task<TLUpdates> SetPrivateTtlAsync(long authKeyId, long userId,
         long peerUserId, int period)
     {
-        // Saved Messages has no second party to keep a timer with, and pinned TDLib
-        // refuses the request locally (`MessagesManager.cpp:29452-29455`).
         if (peerUserId == userId)
         {
             return ErrorUpdates("PEER_ID_INVALID");
@@ -146,7 +136,7 @@ public sealed class SetHistoryTTLHandler : MessagesHandlerBase
         }
 
         _log.Debug($"⌛ SetHistoryTTL user:{userId} peer:{peerUserId} period:{period}");
-        return _fanout.BuildUpdates(updateBytes, new[] { userId, peerUserId },
+        return _fanout.BuildUpdates(userId, updateBytes, new[] { userId, peerUserId },
             Array.Empty<byte[]>(), date, seq);
     }
 
@@ -240,7 +230,7 @@ public sealed class SetHistoryTTLHandler : MessagesHandlerBase
 
         _log.Debug($"⌛ SetHistoryTTL user:{userId} channel:{channelId} " +
                    $"period:{period}");
-        return _fanout.BuildUpdates(updateBytes, new[] { userId },
+        return _fanout.BuildUpdates(userId, updateBytes, new[] { userId },
             new[] { channelBytes }, date, seq);
     }
 
@@ -250,8 +240,6 @@ public sealed class SetHistoryTTLHandler : MessagesHandlerBase
         return peer.AsSpan().ToArray();
     }
 
-    // A cleared timer is reported as the flag being absent rather than as zero,
-    // which is how the pinned client distinguishes "no timer" from "not told".
     private static TLUpdate BuildHistoryTtlUpdate(byte[] peerBytes, int period)
     {
         var builder = UpdatePeerHistoryTTL.Builder().Peer(peerBytes);

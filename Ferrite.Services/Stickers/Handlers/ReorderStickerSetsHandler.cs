@@ -10,8 +10,14 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class ReorderStickerSetsHandler : StickerHandlerBase
 {
-    public ReorderStickerSetsHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerCollectionStore _collections;
+
+    public ReorderStickerSetsHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerCollectionStore store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _collections = store;
+    }
 
     [TLFunction(Constructors.baseLayer_ReorderStickerSets)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
@@ -23,7 +29,7 @@ public sealed class ReorderStickerSetsHandler : StickerHandlerBase
         long[] order = request.Order.ToArray();
         long? userId = await GetUserIdAsync(authKeyId);
         return userId.HasValue
-            ? await Store.ReorderAsync(userId.Value, authKeyId, kind, order)
+            ? await _collections.ReorderAsync(userId.Value, authKeyId, kind, order)
             : AuthError();
     }
 }

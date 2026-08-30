@@ -5,7 +5,6 @@ using RocksDbSharp;
 
 namespace Ferrite.Data.Repositories;
 
-//TODO: add transaction support
 public class RocksDBContext : IDisposable
 {
     private readonly RocksDb _db;

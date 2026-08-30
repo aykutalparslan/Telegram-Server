@@ -6,7 +6,6 @@ using System.Buffers.Binary;
 using DotNext.Buffers;
 using DotNext.IO;
 using Ferrite.Crypto;
-using Ferrite.Services;
 using Ferrite.TL;
 
 namespace Ferrite.Core.Framing;
@@ -16,17 +15,8 @@ public abstract class FrameDecoderBase : IFrameDecoder
     private const int StreamChunkSize = 1024;
     protected readonly byte[] LengthBytes = new byte[4];
     protected int Length;
-    /// <summary>
-    /// Number of length bytes to be skipped at the beginning of the frame before decoding it.
-    /// </summary>
     protected int LengthBytesToSkip;
-    /// <summary>
-    /// Number of bytes to be skipped at the beginning of the frame.
-    /// </summary>
     protected int Header;
-    /// <summary>
-    /// Number of bytes to be skipped at the end of the frame.
-    /// </summary>
     protected int Tail;
     private int _remaining;
     private bool _isStream;
@@ -78,12 +68,6 @@ public abstract class FrameDecoderBase : IFrameDecoder
         return HandleFrame(out frame, out position, reader);
     }
 
-    /// <summary>
-    /// Decodes the frame length.
-    /// </summary>
-    /// <param name="reader">Reader for the buffer.</param>
-    /// <param name="emptyFrame">Is set if the received data length is too short.</param>
-    /// <returns>If a quick ack is required.</returns>
     protected abstract bool DecodeLength(ref SequenceReader<byte> reader, out bool emptyFrame);
 
     protected bool CheckRequiresQuickAck(byte[] arr, int pos)

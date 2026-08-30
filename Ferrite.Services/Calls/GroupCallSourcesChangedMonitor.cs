@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -11,24 +10,6 @@ using TLDto = Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Calls;
 
-/// <summary>
-/// Re-publishes a call's per-viewer media mapping after the WORKER changed it on
-/// its own.
-///
-/// The only such change today is a video codec correction. A join answer offers
-/// every codec, the client picks one and never tells us which, and the worker
-/// only finds out from the RTP that arrives — at which point it re-creates the
-/// producer and every consumer of it. Consumer SSRCs are rewritten per viewer,
-/// so every peer that already received this participant's row is now listening
-/// on sources that carry nothing. Without this refresh a client whose codec had
-/// to be corrected is heard but never seen.
-///
-/// The refresh is deliberately version-free: nothing about the participant's
-/// state changed, only the SSRCs it is advertised on, and consuming a call
-/// version here would make every client resync its whole participant list.
-/// Pinned TDLib applies a participant row at the call's current version, which
-/// is the same thing a viewer-local mute edit relies on.
-/// </summary>
 public sealed class GroupCallSourcesChangedMonitor : IDisposable
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -55,7 +36,6 @@ public sealed class GroupCallSourcesChangedMonitor : IDisposable
         _log = log;
     }
 
-    /// <summary>Mappings re-read and re-published.</summary>
     public long RefreshedCount => Interlocked.Read(ref _refreshed);
 
     public Task StartAsync(CancellationToken cancellationToken = default)
@@ -84,11 +64,6 @@ public sealed class GroupCallSourcesChangedMonitor : IDisposable
         }
     }
 
-    /// <summary>
-    /// Re-read the worker's mapping and re-publish the affected participant.
-    /// Public so a test can drive it without a live subscription. Returns true
-    /// when a row was actually re-published.
-    /// </summary>
     public async Task<bool> RefreshAsync(GroupCallMediaSourcesChangedEvent changed)
     {
         try
@@ -97,9 +72,6 @@ public sealed class GroupCallSourcesChangedMonitor : IDisposable
         }
         catch (GroupCallMediaException e)
         {
-            // The worker is unreachable or the room is gone. The stale mapping
-            // stays, which degrades that participant's video rows; the next join
-            // in this call replaces the whole mapping anyway.
             _log.Warning(e, $"📞 GroupCall sources refresh failed call:{changed.CallId} " +
                             $"media:{changed.ParticipantId}");
             return false;
@@ -127,9 +99,6 @@ public sealed class GroupCallSourcesChangedMonitor : IDisposable
         var sources = await _media.ReadViewerSourcesAsync(changed.CallId);
         _sourceMap.Replace(changed.CallId, sources);
 
-        // The event names a media_id; the row that owns it decides whose
-        // participant row gets re-sent. A participant that already left is
-        // simply not re-published.
         long? owner = await FindParticipantAsync(changed.CallId, changed.ParticipantId);
         if (owner == null)
         {
@@ -169,18 +138,12 @@ public sealed class GroupCallSourcesChangedMonitor : IDisposable
                 excludeUserId: null, BuildForMember);
         }
 
-        // A conference is peerless: its own participant list is the audience.
         IReadOnlyList<long> members = await ReadConferenceMembersAsync(callId);
         return members.Count == 0
             ? 0
             : await _fanout.PushGroupCallUpdatesToAsync(members, BuildForMember);
     }
 
-    /// <summary>
-    /// One receiver's view of the corrected row. Every viewer sees different
-    /// SSRCs, and each keeps its own local mute/volume overlay, which a refresh
-    /// must not reset.
-    /// </summary>
     private async Task<TLUpdate?> BuildRowAsync(long callId,
         TLDto.TLGroupCallState call, TLDto.TLGroupCallParticipantState participant,
         long memberId, long producerUserId, string producerMediaId)
@@ -213,8 +176,6 @@ public sealed class GroupCallSourcesChangedMonitor : IDisposable
         using TLInputGroupCall inputCall = GroupCallBuilders.BuildInputGroupCall(call);
         var participants = new Vector();
         participants.AppendTLObject(row.AsSpan());
-        // inputCall stays alive through Build(), so the builder reads its span
-        // directly rather than laundering a pooled value into a managed array.
         return UpdateGroupCallParticipants.Builder()
             .Call(inputCall.AsSpan())
             .Participants(participants)

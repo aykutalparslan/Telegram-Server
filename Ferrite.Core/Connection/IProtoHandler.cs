@@ -3,8 +3,6 @@
 
 using System.Buffers;
 using Ferrite.Core.Connection;
-using Ferrite.Data;
-using Ferrite.Services;
 using Ferrite.Core.Execution;
 
 namespace Ferrite.Core;

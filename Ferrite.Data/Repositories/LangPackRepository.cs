@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
+using Ferrite.Data.Models;
 
 namespace Ferrite.Data.Repositories;
 
@@ -85,7 +86,10 @@ public class LangPackRepository : ILangPackRepository
     {
         await AwaitLoad();
         var result = new List<TLLangPackLanguage>();
-        foreach (byte[] bytes in _store.Iterate(langPack))
+        IEnumerable<byte[]> found = string.IsNullOrEmpty(langPack)
+            ? _store.Iterate()
+            : _store.Iterate(langPack);
+        foreach (byte[] bytes in found)
         {
             result.Add(ReadLanguage(bytes));
         }

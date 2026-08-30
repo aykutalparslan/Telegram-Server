@@ -3,11 +3,6 @@
 
 namespace Ferrite.Data.Repositories;
 
-/// <summary>
-/// Durable committed high-water marks for the common updates PTS sequence.
-/// A reservation in an external counter is not visible client state until the
-/// corresponding unit-of-work batch containing this row has committed.
-/// </summary>
 public interface IUpdatesStateRepository
 {
     bool PutPts(long userId, int pts);

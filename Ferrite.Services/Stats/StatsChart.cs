@@ -5,40 +5,15 @@ using System.Text.Json;
 
 namespace Ferrite.Services.Stats;
 
-/// <summary>
-/// One named series of a chart. The values are index-paired with the chart's own
-/// x column, so a series always has exactly as many points as the chart does.
-/// </summary>
 public readonly record struct StatsChartSeries(string Name, string Color,
     IReadOnlyList<long> Values);
 
-/// <summary>
-/// Renders the chart JSON that `statsGraph.json:DataJSON` carries.
-///
-/// This is the ONE place JSON is written inside Ferrite, and it is allowed
-/// because `dataJSON` is a JSON-DEFINED PROTOCOL BOUNDARY: the field's whole
-/// content is a JSON document the client parses itself. Nothing here is stored;
-/// the durable side of statistics is ordinary TL.
-///
-/// The document shape is the one every Telegram client's chart renderer reads:
-/// a `columns` array whose first column is the `x` axis in MILLISECONDS since the
-/// epoch and whose remaining columns are the series, plus `types`, `names` and
-/// `colors` keyed by the same column names.
-///
-/// A chart with NO DATA still declares its columns and just carries no points.
-/// That is deliberate: a period Ferrite has no rows for answers a well-formed
-/// empty graph rather than a fabricated one, and the client renders an empty
-/// chart instead of failing to parse.
-/// </summary>
 public static class StatsChart
 {
     public const string Line = "line";
     public const string Bar = "bar";
     public const string Area = "area";
 
-    // The documented `colorkey#rrggbb` form, which lets a client substitute its
-    // own theme colour for the key and fall back to the literal value. The `dark`
-    // flag of the stats request picks which literal travels.
     public const string Blue = "blue";
     public const string Green = "green";
     public const string Red = "red";
@@ -61,23 +36,28 @@ public static class StatsChart
             [Indigo] = ("#7f79f3", "#9d94ff"),
         };
 
-    /// <summary>
-    /// The ordered colour keys a multi-series chart assigns to its series, so two
-    /// adjacent series never share a colour.
-    /// </summary>
     public static string ColorAt(int index)
     {
         string[] order = [Blue, Green, Red, Orange, LightBlue, LightGreen, Golden, Indigo];
         return order[index % order.Length];
     }
 
-    /// <summary>
-    /// A chart over a shared x axis. <paramref name="xs"/> are UNIX SECONDS and
-    /// are converted to the milliseconds the client's renderer expects.
-    /// </summary>
-    public static string Build(string type, IReadOnlyList<int> xs,
+    public static string? Build(string type, IReadOnlyList<int> xs,
         IReadOnlyList<StatsChartSeries> series, bool dark, bool stacked = false)
     {
+        if (xs.Count == 0)
+        {
+            return null;
+        }
+
+        List<StatsChartSeries> measurable = series
+            .Where(item => item.Values.Any(value => value != 0))
+            .ToList();
+        if (measurable.Count == 0)
+        {
+            return null;
+        }
+
         var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
         {
@@ -91,11 +71,11 @@ public static class StatsChart
                 writer.WriteNumberValue(x * 1000L);
             }
             writer.WriteEndArray();
-            for (int i = 0; i < series.Count; i++)
+            for (int i = 0; i < measurable.Count; i++)
             {
                 writer.WriteStartArray();
                 writer.WriteStringValue(Column(i));
-                foreach (long value in series[i].Values)
+                foreach (long value in measurable[i].Values)
                 {
                     writer.WriteNumberValue(value);
                 }
@@ -105,27 +85,26 @@ public static class StatsChart
 
             writer.WriteStartObject("types");
             writer.WriteString("x", "x");
-            for (int i = 0; i < series.Count; i++)
+            for (int i = 0; i < measurable.Count; i++)
             {
                 writer.WriteString(Column(i), type);
             }
             writer.WriteEndObject();
 
             writer.WriteStartObject("names");
-            for (int i = 0; i < series.Count; i++)
+            for (int i = 0; i < measurable.Count; i++)
             {
-                writer.WriteString(Column(i), series[i].Name);
+                writer.WriteString(Column(i), measurable[i].Name);
             }
             writer.WriteEndObject();
 
             writer.WriteStartObject("colors");
-            for (int i = 0; i < series.Count; i++)
+            for (int i = 0; i < measurable.Count; i++)
             {
-                writer.WriteString(Column(i), Color(series[i].Color, dark));
+                writer.WriteString(Column(i), Color(measurable[i].Color, dark));
             }
             writer.WriteEndObject();
 
-            // "The `bar` chart type and `stacked` option are always used together."
             if (stacked)
             {
                 writer.WriteBoolean("stacked", true);

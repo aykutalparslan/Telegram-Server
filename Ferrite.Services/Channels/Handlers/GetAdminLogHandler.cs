@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -14,33 +13,12 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Reads the append-only administrative ledger every channel mutation writes.
-///
-/// It reports only what Ferrite actually recorded — no event is synthesized at
-/// read time — so an administrative action that forgets its append is invisible
-/// here, which is what `Phase10hAdminLogTests` gates against.
-///
-/// Two pinned-client contracts shape the answer and both fail SILENTLY, by
-/// dropping the event rather than failing the request. `GetChannelAdminLogQuery`
-/// skips any event whose `user_id` is invalid and logs an error for a user it has
-/// never seen (`DialogEventLog.cpp:580-585`), so every actor and every
-/// participant an action names is carried in `users`. And
-/// `get_chat_event_action_object` returns nullptr for an action it cannot map
-/// (`DialogEventLog.cpp:42`), which silently removes the event from the client's
-/// list, so Ferrite only ever appends actions that mapping accepts.
-/// </summary>
 public sealed class GetAdminLogHandler : ChannelsHandlerBase
 {
     private readonly IChannelAdminLogRepository _channelAdminLogRepository;
 
-    // Every filter bit set: what an absent `events_filter` means. An events_filter
-    // that is PRESENT but empty is a different thing and selects nothing, because
-    // the flag word IS the selection.
     private const int AllEvents = (1 << 19) - 1;
 
-    // Telegram caps one admin-log page; a client asking for more gets the cap
-    // rather than the whole ledger.
     private const int MaxLimit = 100;
 
     public GetAdminLogHandler(IUnitOfWork unitOfWork, IChannelMessagesRepository channelMessagesRepository, IAuthorizationRepository authorizationRepository, IChannelAdminLogRepository channelAdminLogRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IMessageRepository messageRepository, IUserRepository userRepository, ICounterFactory counterFactory,
@@ -70,9 +48,6 @@ public sealed class GetAdminLogHandler : ChannelsHandlerBase
             : AllEvents;
         bool hasAdminFilter = request.Flags[1];
 
-        // The admin log is gated on being an administrator, matching
-        // `get_dialog_event_log` (`DialogEventLog.cpp:645-647`), which refuses
-        // locally before ever sending the query.
         var (currentUserId, channelBytes, error) = await PrepareChannelMutationCore(
             authKeyId, channelId, creatorOnly: false, ChatAdminRightRequirement.Any);
         if (error != null)
@@ -80,9 +55,6 @@ public sealed class GetAdminLogHandler : ChannelsHandlerBase
             return ErrorAdminLogResults(Encoding.UTF8.GetBytes(error));
         }
 
-        // Re-read after the await rather than before it: `inputUserSelf` in the
-        // admins filter can only be resolved once the caller is known, and the
-        // request view cannot cross an await.
         HashSet<long>? admins = null;
         if (hasAdminFilter)
         {
@@ -107,8 +79,6 @@ public sealed class GetAdminLogHandler : ChannelsHandlerBase
             }
         }
 
-        // Newest first, then the page. Ordering is decided here rather than left
-        // to storage: the shared KV contract only guarantees prefix iteration.
         selected.Sort(static (left, right) => right.Id.CompareTo(left.Id));
         if (limit > 0 && selected.Count > limit)
         {
@@ -136,7 +106,7 @@ public sealed class GetAdminLogHandler : ChannelsHandlerBase
         var chats = new Vector();
         chats.AppendTLObject(channelBytes);
         var users = new Vector();
-        AppendUsers(ref users, referencedUsers);
+        AppendUsers(currentUserId, ref users, referencedUsers);
 
         _log.Debug($"📣 GetAdminLog user:{currentUserId} channel:{channelId.Value} events:{selected.Count}");
         return AdminLogResults.Builder()
@@ -149,8 +119,6 @@ public sealed class GetAdminLogHandler : ChannelsHandlerBase
     private readonly record struct SelectedEvent(long Id, int Date, long UserId,
         byte[] Action, IReadOnlyList<long> ReferencedUserIds);
 
-    // One synchronous frame over the stored row: nothing here may outlive the
-    // buffer, so everything the page needs is copied out before returning.
     private static bool TrySelect(TLAdminLogEvent row, string query, int filterMask,
         HashSet<long>? admins, long maxId, long minId, out SelectedEvent selected)
     {
@@ -158,10 +126,6 @@ public sealed class GetAdminLogHandler : ChannelsHandlerBase
         var view = row.AsAdminLogEvent();
         long id = view.Id;
 
-        // max_id/min_id are exclusive bounds around the page, and 0 means
-        // unbounded on that side: pinned TDLib pages backwards from the newest
-        // event with `from_event_id` in max_id and always sends min_id 0
-        // (`DialogEventLog.cpp:556-557`).
         if (maxId > 0 && id >= maxId)
         {
             return false;
@@ -195,9 +159,6 @@ public sealed class GetAdminLogHandler : ChannelsHandlerBase
         Encoding.UTF8.GetString(searchText)
             .Contains(query, StringComparison.OrdinalIgnoreCase);
 
-    // The users an action names besides its actor. Pinned TDLib resolves these
-    // through UserManager and logs an error for one it has never seen, so they
-    // travel with the page.
     private static IReadOnlyList<long> ReadReferencedUserIds(
         ChannelAdminLogEventActionView action)
     {

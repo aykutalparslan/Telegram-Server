@@ -80,12 +80,6 @@ public class Program
             eventArgs.Cancel = true;
             stopping.Cancel();
         };
-        // SIGTERM is how a container runtime asks a server to stop, and without
-        // this the process is killed outright once the grace period expires.
-        // That is not merely untidy: the Kafka consumer never leaves its group,
-        // so the NEXT instance blocks in JoinGroup behind the dead member and
-        // dies in KafkaPipe.SubscribeAsync. A restart therefore fails rather
-        // than restarting.
         using PosixSignalRegistration terminate = PosixSignalRegistration.Create(
             PosixSignal.SIGTERM, context =>
             {
@@ -106,11 +100,6 @@ public class Program
         }
     }
 
-    /// <summary>
-    /// coturn configuration for the standalone entrypoint. Without this the
-    /// structured <see cref="CallTurnOptions"/> never reaches a server started
-    /// from the environment, and TURN silently stays disabled.
-    /// </summary>
     internal static CallTurnOptions? ReadCallTurn(Func<string, string?> read)
     {
         if (read("FERRITE_TURN_ENABLED") is not "1")
@@ -135,14 +124,6 @@ public class Program
         return options;
     }
 
-    /// <summary>
-    /// Reflector configuration for the standalone entrypoint. A containerized
-    /// server cannot use the ephemeral development default: the container
-    /// runtime publishes a port chosen before the process starts, so both the
-    /// bound and the advertised port have to be fixed from outside. An empty
-    /// advertised address still means "use the server's public address"; the
-    /// composition root substitutes it.
-    /// </summary>
     internal static CallMediaRelayOptions ReadCallMedia(Func<string, string?> read)
     {
         int bindPort = ReadPort(read, "FERRITE_CALL_RELAY_BIND_PORT", 0);
@@ -151,13 +132,9 @@ public class Program
             BindAddress = read("FERRITE_CALL_RELAY_BIND_ADDRESS") ?? "0.0.0.0",
             BindPort = bindPort,
             AdvertisedAddress = read("FERRITE_CALL_RELAY_ADVERTISED_ADDRESS") ?? "",
-            // Publishing a container port makes the two numbers the same, so
-            // one variable configures both unless they are split explicitly.
             AdvertisedPort = ReadPort(read,
                 "FERRITE_CALL_RELAY_ADVERTISED_PORT", bindPort)
         };
-        // TryValidate rejects an empty advertised address, which is the legal
-        // "not configured yet" value here, so validate the resolved shape.
         CallMediaRelayOptions resolved = options.AdvertisedAddress.Length == 0
             ? options with { AdvertisedAddress = "0.0.0.0" }
             : options;

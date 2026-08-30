@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -47,7 +46,7 @@ public sealed class GetExportedChatInviteHandler : MessagesHandlerBase
             }
 
             var userVector = new Vector();
-            AppendUsers(ref userVector, new[] { invite.AdminId });
+            AppendUsers(context!.CurrentUserId, ref userVector, new[] { invite.AdminId });
             return Ferrite.TL.baseLayer.messages.ExportedChatInvite.Builder()
                 .Invite(invite.InviteBytes)
                 .Users(userVector)

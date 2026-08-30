@@ -7,10 +7,10 @@ namespace Ferrite.Services.Handlers.AccountMethods;
 
 public abstract class EmojiCatalogueHandlerBase
 {
-    protected readonly StickerStore Stickers;
+    protected readonly EmojiCatalogStore Stickers;
     protected readonly ProfileStore Profiles;
 
-    protected EmojiCatalogueHandlerBase(StickerStore stickers,
+    protected EmojiCatalogueHandlerBase(EmojiCatalogStore stickers,
         ProfileStore profiles)
     {
         Stickers = stickers;

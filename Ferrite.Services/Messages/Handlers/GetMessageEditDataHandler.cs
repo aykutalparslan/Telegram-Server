@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -10,11 +9,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Resolves edit access from the stored message row. The result's caption flag
-/// describes the kind of content that can be caption-edited; it does not mean
-/// that the current caption is non-empty.
-/// </summary>
 public sealed class GetMessageEditDataHandler
 {
     private readonly IChatParticipantsRepository _chatParticipantsRepository;

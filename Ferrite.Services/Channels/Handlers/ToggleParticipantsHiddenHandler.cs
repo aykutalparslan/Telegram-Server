@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -13,11 +12,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Members are hidden by default in a broadcast channel, so the setting only
-/// applies to a supergroup (`can_hide_channel_participants`,
-/// `ChatManager.cpp:3424-3443`), and it is a restrict-members right.
-/// </summary>
 public sealed class ToggleParticipantsHiddenHandler : ChannelPropertyHandlerBase
 {
     private readonly IChannelAdminRepository _channelAdminRepository;

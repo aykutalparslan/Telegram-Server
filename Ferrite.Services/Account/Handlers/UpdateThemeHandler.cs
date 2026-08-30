@@ -12,6 +12,32 @@ public sealed class UpdateThemeHandler : ThemeHandlerBase
     public UpdateThemeHandler(ThemeStore store, ProfileStore profiles)
         : base(store, profiles) { }
 
+    [TLFunction(Constructors.layer107_AccountUpdateTheme)]
+    public async Task<TLBytes> HandleLayer107(long authKeyId, TLBytes q)
+    {
+        using var current = ToCurrentUpdateThemeRequest(q);
+        return await Handle(authKeyId, current);
+    }
+
+    private static TLBytes ToCurrentUpdateThemeRequest(TLBytes q)
+    {
+        var sent = new TL.layer107.account.AccountUpdateTheme(q.AsSpan());
+        var builder = AccountUpdateTheme.Builder()
+            .Format(sent.Format)
+            .Theme(sent.Theme);
+        if (sent.Flags[0]) builder = builder.Slug(sent.Slug);
+        if (sent.Flags[1]) builder = builder.Title(sent.Title);
+        if (sent.Flags[2]) builder = builder.Document(sent.Document);
+        if (sent.Flags[3])
+        {
+            var settings = new Vector();
+            settings.AppendTLObject(sent.Settings);
+            builder = builder.Settings(settings);
+        }
+        using var current = builder.Build();
+        return current.TLBytes!.Value;
+    }
+
     [TLFunction(Constructors.baseLayer_AccountUpdateTheme)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
     {

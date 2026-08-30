@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -11,12 +10,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Whether a user must join a supergroup before posting. `join_to_send` lives on
-/// the compact `channel` row, so the stored row is what changes.
-/// `toggle_channel_join_to_send` (`ChatManager.cpp:3326-3333`) restricts it to an
-/// ordinary supergroup and gates it on restrict-members rights.
-/// </summary>
 public sealed class ToggleJoinToSendHandler : ChannelPropertyHandlerBase
 {
     public ToggleJoinToSendHandler(IUnitOfWork unitOfWork, IChannelMessagesRepository channelMessagesRepository, IAuthorizationRepository authorizationRepository, IChannelAdminLogRepository channelAdminLogRepository, IChannelAdminRepository channelAdminRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IMessageRepository messageRepository, IUserRepository userRepository,

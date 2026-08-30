@@ -7,13 +7,6 @@ using Ferrite.TL.baseLayer;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// Returns the call configuration JSON. TDLib's CallActor requests this on
-/// every call start and gates callStateReady on a valid response, so it must
-/// always return schema-valid JSON. Ferrite has no tunable call config yet,
-/// so the payload is an empty JSON object; it is expanded only when a current
-/// tgcalls client proves a key is required.
-/// </summary>
 public sealed class GetCallConfigHandler
 {
     private static readonly byte[] EmptyConfig = Encoding.UTF8.GetBytes("{}");

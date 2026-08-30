@@ -60,6 +60,19 @@ export class SegmentRing {
     return this.#bytes;
   }
 
+  latestTimestampForChannel(channel) {
+    if (!Number.isInteger(channel) || channel < 0) {
+      throw new TypeError('segment channel must be a non-negative integer');
+    }
+    let latestTimestamp = 0;
+    for (const segment of this.#segments.values()) {
+      if (segment.channel === channel) {
+        latestTimestamp = Math.max(latestTimestamp, segment.timestamp);
+      }
+    }
+    return latestTimestamp;
+  }
+
   async initialize() {
     await mkdir(this.#root, { recursive: true });
   }

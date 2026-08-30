@@ -17,12 +17,14 @@ public sealed class AcceptCallHandler : PhoneCallHandlerBase
     private const int DhValueLength = 256;
 
     private readonly CallRegistryOptions _options;
+    private readonly UserSerializer _userSerializer;
 
-    public AcceptCallHandler(IUnitOfWork unitOfWork, IBlockedPeersRepository blockedPeersRepository, IAuthorizationRepository authorizationRepository, IUserRepository userRepository, ICallRegistry registry,
+    public AcceptCallHandler(IUnitOfWork unitOfWork, IBlockedPeersRepository blockedPeersRepository, IAuthorizationRepository authorizationRepository, IUserRepository userRepository, UserSerializer userSerializer, ICallRegistry registry,
         IUpdatesService updates, IMTProtoTime time, CallRegistryOptions options)
         : base(unitOfWork, blockedPeersRepository, authorizationRepository, userRepository, registry, updates, time)
     {
         _options = options;
+        _userSerializer = userSerializer;
     }
 
     [TLFunction(Constructors.baseLayer_AcceptCall)]
@@ -90,14 +92,13 @@ public sealed class AcceptCallHandler : PhoneCallHandlerBase
         }
 
         CallSnapshot call = result.Call!;
-        // The caller learns the negotiated g_b through phoneCallAccepted.
         await PushCallUpdate(call.CallerUserId, BuildAccepted(call),
             UpdateDeliveryScope.ForAuthKey(call.CallerAuthKeyId));
-        // Every other callee device is told the call is taken elsewhere.
         await PushCallUpdate(call.CalleeUserId,
             BuildDiscarded(call.CallId,
                 Constructors.baseLayer_PhoneCallDiscardReasonBusy, call.Video, 0),
             UpdateDeliveryScope.ExcludingAuthKeys(new[] { authKeyId }));
-        return BuildResult(BuildWaiting(call), call.CallerUserId, call.CalleeUserId);
+        return BuildResult(calleeUserId, BuildWaiting(call), call.CallerUserId,
+            call.CalleeUserId, _userSerializer);
     }
 }

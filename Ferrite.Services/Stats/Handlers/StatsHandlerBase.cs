@@ -1,26 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
+using System.Text;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Channels;
 using Ferrite.Services.Stats;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.dto;
+using Ferrite.TL.baseLayer.stats;
 using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.StatsMethods;
 
-/// <summary>
-/// The access check every `stats.*` method shares, plus the snapshot load.
-///
-/// Statistics are ADMIN-ONLY, which is also what pinned TDLib assumes: it gates
-/// its statistics screen on `channelFull.can_view_stats`, and Ferrite only sets
-/// that flag for a caller who passes the check here. The server still performs
-/// the check itself — a client is free to send the query regardless of what its
-/// own UI would allow.
-/// </summary>
 public abstract class StatsHandlerBase
 {
     private readonly IChatParticipantsRepository _chatParticipantsRepository;
@@ -28,14 +20,14 @@ public abstract class StatsHandlerBase
     private readonly IAuthorizationRepository _authorizationRepository;
     private readonly IChannelAdminRepository _channelAdminRepository;
     private readonly IChatRepository _chatRepository;
-    private readonly IUserRepository _userRepository;
+    private readonly UserSerializer _userSerializer;
 
     protected readonly IUnitOfWork _unitOfWork;
     protected readonly StatisticsStore _statistics;
     protected readonly StatsGraphTokens _tokens;
     protected readonly ILogger _log;
 
-    protected StatsHandlerBase(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IAuthorizationRepository authorizationRepository, IChannelAdminRepository channelAdminRepository, IChatRepository chatRepository, IUserRepository userRepository, StatisticsStore statistics,
+    protected StatsHandlerBase(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IAuthorizationRepository authorizationRepository, IChannelAdminRepository channelAdminRepository, IChatRepository chatRepository, UserSerializer userSerializer, StatisticsStore statistics,
         StatsGraphTokens tokens, ILogger log)
     {
         _chatParticipantsRepository = chatParticipantsRepository;
@@ -43,7 +35,7 @@ public abstract class StatsHandlerBase
         _authorizationRepository = authorizationRepository;
         _channelAdminRepository = channelAdminRepository;
         _chatRepository = chatRepository;
-        _userRepository = userRepository;
+        _userSerializer = userSerializer;
 
         _unitOfWork = unitOfWork;
         _statistics = statistics;
@@ -58,15 +50,6 @@ public abstract class StatsHandlerBase
             new(0, 0, false, 0, error);
     }
 
-    /// <summary>
-    /// Resolves the channel, proves the caller may read its statistics, and
-    /// reports the DC the statistics are served from.
-    ///
-    /// The stored `dto.channelAdminState` is the channel's own record of whether
-    /// its statistics are servable and from where; the caller's administrator
-    /// status is checked on top of it. Both must hold, which is exactly the pair
-    /// `channelFull` reports as `stats_dc` + `can_view_stats`.
-    /// </summary>
     protected async Task<StatsAccess> AuthorizeAsync(long authKeyId, long? channelId)
     {
         using TLAuthInfo? auth = await _authorizationRepository
@@ -118,10 +101,6 @@ public abstract class StatsHandlerBase
             null);
     }
 
-    /// <summary>
-    /// The channel's stored statistics availability, defaulting to what a
-    /// channel with no administration row behaves as.
-    /// </summary>
     protected async Task<(bool CanViewStats, int StatsDc)> ReadStatisticsStateAsync(
         long channelId)
     {
@@ -133,13 +112,7 @@ public abstract class StatsHandlerBase
         return (view.CanViewStats, view.StatsDc);
     }
 
-    /// <summary>
-    /// Every user the answer names, each once. Pinned TDLib resolves the user of
-    /// a top-poster/admin/inviter row through UserManager and DROPS the row when
-    /// it has never seen that user, so a name missing here silently shortens the
-    /// client's list rather than failing the request.
-    /// </summary>
-    protected void AppendUsers(ref Vector userVector, IEnumerable<long> userIds)
+    protected void AppendUsers(long viewerUserId, ref Vector userVector, IEnumerable<long> userIds)
     {
         var seen = new HashSet<long>();
         foreach (long userId in userIds)
@@ -149,11 +122,7 @@ public abstract class StatsHandlerBase
                 continue;
             }
 
-            using TLUser? user = _userRepository.GetUser(userId);
-            if (user != null)
-            {
-                userVector.AppendTLObject(user.Value.AsSpan());
-            }
+            _userSerializer.Append(viewerUserId, ref userVector, userId);
         }
     }
 
@@ -169,6 +138,29 @@ public abstract class StatsHandlerBase
         }
         return null;
     }
+
+    protected static TLStatsGraph Graph(string? json, string? zoomToken)
+    {
+        if (json == null)
+        {
+            return GraphError("NOT_ENOUGH_DATA");
+        }
+
+        using TLDataJSON data = DataJSON.Builder()
+            .Data(Encoding.UTF8.GetBytes(json))
+            .Build();
+        var builder = StatsGraph.Builder().Json(data.AsSpan());
+        if (zoomToken != null)
+        {
+            builder = builder.ZoomToken(Encoding.UTF8.GetBytes(zoomToken));
+        }
+        return builder.Build();
+    }
+
+    protected static TLStatsGraph GraphError(string message) =>
+        StatsGraphError.Builder()
+            .Error(Encoding.UTF8.GetBytes(message))
+            .Build();
 
     protected static int UnixNow() => (int)DateTimeOffset.Now.ToUnixTimeSeconds();
 }

@@ -3,12 +3,6 @@
 
 namespace Ferrite.Services.Calls;
 
-/// <summary>
-/// Explicit degraded production fallback when no external worker is configured.
-/// Discovery and discard remain available, while every operation that needs media
-/// fails with the same typed temporary error as an unreachable worker. The
-/// in-process media fake is reserved for focused and TDLib signaling tests.
-/// </summary>
 public sealed class UnavailableGroupCallMediaPlane : IGroupCallMediaPlane
 {
     private static GroupCallMediaException Unavailable() => new(

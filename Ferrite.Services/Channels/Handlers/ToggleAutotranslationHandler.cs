@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -12,12 +11,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Automatic translation of a broadcast channel's posts.
-/// `toggle_channel_has_automatic_translation` (`ChatManager.cpp:3394-3405`)
-/// refuses anything that is not a channel and needs change-info rights.
-/// `autotranslation` is `flags2.15` on the compact `channel` row.
-/// </summary>
 public sealed class ToggleAutotranslationHandler : ChannelPropertyHandlerBase
 {
     public ToggleAutotranslationHandler(IUnitOfWork unitOfWork, IChannelMessagesRepository channelMessagesRepository, IAuthorizationRepository authorizationRepository, IChannelAdminLogRepository channelAdminLogRepository, IChannelAdminRepository channelAdminRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IMessageRepository messageRepository, IUserRepository userRepository,

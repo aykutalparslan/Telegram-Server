@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.Services.Calls.E2E;
@@ -14,13 +13,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.declineConferenceCallInvite. Marks the invite service message the
-/// caller was sent as missed and edits it on both sides, which is how the
-/// inviter's client learns the invitation was answered. Declining an unknown or
-/// already-answered message is a no-op: the client retries a decline whenever it
-/// is unsure, so it must never fail.
-/// </summary>
 public sealed class DeclineConferenceCallInviteHandler : ConferenceCallHandlerBase
 {
     private readonly IMessageRepository _messageRepository;
@@ -51,8 +43,6 @@ public sealed class DeclineConferenceCallInviteHandler : ConferenceCallHandlerBa
         InviteMessage? invite = await ReadInviteAsync(userId, msgId);
         if (invite == null || invite.Value.Missed)
         {
-            // Unknown, not an invite, or already answered. An idempotent empty
-            // result keeps a retry from surfacing as an error in the client.
             return await BuildConferenceResultAsync(authKeyId, userId,
                 Array.Empty<byte[]>());
         }
@@ -75,11 +65,6 @@ public sealed class DeclineConferenceCallInviteHandler : ConferenceCallHandlerBa
     private readonly record struct InviteMessage(long CallId, bool Missed, bool Video,
         long PeerUserId, int Date);
 
-    /// <summary>
-    /// The stored invite as this account holds it. Anything that is not an
-    /// unanswered conference invitation resolves to null, which the caller treats
-    /// as "nothing to decline".
-    /// </summary>
     private async ValueTask<InviteMessage?> ReadInviteAsync(long userId, int msgId)
     {
         using TLDto.TLSavedMessage? saved = await _messageRepository
@@ -112,8 +97,6 @@ public sealed class DeclineConferenceCallInviteHandler : ConferenceCallHandlerBa
             peerUser.UserId, service.Date);
     }
 
-    // Declining turns the open invitation into a missed call on both sides; the
-    // call id and the video bit stay so the client can still render what it was.
     private static byte[] BuildDeclinedAction(InviteMessage invite)
     {
         var builder = MessageActionConferenceCall.Builder()
@@ -128,11 +111,6 @@ public sealed class DeclineConferenceCallInviteHandler : ConferenceCallHandlerBa
         return action.AsSpan().ToArray();
     }
 
-    /// <summary>
-    /// Rewrites one stored copy of the invite in place and returns the
-    /// updateEditMessage that reports it. The message keeps its id and its
-    /// original date; only the action and the pts move.
-    /// </summary>
     private async ValueTask<byte[]?> RewriteAsync(long ownerId, long? authKeyId,
         int msgId, byte[] actionBytes)
     {
@@ -183,10 +161,6 @@ public sealed class DeclineConferenceCallInviteHandler : ConferenceCallHandlerBa
         await RewriteAsync(userId, authKeyId, msgId, actionBytes) ??
         Array.Empty<byte>();
 
-    /// <summary>
-    /// The inviter's own copy carries a different message id, so it is found by
-    /// walking that dialog for the invite naming the same call.
-    /// </summary>
     private async Task EditPeerCopyAsync(long peerUserId, long declinerUserId,
         byte[] actionBytes, int date, long callId)
     {

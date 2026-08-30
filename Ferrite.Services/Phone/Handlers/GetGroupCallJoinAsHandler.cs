@@ -10,29 +10,23 @@ using Ferrite.TL.baseLayer.phone;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.getGroupCallJoinAs. Ferrite currently authorizes only the account's own
-/// identity, so it advertises exactly that peer and hydrates the related user.
-/// Channel and anonymous identities are deliberately omitted until their rights
-/// model is implemented end to end.
-/// </summary>
 public sealed class GetGroupCallJoinAsHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
     private readonly IChatParticipantsRepository _chatParticipantsRepository;
     private readonly IChatRepository _chatRepository;
 
-    private readonly IUserRepository _userRepository;
+    private readonly UserSerializer _userSerializer;
 
     private readonly IUnitOfWork _unitOfWork;
 
-    public GetGroupCallJoinAsHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IUserRepository userRepository)
+    public GetGroupCallJoinAsHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, UserSerializer userSerializer)
     {
         _authorizationRepository = authorizationRepository;
         _chatParticipantsRepository = chatParticipantsRepository;
         _chatRepository = chatRepository;
 
-        _userRepository = userRepository;
+        _userSerializer = userSerializer;
 
         _unitOfWork = unitOfWork;
     }
@@ -52,7 +46,7 @@ public sealed class GetGroupCallJoinAsHandler
             return Error(access.Error);
         }
 
-        using TLUser? user = _userRepository.GetUser(access.CurrentUserId);
+        using TLUser? user = _userSerializer.Get(access.CurrentUserId, access.CurrentUserId);
         if (user == null || user.Value.Type != TLUser.UserType.User)
         {
             return Error(GroupCallErrors.PeerIdInvalid);

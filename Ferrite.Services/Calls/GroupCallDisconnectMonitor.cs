@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -13,35 +12,11 @@ namespace Ferrite.Services.Calls;
 
 public sealed class GroupCallDisconnectOptions
 {
-    /// <summary>
-    /// How long a participant may be disconnected from the media worker before
-    /// Ferrite marks it left. Long enough to survive an ICE restart or a brief
-    /// network change, short enough that the other members stop seeing a
-    /// participant who is not coming back.
-    /// </summary>
     public TimeSpan Grace { get; init; } = TimeSpan.FromSeconds(30);
 
-    /// <summary>
-    /// How long after joining a participant still counts as live even though the
-    /// worker has no connected transport for it yet. ICE and DTLS complete after
-    /// the join answer, so a participant is legitimately "not connected yet" for
-    /// a while; reporting that as dropped in <c>phone.checkGroupCall</c> makes
-    /// pinned TDLib conclude it lost the call and leave. Eviction of a transport
-    /// that never arrives stays with <see cref="Grace"/>.
-    /// </summary>
     public TimeSpan ConnectGrace { get; init; } = TimeSpan.FromSeconds(30);
 }
 
-/// <summary>
-/// Turns worker disconnect events into participant evictions, but only after a
-/// grace period the participant can recover from.
-///
-/// A transport closing is not the same as leaving: a client that reconnects or
-/// restarts ICE re-establishes the same media_id, so the eviction is cancelled by
-/// re-checking liveness at expiry rather than by trusting the event. Only when
-/// the participant is still unreachable does it commit the same versioned left
-/// row an explicit <c>leaveGroupCall</c> would have written.
-/// </summary>
 public sealed class GroupCallDisconnectMonitor : IDisposable
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -74,10 +49,8 @@ public sealed class GroupCallDisconnectMonitor : IDisposable
         _log = log;
     }
 
-    /// <summary>Participants marked left because their grace period expired.</summary>
     public long EvictedCount => Interlocked.Read(ref _evicted);
 
-    /// <summary>Disconnects whose participant was alive again by expiry.</summary>
     public long RecoveredCount => Interlocked.Read(ref _recovered);
 
     public Task StartAsync(CancellationToken cancellationToken = default)
@@ -113,10 +86,6 @@ public sealed class GroupCallDisconnectMonitor : IDisposable
         }
     }
 
-    /// <summary>
-    /// The media plane's disconnect callback. Public so a caller (and a test) can
-    /// drive the grace period without going through a live subscription.
-    /// </summary>
     public void OnDisconnect(GroupCallMediaDisconnectEvent disconnect)
     {
         var key = (disconnect.CallId, disconnect.ParticipantId);
@@ -124,8 +93,6 @@ public sealed class GroupCallDisconnectMonitor : IDisposable
         {
             if (_subscription == null || _pending.ContainsKey(key))
             {
-                // Already counting down; a repeated event must not reset the clock,
-                // or a flapping transport would postpone eviction forever.
                 return;
             }
 
@@ -139,11 +106,6 @@ public sealed class GroupCallDisconnectMonitor : IDisposable
                    $"grace {_options.Grace.TotalSeconds:0}s");
     }
 
-    /// <summary>
-    /// The grace decision itself, separated from the timer that normally fires it
-    /// so eviction and recovery are decidable without waiting. Returns true when
-    /// the participant was marked left.
-    /// </summary>
     public async Task<bool> ExpireAsync(GroupCallMediaDisconnectEvent disconnect)
     {
         var key = (disconnect.CallId, disconnect.ParticipantId);
@@ -157,9 +119,6 @@ public sealed class GroupCallDisconnectMonitor : IDisposable
 
         try
         {
-            // A worker that died takes every transport with it, so there is nothing
-            // to recover to; any other reason gets one last liveness check, which is
-            // what makes a reconnect or a rejoin cancel the eviction.
             if (disconnect.Reason != GroupCallMediaDisconnectReason.WorkerDied &&
                 await _media.IsAliveAsync(disconnect.CallId, disconnect.ParticipantId))
             {
@@ -195,9 +154,6 @@ public sealed class GroupCallDisconnectMonitor : IDisposable
             peerChatId = call.Value.AsGroupCallState().PeerId;
         }
 
-        // The event names a media_id, so the row it belongs to is resolved rather
-        // than assumed: a participant that rejoined under a different id must not
-        // be evicted by a stale event.
         long? owner = await FindParticipantAsync(disconnect.CallId,
             disconnect.ParticipantId);
         if (owner == null)
@@ -254,12 +210,6 @@ public sealed class GroupCallDisconnectMonitor : IDisposable
         return null;
     }
 
-    /// <summary>
-    /// The same versioned left row an explicit leave would have produced, so a
-    /// client cannot tell an eviction from a normal departure and needs no extra
-    /// recovery path. A left row carries no media, so one payload serves every
-    /// member.
-    /// </summary>
     private async Task<int> PushLeftRowAsync(TLDto.TLGroupCallState call,
         TLDto.TLGroupCallParticipantState participant, long peerChatId)
     {

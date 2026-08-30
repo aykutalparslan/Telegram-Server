@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -12,21 +11,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Shared plumbing for channel catalogues:
-/// `getAdminedPublicChannels`, `getLeftChannels`, `getGroupsForDiscussion`,
-/// `getInactiveChannels` and `getChannelRecommendations`.
-///
-/// All five answer from STORED membership and channel state, and all five order
-/// deterministically, because a catalogue whose order depends on storage
-/// enumeration produces a different list on every call and no assertion can
-/// pin it.
-///
-/// Every row is projected with <see cref="ChannelRows.ForViewerAsync"/> before
-/// it leaves. `creator` and `left` are per-VIEWER facts, and a catalogue is
-/// precisely where a caller meets channels it does not belong to: serving the
-/// stored row would tell a stranger it owns the channel.
-/// </summary>
 public abstract class ChannelCatalogueHandlerBase : ChannelsHandlerBase
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -50,11 +34,6 @@ public abstract class ChannelCatalogueHandlerBase : ChannelsHandlerBase
 
     }
 
-    /// <summary>
-    /// One channel the caller has a relationship with, flattened into the facts
-    /// the catalogues filter on. Read in one synchronous frame per channel so no
-    /// view outlives its buffer.
-    /// </summary>
     protected readonly record struct ChannelMembership(long ChannelId, int Role,
         bool Megagroup, bool Broadcast, bool Gigagroup, bool HasActiveUsername,
         bool Forum, int Date);
@@ -71,11 +50,6 @@ public abstract class ChannelCatalogueHandlerBase : ChannelsHandlerBase
         return auth == null ? null : auth.Value.AsAuthInfo().UserId;
     }
 
-    /// <summary>
-    /// Every CHANNEL the caller has a participant row for, including the left
-    /// and banned ones, in ascending channel id. Basic groups are excluded here
-    /// rather than by each caller: none of these catalogues can answer one.
-    /// </summary>
     protected async Task<List<ChannelMembership>> ReadMembershipAsync(long userId)
     {
         var participants = await _chatParticipantsRepository
@@ -121,15 +95,6 @@ public abstract class ChannelCatalogueHandlerBase : ChannelsHandlerBase
         role != (int)ChatParticipantRole.Banned &&
         role != (int)ChatParticipantRole.Left;
 
-    /// <summary>
-    /// Builds `messages.chats` from a resolved, already-ordered id list.
-    /// `messages.chatsSlice` is deliberately never used: pinned TDLib logs
-    /// `LOG(ERROR) &lt;&lt; "Receive chatsSlice"` for both
-    /// `GetCreatedPublicChannelsQuery` (`ChatManager.cpp:1414`) and
-    /// `GetGroupsForDiscussionQuery` (`ChatManager.cpp:1459`) and then treats it
-    /// as a whole list anyway, so the sliced form buys nothing and costs a
-    /// client-side error line.
-    /// </summary>
     protected async Task<Ferrite.TL.baseLayer.messages.TLChats> BuildChatsAsync(
         long viewerUserId, IReadOnlyList<long> channelIds)
     {
@@ -159,12 +124,6 @@ public abstract class ChannelCatalogueHandlerBase : ChannelsHandlerBase
             .Build();
     }
 
-    /// <summary>
-    /// The date of a channel's newest stored message, or its creation date when
-    /// it has never carried one. This is the only activity signal Ferrite
-    /// genuinely holds for a channel, and `getInactiveChannels` reports it
-    /// rather than a synthesized "last seen".
-    /// </summary>
     protected async Task<int> ReadLastActivityDateAsync(long channelId,
         int createdDate)
     {

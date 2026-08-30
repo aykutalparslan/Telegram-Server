@@ -10,8 +10,6 @@ using System.Text.RegularExpressions;
 
 namespace Ferrite.TLParser
 {
-    //https://github.com/dotnet/roslyn-sdk/blob/main/samples/CSharp/SourceGenerators/SourceGeneratorSamples/MathsGenerator.cs
-    //https://github.com/dotnet/roslyn/blob/main/src/Compilers/CSharp/Portable/Parser/Lexer.cs
     public class Lexer
     {
         private TextWindow _textWindow;
@@ -382,7 +380,6 @@ namespace Ferrite.TLParser
                 {
                     if (char.IsWhiteSpace(_textWindow.Peek(pos)))
                     {
-                        //skip
                         continue;
                     } 
                     else if (_textWindow.IsExactMatch("functions", pos))

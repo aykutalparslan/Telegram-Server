@@ -41,8 +41,6 @@ public class RSAKey : IRSAKey
         RSA? rsa = RSA.Create(2048);
         string privateKeyFile = alias + "-private.key";
         string publicKeyFile = alias + "-public.key";
-        // Both files must be present to reuse the pair. Accepting a partial pair
-        // would import a private key that the published public key does not match.
         bool exists = File.Exists(privateKeyFile) && File.Exists(publicKeyFile);
         if (!exists)
         {
@@ -84,29 +82,29 @@ public class RSAKey : IRSAKey
         using (var stream = new MemoryStream())
         {
             var writer = new BinaryWriter(stream);
-            writer.Write((byte)0x30); // SEQUENCE
+            writer.Write((byte)0x30);
             using (var innerStream = new MemoryStream())
             {
                 var innerWriter = new BinaryWriter(innerStream);
-                innerWriter.Write((byte)0x30); // SEQUENCE
+                innerWriter.Write((byte)0x30);
                 EncodeLength(innerWriter, 13);
-                innerWriter.Write((byte)0x06); // OBJECT IDENTIFIER
+                innerWriter.Write((byte)0x06);
                 var rsaEncryptionOid = new byte[] { 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01 };
                 EncodeLength(innerWriter, rsaEncryptionOid.Length);
                 innerWriter.Write(rsaEncryptionOid);
-                innerWriter.Write((byte)0x05); // NULL
+                innerWriter.Write((byte)0x05);
                 EncodeLength(innerWriter, 0);
-                innerWriter.Write((byte)0x03); // BIT STRING
+                innerWriter.Write((byte)0x03);
                 using (var bitStringStream = new MemoryStream())
                 {
                     var bitStringWriter = new BinaryWriter(bitStringStream);
-                    bitStringWriter.Write((byte)0x00); // # of unused bits
-                    bitStringWriter.Write((byte)0x30); // SEQUENCE
+                    bitStringWriter.Write((byte)0x00);
+                    bitStringWriter.Write((byte)0x30);
                     using (var paramsStream = new MemoryStream())
                     {
                         var paramsWriter = new BinaryWriter(paramsStream);
-                        EncodeIntegerBigEndian(paramsWriter, publicKeyParameters.Modulus); // Modulus
-                        EncodeIntegerBigEndian(paramsWriter, publicKeyParameters.Exponent); // Exponent
+                        EncodeIntegerBigEndian(paramsWriter, publicKeyParameters.Modulus);
+                        EncodeIntegerBigEndian(paramsWriter, publicKeyParameters.Exponent);
                         var paramsLength = (int)paramsStream.Length;
                         EncodeLength(bitStringWriter, paramsLength);
                         bitStringWriter.Write(paramsStream.GetBuffer(), 0, paramsLength);
@@ -132,12 +130,10 @@ public class RSAKey : IRSAKey
         if (length < 0) throw new ArgumentOutOfRangeException("length", "Length must be non-negative");
         if (length < 0x80)
         {
-            // Short form
             stream.Write((byte)length);
         }
         else
         {
-            // Long form
             var temp = length;
             var bytesRequired = 0;
             while (temp > 0)
@@ -155,7 +151,7 @@ public class RSAKey : IRSAKey
 
     private static void EncodeIntegerBigEndian(BinaryWriter stream, byte[]? value, bool forceUnsigned = true)
     {
-        stream.Write((byte)0x02); // INTEGER
+        stream.Write((byte)0x02);
         var prefixZeros = 0;
         if (value != null)
             for (var i = 0; i < value.Length; i++)
@@ -173,7 +169,6 @@ public class RSAKey : IRSAKey
         {
             if (value != null && forceUnsigned && value[prefixZeros] > 0x7f)
             {
-                // Add a prefix zero to force unsigned if the MSB is 1
                 EncodeLength(stream, value.Length - prefixZeros + 1);
                 stream.Write((byte)0);
             }
@@ -198,11 +193,11 @@ public class RSAKey : IRSAKey
         using (var stream = new MemoryStream())
         {
             var writer = new BinaryWriter(stream);
-            writer.Write((byte)0x30); // SEQUENCE
+            writer.Write((byte)0x30);
             using (var innerStream = new MemoryStream())
             {
                 var innerWriter = new BinaryWriter(innerStream);
-                EncodeIntegerBigEndian(innerWriter, new byte[] { 0x00 }); // Version
+                EncodeIntegerBigEndian(innerWriter, new byte[] { 0x00 });
                 EncodeIntegerBigEndian(innerWriter, privateKeyParameters.Modulus);
                 EncodeIntegerBigEndian(innerWriter, privateKeyParameters.Exponent);
                 EncodeIntegerBigEndian(innerWriter, privateKeyParameters.D);
@@ -235,7 +230,6 @@ public class RSAKey : IRSAKey
         string pkey = ExportPublicKey();
         var parameters = (AsymmetricKeyParameter)new PemReader(new StringReader(pkey)).ReadObject();
 
-
         engine.Init(true, parameters);
         return engine.ProcessBlock(data, 0, data.Length);
     }
@@ -261,6 +255,14 @@ public class RSAKey : IRSAKey
         var engine = new RsaEngine();
 
         engine.Init(false, usePrivateKey ? _privateKey : _publicKey);
-        return engine.ProcessBlock(data, 0, 256);
+        byte[] decrypted = engine.ProcessBlock(data, 0, 256);
+        if (decrypted.Length == 256)
+        {
+            return decrypted;
+        }
+
+        var block = new byte[256];
+        decrypted.CopyTo(block, 256 - decrypted.Length);
+        return block;
     }
 }

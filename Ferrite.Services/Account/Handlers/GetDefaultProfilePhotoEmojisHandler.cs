@@ -8,7 +8,7 @@ namespace Ferrite.Services.Handlers.AccountMethods;
 
 public sealed class GetDefaultProfilePhotoEmojisHandler : EmojiCatalogueHandlerBase
 {
-    public GetDefaultProfilePhotoEmojisHandler(StickerStore stickers,
+    public GetDefaultProfilePhotoEmojisHandler(EmojiCatalogStore stickers,
         ProfileStore profiles) : base(stickers, profiles) { }
 
     [TLFunction(Constructors.baseLayer_GetDefaultProfilePhotoEmojis)]

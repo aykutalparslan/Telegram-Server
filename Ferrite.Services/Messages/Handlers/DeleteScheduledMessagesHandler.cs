@@ -2,8 +2,8 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Scheduling;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.messages;
@@ -11,13 +11,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Drops queue entries without sending them. The answer is the same
-/// `updateDeleteScheduledMessages` a flush produces but with no `sent_messages`,
-/// which is how a client tells "gone, never sent" from "gone, here are its real ids"
-/// (/api/scheduled-messages). No recipient learns anything, because nothing was ever
-/// delivered.
-/// </summary>
 public sealed class DeleteScheduledMessagesHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -92,16 +85,11 @@ public sealed class DeleteScheduledMessagesHandler
         }
         await _unitOfWork.SaveAsync();
 
-        // An id that is already gone is harmless and is still reported as deleted:
-        // a replayed delete has to converge on the same client state, and the
-        // request carries no way to say "this one was already absent".
         int now = _scheduled.UnixNow();
         var acknowledged = removed.Count > 0 ? removed : seen.ToList();
         using (TLUpdate broadcast = ScheduledMessageStore.BuildDeleteScheduledUpdate(
                    resolved.PeerType, resolved.PeerId, acknowledged))
         {
-            // Other sessions of the same user own the same queue and must see it
-            // shrink; the caller learns from this result instead.
             await _updates.EnqueueUpdate(resolved.UserId,
                 ScheduledMessageStore.BuildDeleteScheduledUpdate(resolved.PeerType,
                     resolved.PeerId, acknowledged),
@@ -124,7 +112,7 @@ public sealed class DeleteScheduledMessagesHandler
             _log.Debug($"⏰ DeleteScheduledMessages user:{resolved.UserId} " +
                        $"peer:{resolved.PeerType}:{resolved.PeerId} " +
                        $"deleted:{removed.Count}");
-            return _fanout.BuildUpdates(new[] { broadcast.AsSpan().ToArray() },
+            return _fanout.BuildUpdates(resolved.UserId, new[] { broadcast.AsSpan().ToArray() },
                 userIds, chats, now, seq);
         }
     }

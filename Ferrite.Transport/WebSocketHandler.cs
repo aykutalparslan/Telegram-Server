@@ -185,7 +185,6 @@ namespace Ferrite.Transport
             }
         }
 
-        // https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_server#decoding_messages
         public SequencePosition DecodeTo(in ReadOnlySequence<byte> buff, PipeWriter output)
         {
             SequenceReader<byte> reader = new SequenceReader<byte>(buff);

@@ -1,0 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
+
+namespace Ferrite.Services.Common;
+
+public readonly record struct ErrorMessage(int Code, string Message);

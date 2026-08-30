@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -26,7 +25,6 @@ public abstract class ChannelsHandlerBase
     private readonly IMessageRepository _messageRepository;
     private readonly IUserRepository _userRepository;
 
-    // User and channel usernames share one validation shape and one namespace.
     protected static readonly Regex UsernameRegex = new("(^[a-zA-Z0-9_]{5,32}$)", RegexOptions.Compiled);
     protected readonly IUnitOfWork _unitOfWork;
     protected readonly ICounterFactory _counterFactory;
@@ -68,8 +66,6 @@ public abstract class ChannelsHandlerBase
         _fanout = fanout;
     }
 
-    // Builds a fresh participant row so role transitions can also clear the optional
-    // admin/banned rights and rank fields (Clone would carry them over).
     protected static TLChatParticipantInfo BuildParticipantRow(long chatId, long userId,
         ChatParticipantRole role, long inviterId, int date, byte[]? adminRights,
         byte[]? bannedRights, byte[]? rank)
@@ -96,8 +92,6 @@ public abstract class ChannelsHandlerBase
         return builder.Build();
     }
 
-    // Persists pending writes and returns an empty Updates (no events, pts unchanged) for
-    // channel deletes that removed nothing on the server. The client clears its local view.
     protected async Task<Ferrite.TL.baseLayer.TLUpdates> BuildEmptyChannelUpdates(long authKeyId,
         long actorUserId)
     {
@@ -122,8 +116,6 @@ public abstract class ChannelsHandlerBase
         ReadOnlySpan<byte> message) =>
         (Ferrite.TL.baseLayer.messages.TLAffectedHistory)RpcErrorGenerator.GenerateError(400, message);
 
-    // Reads a stored message's from_id user (channel posts carry the poster). Safe on
-    // non-regular messages: the constructor is read first and other reads are skipped.
     protected static long ResolveMessageSenderId(Span<byte> messageSpan)
     {
         var message = (Ferrite.TL.baseLayer.Message)messageSpan;
@@ -182,9 +174,6 @@ public abstract class ChannelsHandlerBase
             : 0;
     }
 
-    // Auth + channel-existence + creator/admin rights check shared by the channel
-    // mutation methods. Returns the caller id and a copy of the stored channel row,
-    // or a pre-built error Updates.
     protected async Task<(long CurrentUserId, byte[] ChannelBytes, Ferrite.TL.baseLayer.TLUpdates? Error)>
         PrepareChannelMutation(long authKeyId, long? channelId, bool creatorOnly,
             ChatAdminRightRequirement requiredRight = ChatAdminRightRequirement.Any)
@@ -195,8 +184,6 @@ public abstract class ChannelsHandlerBase
             error == null ? null : ErrorUpdates(Encoding.UTF8.GetBytes(error)));
     }
 
-    // Same check as PrepareChannelMutation but returns the error as a message string so
-    // callers with a non-Updates result type (AffectedMessages/AffectedHistory) can wrap it.
     protected async Task<(long CurrentUserId, byte[] ChannelBytes, string? Error)>
         PrepareChannelMutationCore(long authKeyId, long? channelId, bool creatorOnly,
             ChatAdminRightRequirement requiredRight = ChatAdminRightRequirement.Any)
@@ -242,8 +229,6 @@ public abstract class ChannelsHandlerBase
     protected static TLBool ErrorBool(ReadOnlySpan<byte> message) =>
         (TLBool)RpcErrorGenerator.GenerateError(400, message);
 
-    // Whether a username is taken by a user account or another chat; user and
-    // channel usernames share one global namespace.
     protected bool IsUsernameOccupied(string username, long? excludeChatId)
     {
         using var user = _userRepository.GetUserByUsername(username);
@@ -255,11 +240,6 @@ public abstract class ChannelsHandlerBase
         return existingChatId != null && existingChatId != excludeChatId;
     }
 
-    // Reads the compact channel row's EDITABLE username ("" when private). It
-    // reads the collection rather than the `username` field directly, because a
-    // channel carrying more than one username stores them in `usernames` with
-    // `username` empty; reading the field alone would report such a channel as
-    // private.
     protected static string ReadChannelUsername(byte[] channelBytes)
     {
         using var stored = new TLChat(channelBytes, 0, channelBytes.Length);
@@ -270,11 +250,6 @@ public abstract class ChannelsHandlerBase
         return ChannelUsernames.Editable(ChannelUsernames.Read(stored.AsChannel()));
     }
 
-    // Fresh-builds the compact channel row so an empty username CLEARS the optional
-    // field (Clone carries the old flag over). Every other field survives, because
-    // the rebuild goes through the single full-field core in ChannelRows, and the
-    // two username fields stay mutually exclusive because it goes through the
-    // collection model rather than writing `username` beside a stored `usernames`.
     protected byte[] RebuildChannelRowWithUsername(byte[] channelBytes, string username)
     {
         using var stored = new TLChat(channelBytes, 0, channelBytes.Length);
@@ -285,8 +260,6 @@ public abstract class ChannelsHandlerBase
         return updated.AsSpan().ToArray();
     }
 
-    // Writes a channel service message into the single per-channel box, advancing pts,
-    // and returns Updates(updateNewChannelMessage + updateChannel) for the caller.
     protected async Task<Ferrite.TL.baseLayer.TLUpdates> EmitChannelServiceMessage(long authKeyId,
         long actorUserId, long channelId, byte[] channelBytes, byte[] actionBytes)
     {
@@ -296,13 +269,6 @@ public abstract class ChannelsHandlerBase
 
         await _unitOfWork.SaveAsync();
 
-        // The actor learns of the change from the updateChannel in its own RPC
-        // result below; every OTHER member has to be told separately or their
-        // cached channelFull never expires. The service message alone is not
-        // enough: pinned TDLib applies messageChatEditPhoto to chat.photo but
-        // only reloads FULL channel info on updateChannel, so a member polling
-        // getSupergroupFullInfo answers from cache forever and never reaches the
-        // server at all. Pushed after SaveAsync so nobody re-reads a stale row.
         await _fanout.PushUpdateChannelToOtherMembersAsync(channelId, actorUserId);
 
         var seqCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, actorUserId);
@@ -323,7 +289,7 @@ public abstract class ChannelsHandlerBase
         }
 
         var userVector = new Vector();
-        AppendUser(ref userVector, actorUserId);
+        AppendUser(actorUserId, ref userVector, actorUserId);
         var chatVector = new Vector();
         chatVector.AppendTLObject(channelBytes);
 
@@ -336,10 +302,6 @@ public abstract class ChannelsHandlerBase
             .Build();
     }
 
-    // Low-level write of a channel service message into the single per-channel box:
-    // allocates the next channel message id, stores the messageService row, advances
-    // channel pts, and returns the serialized message plus its pts. Callers batch other
-    // repository writes before their own SaveAsync.
     protected async Task<(byte[] MessageBytes, int Pts)> WriteChannelServiceMessage(
         long channelId, long actorUserId, byte[] actionBytes, int date,
         byte[]? replyToHeaderBytes = null)
@@ -349,15 +311,6 @@ public abstract class ChannelsHandlerBase
         return (write.Bytes, write.Pts);
     }
 
-    // Appends one administrative event to the channel's append-only ledger, in the
-    // same change as the mutation that caused it: the write joins the caller's
-    // batch and commits with it, so an action that succeeds is an action the admin
-    // log can show. The id is a per-channel counter and is also the paging cursor
-    // channels.getAdminLog names as max_id/min_id.
-    //
-    // `searchText` is what `q` matches. It is recorded here rather than derived at
-    // read time because the action alone does not carry it: a restricted member's
-    // name lives in the user row, not in channelAdminLogEventActionParticipantToggleBan.
     protected async Task AppendAdminLogEventAsync(long channelId, long actorUserId,
         byte[] actionBytes, int date, string searchText = "")
     {
@@ -369,10 +322,6 @@ public abstract class ChannelsHandlerBase
         _channelAdminLogRepository.PutEvent(row);
     }
 
-    // The display name a `q` search matches a participant event on. Reads the
-    // stored user row synchronously; an absent user contributes nothing rather
-    // than failing the mutation, because the ledger append must never be the
-    // reason an administrative action fails.
     protected string ReadUserSearchText(long userId)
     {
         using var user = _userRepository.GetUser(userId);
@@ -422,35 +371,16 @@ public abstract class ChannelsHandlerBase
                role != (int)ChatParticipantRole.Left;
     }
 
-    protected void AppendUsers(ref Vector userVector, IEnumerable<long> userIds)
+    protected void AppendUsers(long viewerUserId, ref Vector userVector, IEnumerable<long> userIds)
     {
-        var seen = new HashSet<long>();
-        foreach (long userId in userIds)
-        {
-            if (!seen.Add(userId))
-            {
-                continue;
-            }
-
-            using var user = _userRepository.GetUser(userId);
-            if (user != null)
-            {
-                userVector.AppendTLObject(user.Value.AsSpan());
-            }
-        }
+        _fanout.AppendUsers(viewerUserId, ref userVector, userIds);
     }
 
-    protected void AppendUser(ref Vector userVector, long userId)
+    protected void AppendUser(long viewerUserId, ref Vector userVector, long userId)
     {
-        using var user = _userRepository.GetUser(userId);
-        if (user != null)
-        {
-            userVector.AppendTLObject(user.Value.AsSpan());
-        }
+        _fanout.AppendUsers(viewerUserId, ref userVector, new[] { userId });
     }
 
-    // Auth + channel-existence check for the self-membership paths (join/leave).
-    // Unlike PrepareChannelMutation these do not require creator/admin rights.
     protected async Task<(long CurrentUserId, byte[] ChannelBytes, bool Megagroup,
         Ferrite.TL.baseLayer.TLUpdates? Error)>
         ResolveChannelForMembership(long authKeyId, long? channelId)
@@ -477,9 +407,6 @@ public abstract class ChannelsHandlerBase
         return (currentUserId, channel.Value.AsSpan().ToArray(), megagroup, null);
     }
 
-    // Persists pending unit-of-work writes and returns Updates(updateChannel) carrying
-    // the channel row and the actor plus any extra users (no service message). Used by
-    // the broadcast membership paths and idempotent no-ops.
     protected async Task<Ferrite.TL.baseLayer.TLUpdates> BuildChannelUpdates(long authKeyId,
         long actorUserId, byte[] channelBytes, IReadOnlyCollection<long> extraUserIds)
     {
@@ -540,8 +467,6 @@ public abstract class ChannelsHandlerBase
         return null;
     }
 
-    // Maps a stored participant row to the schema's ChannelParticipant variant,
-    // carrying the persisted admin/banned rights and rank where present.
     protected byte[] BuildChannelParticipantBytes(TLChatParticipantInfo storedInfo, long currentUserId)
     {
         var info = storedInfo.AsChatParticipantInfo();
@@ -570,9 +495,6 @@ public abstract class ChannelsHandlerBase
                     .PromotedBy(info.InviterId)
                     .Date(info.Date)
                     .AdminRights(adminRights ?? BuildFullAdminRights());
-                // The viewer may edit the admins they promoted; the creator's own row is
-                // the Creator variant, and the creator is the promoter everywhere else
-                // it matters until a richer viewer-role plumbing is needed.
                 if (info.InviterId == currentUserId)
                 {
                     builder = builder.CanEdit(true);
@@ -593,8 +515,6 @@ public abstract class ChannelsHandlerBase
             {
                 if (bannedRights != null)
                 {
-                    // Unbanned-from-kick but still restricted: outside the channel with
-                    // banned rights attached.
                     return BuildBannedParticipantBytes(info, left: true, bannedRights);
                 }
                 using TLPeer peer = new PeerUser(userId);
@@ -607,7 +527,6 @@ public abstract class ChannelsHandlerBase
             {
                 if (bannedRights != null)
                 {
-                    // A restricted member stays in the channel (left=false).
                     return BuildBannedParticipantBytes(info, left: false, bannedRights);
                 }
                 if (userId == currentUserId)
@@ -629,9 +548,6 @@ public abstract class ChannelsHandlerBase
         }
     }
 
-    // channelParticipantBanned row: restricted members carry left=false, kicked or
-    // unbanned-but-restricted users carry left=true. The restricting/kicking admin is
-    // stored in the row's inviter field.
     protected static byte[] BuildBannedParticipantBytes(ChatParticipantInfo info, bool left,
         byte[] bannedRights)
     {
@@ -649,10 +565,6 @@ public abstract class ChannelsHandlerBase
         return p.AsSpan().ToArray();
     }
 
-    // The `channelParticipantLeft` form for a user with no stored row, which is
-    // what an admin-log action's "before" side is when a promotion or a ban also
-    // brings the user into the channel. It parses as a valid participant on a
-    // User peer, which is what pinned TDLib requires of both sides.
     protected static byte[] BuildLeftParticipantBytes(long userId)
     {
         using TLPeer peer = new PeerUser(userId);
@@ -661,8 +573,6 @@ public abstract class ChannelsHandlerBase
         return participant.AsSpan().ToArray();
     }
 
-    // Kicked rows written before rights persistence carry no stored rights; a kick is
-    // at minimum a view_messages ban.
     protected static byte[] BuildKickedBannedRights()
     {
         using var rights = ChatBannedRights.Builder()
@@ -672,8 +582,6 @@ public abstract class ChannelsHandlerBase
         return rights.ToReadOnlySpan().ToArray();
     }
 
-    // The rights carried in creator rows (and admin rows promoted before rights
-    // persistence landed) are synthesized as a full-rights set.
     protected static byte[] BuildFullAdminRights()
     {
         using var rights = ChatAdminRights.Builder()
@@ -741,9 +649,6 @@ public abstract class ChannelsHandlerBase
     protected static string ReadQuery(ReadOnlySpan<byte> q) =>
         q.Length == 0 ? string.Empty : Encoding.UTF8.GetString(q);
 
-    // The kicked filter lists users banned from viewing (role Banned); the banned
-    // filter lists restricted users who still hold banned rights without being kicked
-    // (TDLib's supergroupMembersFilterRestricted maps to channelParticipantsBanned).
     protected static bool MatchesParticipantFilter(int role, bool hasBannedRights,
         ParticipantFilterKind kind) => kind switch
     {
@@ -773,8 +678,6 @@ public abstract class ChannelsHandlerBase
         ReadOnlySpan<byte> message) =>
         (Ferrite.TL.baseLayer.messages.TLInvitedUsers)RpcErrorGenerator.GenerateError(400, message);
 
-    // Appends a flag-less missingInvitee row per user id (premium flags do not apply
-    // locally). Passed by ref so the caller sees the appended length/regrown buffer.
     protected static void AppendMissingInvitees(ref Vector missingInvitees, IEnumerable<long> userIds)
     {
         foreach (long userId in userIds)

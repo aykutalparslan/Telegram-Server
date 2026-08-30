@@ -10,4 +10,6 @@ public interface IUserStatusRepository
 {
     public bool PutUserStatus(long userId, bool status);
     public ValueTask<TLUserStatus> GetUserStatusAsync(long userId);
+
+    public TLUserStatus GetUserStatus(long userId);
 }

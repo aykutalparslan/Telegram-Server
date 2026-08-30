@@ -12,11 +12,6 @@ using TLDto = Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.saveDefaultGroupCallJoinAs. The current supported join-as set contains
-/// only self, and the choice is persisted per account and hosting peer so the
-/// next chatFull/channelFull exposes the same default.
-/// </summary>
 public sealed class SaveDefaultGroupCallJoinAsHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;

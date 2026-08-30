@@ -5,11 +5,6 @@ using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Data.Repositories;
 
-/// <summary>
-/// Per-viewer content-read markers for the shared channel message box. A channel
-/// post exists once, so clearing its mention/media-unread state must never mutate
-/// the stored message; it is recorded here against the reading user instead.
-/// </summary>
 public interface IChannelContentReadsRepository
 {
     bool PutContentRead(TLChannelContentRead read);

@@ -6,11 +6,6 @@ using Ferrite.TL.baseLayer;
 
 namespace Ferrite.Services.Calls;
 
-/// <summary>
-/// Reports whether the external coturn endpoint should currently be
-/// advertised. A health failure only omits WebRTC rows from new confirms; it
-/// never aborts a confirmed call that still has a healthy reflector.
-/// </summary>
 public interface ITurnEndpointHealth
 {
     bool IsHealthy { get; }
@@ -26,13 +21,6 @@ public sealed class StaticTurnEndpointHealth : ITurnEndpointHealth
     public bool IsHealthy { get; }
 }
 
-/// <summary>
-/// Builds the serialized phoneConnectionWebrtc rows for one call. The pinned
-/// Android client classifies a row solely by its turn flag and ignores a
-/// simultaneous stun flag, so the TURN row (with credentials) and the STUN
-/// row (without) are always two distinct rows with distinct stable nonzero
-/// ids, never one combined row.
-/// </summary>
 public sealed class CallTurnConnectionBuilder
 {
     private readonly CallTurnOptions _options;

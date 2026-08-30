@@ -5,10 +5,6 @@ using System.Runtime.InteropServices;
 
 namespace Ferrite.TL;
 
-// A tde2e bare vector of longs: an int32 count followed by count int64 values,
-// with no 1cb5c415 constructor. The reference serializes
-// e2e.chain.sharedKey's dest_user_id with TlStoreVector, which writes only the
-// count, so a boxed Vector here would corrupt every block hash.
 public ref struct VectorBareOfLong
 {
     private Span<byte> _buff;

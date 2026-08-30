@@ -9,3 +9,8 @@ deploy
 group-call-worker
 data
 *.log
+# Upstream-client build scratch and artifacts. A checked-out Telegram-iOS tree
+# with its Bazel output is tens of gigabytes, and every byte of it would be
+# tarred and shipped to the daemon on each server image build.
+interop/upstream-clients/work
+.ferrite

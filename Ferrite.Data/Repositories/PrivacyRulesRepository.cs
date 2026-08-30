@@ -3,6 +3,7 @@
 
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
+using Ferrite.Data.Models;
 
 namespace Ferrite.Data.Repositories;
 
@@ -20,8 +21,6 @@ public class PrivacyRulesRepository : IPrivacyRulesRepository
     }
     public bool PutPrivacyRules(long userId, InputPrivacyKey key, Vector rules)
     {
-        // account.setPrivacy replaces the full rule set for a key; drop any
-        // previously stored rule rows so stale rule types do not survive.
         _store.Delete(userId, (int)key);
         int count = rules.Count;
         for(int i = 0 ; i < count; i++)

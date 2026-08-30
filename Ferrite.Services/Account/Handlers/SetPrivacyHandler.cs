@@ -5,7 +5,6 @@ using System.Numerics;
 using System.Text;
 using System.Text.RegularExpressions;
 using Ferrite.Crypto;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Gateway;
 using Ferrite.TL;
@@ -21,12 +20,14 @@ namespace Ferrite.Services.Handlers.AccountMethods;
 public sealed class SetPrivacyHandler : AccountHandlerBase
 {
     private readonly IAuthorizationRepository _authorizationRepository;
+    private readonly UserSerializer _userSerializer;
 
     public SetPrivacyHandler(ISearchEngine search, IUpdatesService updates, IRandomGenerator random,
-        IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IChatRepository chatRepository, IPrivacyRulesRepository privacyRulesRepository, IUserRepository userRepository, IVerificationGateway verificationGateway)
+        IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IChatRepository chatRepository, IPrivacyRulesRepository privacyRulesRepository, IUserRepository userRepository, UserSerializer userSerializer, IVerificationGateway verificationGateway)
         : base(search, updates, random, unitOfWork, chatRepository, privacyRulesRepository, userRepository, verificationGateway)
     {
         _authorizationRepository = authorizationRepository;
+        _userSerializer = userSerializer;
 
     }
 
@@ -51,6 +52,7 @@ public sealed class SetPrivacyHandler : AccountHandlerBase
             }
             await _unitOfWork.SaveAsync();
             await EnqueuePrivacyUpdate(userId, key.Value);
-            return await GetPrivacyRulesInternal(auth.Value, key.Value);
+            return await GetPrivacyRulesInternal(auth.Value, key.Value,
+                _userSerializer);
         }
 }

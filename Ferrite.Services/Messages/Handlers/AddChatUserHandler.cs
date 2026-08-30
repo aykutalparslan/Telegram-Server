@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -30,6 +29,24 @@ public sealed class AddChatUserHandler : MessagesHandlerBase
 
     }
 
+    [TLFunction(Constructors.layer133_MessagesAddChatUser)]
+    public async Task<TLInvitedUsers> HandleLayer133(long authKeyId, TLBytes q)
+    {
+        using var current = ToCurrentAddChatUserRequest(q);
+        return await Handle(authKeyId, current);
+    }
+
+    private static TLBytes ToCurrentAddChatUserRequest(TLBytes q)
+    {
+        var sent = new TL.layer133.messages.MessagesAddChatUser(q.AsSpan());
+        using var current = AddChatUser.Builder()
+            .ChatId(sent.ChatId)
+            .UserId(sent.UserId)
+            .FwdLimit(sent.FwdLimit)
+            .Build();
+        return current.TLBytes!.Value;
+    }
+
     [TLFunction(Constructors.baseLayer_AddChatUser)]
     public async Task<TLInvitedUsers> Handle(long authKeyId, TLBytes q)
         {
@@ -46,8 +63,6 @@ public sealed class AddChatUserHandler : MessagesHandlerBase
             TLChatParticipantInfo? newParticipant = null;
             try
             {
-                // Non-admin members may add users unless the chat's default banned rights
-                // ban invites.
                 if (!IsBasicChatAdmin(context.ActiveParticipants, context.CurrentUserId) &&
                     ChatRights.DefaultBans(context.ChatBytes, ChatBannedAction.InviteUsers))
                 {
@@ -73,11 +88,9 @@ public sealed class AddChatUserHandler : MessagesHandlerBase
                 int date = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
                 if (!await _privacy.IsChatInviteAllowed(context.CurrentUserId, targetId))
                 {
-                    // Privacy-blocked: nothing persists; the target is reported as a
-                    // flag-less missingInvitee row (premium flags do not apply locally).
                     _log.Debug($"👥 AddChatUser user:{context.CurrentUserId} chat:{chatId} " +
                                $"target:{targetId} blocked by privacy");
-                    return BuildPrivacyBlockedInvitedUsers(targetId, context.ChatBytes, date);
+                    return BuildPrivacyBlockedInvitedUsers(context.CurrentUserId, targetId, context.ChatBytes, date);
                 }
 
                 newParticipant = ChatParticipantInfo.Builder()
@@ -92,8 +105,6 @@ public sealed class AddChatUserHandler : MessagesHandlerBase
                 byte[] updatedChatBytes = _chatRows.UpdateStoredChatMembership(context.ChatBytes, 1);
                 int newVersion = ReadChatVersion(updatedChatBytes);
 
-                // The copied history must precede the add-user service message in the
-                // target's box so their message ids ascend with the original order.
                 await CopyRecentChatHistory(context.CurrentUserId, targetId, chatId, fwdLimit);
 
                 var fanoutParticipants = new List<TLChatParticipantInfo>(context.ActiveParticipants)
@@ -128,4 +139,5 @@ public sealed class AddChatUserHandler : MessagesHandlerBase
                 DisposeParticipants(context.ActiveParticipants);
             }
         }
+
 }

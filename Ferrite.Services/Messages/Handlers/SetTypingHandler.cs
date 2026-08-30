@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -33,9 +32,6 @@ public sealed class SetTypingHandler : MessagesHandlerBase
     [TLFunction(Constructors.baseLayer_SetTyping)]
     public async ValueTask<TLBool> Handle(long authKeyId, TLBytes q)
         {
-            // Resolve the target user from the span-backed view BEFORE the await; a ref-struct
-            // view cannot survive an await. The Action bytes are re-read from a fresh (SetTyping)q
-            // cast afterwards (q's memory outlives the call).
             var peer = ((SetTyping)q).Get_PeerView();
             bool toUser = peer.Is(out InputPeerUser targetUser);
             bool toChat = peer.Is(out InputPeerChat targetChat);
@@ -57,8 +53,6 @@ public sealed class SetTypingHandler : MessagesHandlerBase
                 {
                     return ErrorBool(channelError);
                 }
-                // Typing signals an upcoming post, so broadcast channels gate it on the
-                // same post rights as the send path.
                 if (broadcast && !ChatRights.HasAdminRight(channelParticipantBytes,
                         ChatAdminRightRequirement.PostMessages))
                 {

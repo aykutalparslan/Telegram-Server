@@ -42,10 +42,6 @@ public class TypeTermSyntax
         {
             return "VectorOfString";
         }
-        // tde2e's `vector<...>` is a BARE vector: the reference writes only an
-        // int32 count, never the 1cb5c415 constructor. Bare vectors of boxed
-        // elements are served by VectorBare, but bare elements need their own
-        // readers because there is no per-element constructor id to dispatch on.
         if (Identifier == "vector" && OptionalType?.Identifier == "long")
         {
             return "VectorBareOfLong";
@@ -79,10 +75,6 @@ public class TypeTermSyntax
         {
             sb.Append(Identifier);
         }
-        //if (OptionalType == null) return sb.ToString();
-        //sb.Append("<");
-        //sb.Append(OptionalType.GetFullyQualifiedIdentifier());
-        //sb.Append(">");
         return sb.ToString();
     }
 }

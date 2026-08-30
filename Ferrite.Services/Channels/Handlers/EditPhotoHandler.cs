@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -87,8 +86,6 @@ public sealed class EditPhotoHandler : ChannelsHandlerBase
             updatedChannelBytes, actionBytes);
     }
 
-    // The full `Photo` behind the compact row's `chatPhoto`, or `photoEmpty` when
-    // the channel has none. The action's prev/new fields are not flag-gated.
     private byte[] ReadChannelPhoto(byte[] channelBytes)
     {
         using var stored = new TLChat(channelBytes, 0, channelBytes.Length);

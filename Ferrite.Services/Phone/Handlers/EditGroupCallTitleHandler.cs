@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -13,20 +12,10 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.editGroupCallTitle. A CALL-ONLY setting: the manage-call gate applies,
-/// the participants version is NOT consumed (a version step with no matching
-/// participants update would make every pinned client resync its list), and the
-/// change travels as viewer-correct updateGroupCall on both channels. An
-/// unchanged title answers GROUPCALL_NOT_MODIFIED, which pinned TDLib maps back
-/// to success.
-/// </summary>
 public sealed class EditGroupCallTitleHandler : GroupCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
 
-    // Matches pinned TDLib's MAX_TITLE_LENGTH; its client truncates, so a longer
-    // title only reaches Ferrite from a raw client.
     private const int MaxTitleLength = 64;
 
     public EditGroupCallTitleHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, UpdateFanout fanout,

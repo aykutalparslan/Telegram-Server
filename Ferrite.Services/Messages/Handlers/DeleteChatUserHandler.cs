@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -77,9 +76,6 @@ public sealed class DeleteChatUserHandler : MessagesHandlerBase
                     return ErrorUpdates("USER_NOT_PARTICIPANT");
                 }
 
-                // Self-leave is always allowed. Otherwise the creator removes anyone,
-                // only the creator removes admins, and regular members remove only
-                // users they invited themselves (TDLib defers these checks to us).
                 if (targetId != context.CurrentUserId)
                 {
                     bool allowed = currentRole == (int)ChatParticipantRole.Creator ||
@@ -100,7 +96,6 @@ public sealed class DeleteChatUserHandler : MessagesHandlerBase
                     {
                         continue;
                     }
-                    // Mark left rather than deleting so inviter/date survive re-adds.
                     using TLChatParticipantInfo leftParticipant = info.Clone()
                         .Role((int)ChatParticipantRole.Left)
                         .Build();
@@ -113,8 +108,6 @@ public sealed class DeleteChatUserHandler : MessagesHandlerBase
 
                 if (revokeHistory)
                 {
-                    // Clear the removed user's copy of this conversation before the
-                    // removal service message lands, so they keep only that message.
                     IUpdatesContext targetCtx = targetId == context.CurrentUserId
                         ? _updatesContextFactory.GetUpdatesContext(authKeyId, targetId)
                         : _updatesContextFactory.GetUpdatesContext(null, targetId);
@@ -143,9 +136,6 @@ public sealed class DeleteChatUserHandler : MessagesHandlerBase
                     BuildChatParticipantsUpdateBytes(chatId, remainingParticipants, newVersion);
                 _log.Debug($"👥 DeleteChatUser user:{context.CurrentUserId} chat:{chatId} " +
                            $"target:{targetId} revoke:{revokeHistory}");
-                // The removal service message fans out to the old participant set so the
-                // removed user still receives it; updateChatParticipants carries the
-                // remaining members.
                 return await EmitBasicGroupServiceUpdates(authKeyId, context.CurrentUserId,
                     chatId, context.ActiveParticipants, actionBytes, updatedChatBytes,
                     participantsUpdateBytes);

@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -21,7 +20,7 @@ internal static class ChannelForumTopics
         IChatParticipantsRepository chatParticipantsRepository,
         IChannelMessagesRepository channelMessagesRepository,
         IForumTopicsRepository forumTopicsRepository,
-        IUserRepository userRepository, ICounterFactory counterFactory, long authKeyId,
+        UserSerializer userSerializer, ICounterFactory counterFactory, long authKeyId,
         long? channelId, string query, int offsetDate, int offsetId,
         int offsetTopic, int limit, IReadOnlyCollection<int>? requestedIds)
     {
@@ -116,7 +115,7 @@ internal static class ChannelForumTopics
         var chatVector = new Vector();
         chatVector.AppendTLObject(channelBytes);
         var userVector = new Vector();
-        AppendUsers(userRepository, ref userVector, relatedUserIds);
+        AppendUsers(currentUserId, userSerializer, ref userVector, relatedUserIds);
         return Ferrite.TL.baseLayer.messages.ForumTopics.Builder()
             .Count(total).Topics(topicVector).Messages(messageVector)
             .Chats(chatVector).Users(userVector).Pts(pts).Build();
@@ -159,15 +158,14 @@ internal static class ChannelForumTopics
             : fallback;
     }
 
-    private static void AppendUsers(IUserRepository userRepository, ref Vector userVector,
+    private static void AppendUsers(long viewerUserId, UserSerializer userSerializer, ref Vector userVector,
         IEnumerable<long> userIds)
     {
         var seen = new HashSet<long>();
         foreach (long userId in userIds)
         {
             if (!seen.Add(userId)) continue;
-            using var user = userRepository.GetUser(userId);
-            if (user != null) userVector.AppendTLObject(user.Value.AsSpan());
+            userSerializer.Append(viewerUserId, ref userVector, userId);
         }
     }
 }

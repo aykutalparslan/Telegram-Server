@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -47,8 +46,6 @@ public sealed class CheckUsernameHandler : ChannelsHandlerBase
             return ErrorBool("USERNAME_INVALID"u8);
         }
 
-        // TDLib checks availability with inputChannelEmpty before the channel exists,
-        // so a missing channel id only skips the keep-own-username exemption.
         bool occupied = IsUsernameOccupied(username, channelId);
         _log.Debug($"📣 CheckUsername user:{auth.Value.AsAuthInfo().UserId} " +
                    $"channel:{channelId?.ToString() ?? "-"} username:{username} occupied:{occupied}");

@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -34,6 +33,24 @@ public sealed class InviteToChannelHandler : ChannelsHandlerBase
         _chatRepository = chatRepository;
         _userRepository = userRepository;
 
+    }
+
+    [TLFunction(Constructors.layer51_ChannelsInviteToChannel)]
+    public async Task<Ferrite.TL.baseLayer.messages.TLInvitedUsers> HandleLayer51(
+        long authKeyId, TLBytes q)
+    {
+        using var current = ToCurrentInviteRequest(q);
+        return await Handle(authKeyId, current);
+    }
+
+    private static TLBytes ToCurrentInviteRequest(TLBytes q)
+    {
+        var sent = new TL.layer51.channels.ChannelsInviteToChannel(q.AsSpan());
+        using var current = InviteToChannel.Builder()
+            .Channel(sent.Channel)
+            .Users(sent.Users)
+            .Build();
+        return current.TLBytes!.Value;
     }
 
     [TLFunction(Constructors.baseLayer_InviteToChannel)]
@@ -68,9 +85,6 @@ public sealed class InviteToChannelHandler : ChannelsHandlerBase
 
         int date = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
 
-        // Creator/admins invite with the invite_users admin right; plain megagroup
-        // members may invite unless restricted individually or by the channel's
-        // default banned rights. Broadcast subscribers never invite.
         var caller = await _chatParticipantsRepository
             .GetParticipantAsync(id, currentUserId);
         if (caller == null || !IsActiveParticipant(caller.Value))
@@ -91,7 +105,6 @@ public sealed class InviteToChannelHandler : ChannelsHandlerBase
             return ErrorInvitedUsers("CHAT_ADMIN_REQUIRED"u8);
         }
 
-        // Resolve invitees and the current active/kicked sets before any mutation.
         var inviteeIds = ResolveInputUserIds(((InviteToChannel)q).Users, currentUserId);
         var participantInfos = await _chatParticipantsRepository.GetParticipantsAsync(id);
         var activeIds = new HashSet<long>();
@@ -119,14 +132,11 @@ public sealed class InviteToChannelHandler : ChannelsHandlerBase
             }
             if (kickedIds.Contains(inviteeId))
             {
-                // A kicked user must be unbanned (channels.editBanned) before re-invite.
                 return ErrorInvitedUsers("USER_BANNED_IN_CHANNEL"u8);
             }
             using var user = _userRepository.GetUser(inviteeId);
             if (user == null)
             {
-                // The id does not resolve to a known account; report it back as a
-                // missing invitee instead of silently dropping it.
                 missing.Add(inviteeId);
                 continue;
             }
@@ -148,8 +158,6 @@ public sealed class InviteToChannelHandler : ChannelsHandlerBase
             {
                 return ErrorInvitedUsers("USER_ID_INVALID"u8);
             }
-            // Nobody new was added (all already members and/or unknown accounts);
-            // still report any unknown accounts as missing invitees.
             using var noop = await BuildChannelUpdates(authKeyId, currentUserId, channelBytes,
                 Array.Empty<long>());
             var noopMissing = new Vector();
@@ -162,8 +170,6 @@ public sealed class InviteToChannelHandler : ChannelsHandlerBase
 
         byte[] updatedChannelBytes = _chatRows.UpdateStoredChannelParticipantsCount(channelBytes, added.Count);
 
-        // Megagroups record the additions as a single messageActionChatAddUser service
-        // message; broadcast channels add subscribers without a service message.
         byte[]? serviceMessageBytes = null;
         int servicePts = 0;
         if (megagroup)
@@ -186,10 +192,6 @@ public sealed class InviteToChannelHandler : ChannelsHandlerBase
 
         await _unitOfWork.SaveAsync();
 
-        // Notify the added users and the existing members. In a megagroup the addition
-        // rides as the messageActionChatAddUser service message (updateNewChannelMessage
-        // also makes a freshly added client create the dialog); broadcast channels have
-        // no service message, so added subscribers get updateChannel instead.
         if (serviceMessageBytes != null)
         {
             var pushTargets = new List<long>(added);
@@ -235,7 +237,7 @@ public sealed class InviteToChannelHandler : ChannelsHandlerBase
         var userVector = new Vector();
         var resultUserIds = new List<long> { currentUserId };
         resultUserIds.AddRange(added);
-        AppendUsers(ref userVector, resultUserIds);
+        AppendUsers(currentUserId, ref userVector, resultUserIds);
         var chatVector = new Vector();
         chatVector.AppendTLObject(updatedChannelBytes);
 
@@ -257,10 +259,6 @@ public sealed class InviteToChannelHandler : ChannelsHandlerBase
             .Build();
     }
 
-    // One event per invitee, because the admin log describes people rather than
-    // requests. The participant is carried as the plain member row the invite just
-    // wrote; pinned TDLib refuses the event unless it parses as a valid
-    // participant on a User peer (`DialogEventLog.cpp:77-83`).
     private async Task AppendInviteEventAsync(long channelId, long actorUserId,
         long inviteeId, int date)
     {

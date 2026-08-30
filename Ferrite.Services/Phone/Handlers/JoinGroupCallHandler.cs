@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.Services.Calls.E2E;
@@ -15,14 +14,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.joinGroupCall. Allocates the caller's media transport, commits the
-/// participant row with exactly one version increment, and answers with the
-/// connection credentials followed by viewer-correct call/participant updates.
-/// The media transport is created before the row is committed and torn down
-/// again whenever the commit does not win, so a stored join always has a live
-/// transport and a lost race never leaks one.
-/// </summary>
 public sealed class JoinGroupCallHandler : GroupCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -48,14 +39,9 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
     public async ValueTask<TLUpdatesResult> Handle(long authKeyId, TLBytes q)
     {
         ConferenceCallRef conferenceRef;
-        // Every field is read here, before the first await: the request view,
-        // its nested views, and the payload span are all ref structs over the
-        // request's memory.
         var request = (JoinGroupCall)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
             out long accessHash);
-        // A conference join may instead name the call by the invite message the
-        // caller holds, which is the only form an invitee can produce.
         bool conference = request.Flags[3];
         if (conference)
         {
@@ -80,10 +66,6 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
         {
             return Error(GroupCallErrors.GroupCallInvalid);
         }
-        // public_key and block share flags.3 and only appear on an E2E conference
-        // join. The block is validated and appended to sub-chain 0 before the
-        // participant is committed, so a client never gets a plaintext call it
-        // believes is end-to-end.
         if (conference)
         {
             return await _conferenceJoin.JoinAsync(authKeyId, conferenceRef,
@@ -145,9 +127,6 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
         {
             try
             {
-                // RTMP-only calls intentionally omit an SFU room at create/start.
-                // The first RTC participant promotes the call to the ordinary
-                // media path through this idempotent allocation.
                 await _media.CreateRoomAsync(callId);
             }
             catch (GroupCallMediaException e)
@@ -158,9 +137,6 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
             }
         }
 
-        // media_id is the durable correlation between a participant row and its
-        // worker transport, so a rejoin keeps the same id and replaces the old
-        // transport rather than allocating a second one under a new name.
         string mediaId;
         bool rejoining;
         using (TLDto.TLGroupCallParticipantState? existing = await _groupCallsRepository.GetParticipantAsync(callId, access.CurrentUserId))
@@ -174,9 +150,6 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
 
         if (rejoining)
         {
-            // The client abandoned its previous transport the moment it re-sent
-            // joinGroupCall, so dropping it first is what keeps the worker from
-            // rejecting the new one as a duplicate participant.
             await GroupCallJoinRows.ReleaseTransportAsync(_media, Log, callId, mediaId,
                 "stale rejoin transport");
         }
@@ -196,22 +169,9 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
 
         int now = Now();
         bool muted = requestedMuted || (callJoinMuted && !access.CanManageCall);
-        // On the wire can_self_unmute doubles as "muted by themselves": pinned
-        // TDLib reads is_muted_by_themselves straight from it and
-        // is_muted_by_admin from muted && !can_self_unmute
-        // (GroupCallParticipant.cpp:25-26), so an UNMUTED row must never carry it
-        // or every client renders the participant as muted. It is set exactly when
-        // the row is muted but the account may lift that mute itself.
         bool canSelfUnmute = muted &&
                              (access.CanManageCall || !callJoinMuted || inviteSelfUnmute);
-        // video_stopped is a client request for THIS join, not durable state: a
-        // participant counts as video-joined only when it actually advertised
-        // source groups and did not ask for its camera to stay off.
         bool videoJoined = payload.VideoSourceGroups.Count > 0 && !videoStopped;
-        // The endpoint is persisted whenever the worker allocated a camera
-        // transport — even for a video_stopped join — because it is the durable
-        // record that this join CAN send video, which editGroupCallParticipant's
-        // video_stopped:false branch later needs to turn the camera on.
         string? videoEndpoint = payload.VideoSourceGroups.Count > 0
             ? joined.Transport.Video?.Endpoint
             : null;
@@ -242,10 +202,6 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
 
         byte[] chatBytes = ChatLink.SetCallFlags(access.Kind, access.ChatBytes!,
             callActive: true, callNotEmpty: true);
-        // SetCallFlags persists the compact hosting row after the participant
-        // repository's own join flush. Commit that second durable mutation before
-        // fan-out/result construction; otherwise Cassandra closes the request
-        // scope with a pending row and the client never receives its join answer.
         await UnitOfWork.SaveAsync();
         int videoCount = await CountUnmutedVideoAsync(callId);
 
@@ -260,8 +216,6 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
 
         GroupCallViewer viewer = await BuildViewerAsync(callId, access.CurrentUserId,
             access.CanManageCall);
-        // The joiner's own row carries the sources it just advertised against the
-        // endpoint the worker assigned; no other viewer's mapping applies to it.
         var selfOverlay = new GroupCallParticipantOverlay(MutedByYou: false,
             LocalVolume: null, joined.CanonicalSource,
             GroupCallJoinRows.BuildSelfSources(joined, payload, videoJoined));
@@ -282,8 +236,6 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
         Log.Debug($"📞 joinGroupCall call:{callId} user:{access.CurrentUserId} " +
                   $"source:{payload.Source} media:{mediaId} rejoin:{rejoining} " +
                   $"video:{videoJoined} muted:{muted} fanout:{delivered}");
-        // The connection answer must be applied unconditionally, so this result
-        // leaves the seq sequence; see BuildUnsequencedResultAsync.
         return await BuildUnsequencedResultAsync(access.CurrentUserId, updates,
             chatBytes);
     }
@@ -292,11 +244,6 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
         (TLUpdatesResult)RpcErrorGenerator.GenerateError(400,
             Encoding.UTF8.GetBytes(message));
 
-    /// <summary>
-    /// Ferrite serves the account's own identity only. Anonymous/channel join-as
-    /// remains outside the current supported boundary, so anything else is
-    /// refused rather than silently rewritten to self.
-    /// </summary>
     private static bool TryReadSelfJoinAs(InputPeerView peer, out long userId)
     {
         if (peer.Is(out InputPeerSelf _))
@@ -319,12 +266,6 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
 
     private readonly record struct InviteDecision(bool Valid, bool CanSelfUnmute);
 
-    /// <summary>
-    /// An invite is usable only while it names this call, has not been revoked,
-    /// still matches the call's current generation, and has not expired. Rotating
-    /// the generation is how the manage endpoints invalidate every outstanding
-    /// link at once.
-    /// </summary>
     private async ValueTask<InviteDecision> ResolveInviteAsync(long callId,
         int currentGeneration, string hash)
     {
@@ -348,11 +289,6 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
         return new InviteDecision(true, view.CanSelfUnmute);
     }
 
-    /// <summary>
-    /// Every other member learns about the join after the commit, each from its
-    /// own perspective: its own consumer SSRCs for the new participant, and its
-    /// own view of the call row.
-    /// </summary>
     private async Task<int> PushJoinToOtherMembersAsync(TLDto.TLGroupCallState call,
         TLDto.TLGroupCallParticipantState participant, GroupCallPeerAccess access,
         int videoCount)
@@ -369,9 +305,6 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
                 GroupCallViewer viewer = await BuildViewerAsync(callId, memberId,
                     canManage);
                 string? viewerMediaId = await GetMediaIdAsync(callId, memberId);
-                // The member's STORED local mute/volume for a rejoiner rides along:
-                // a non-min row overwrites the client's local state, so omitting
-                // them here would silently reset it.
                 GroupCallParticipantOverlay overlay = await BuildMemberOverlayAsync(
                     callId, memberId, viewerMediaId, joinerUserId, producerMediaId);
                 using TLGroupCallParticipant row = GroupCallBuilders.BuildParticipant(

@@ -17,14 +17,14 @@ public sealed class ConfirmCallHandler : PhoneCallHandlerBase
 {
     private const int DhValueLength = 256;
 
-    // One reflector row per call; any nonzero id maps to reflector index 1.
     private const long ReflectorConnectionId = 1;
 
     private readonly PrivacyEvaluator _privacy;
     private readonly ICallMediaRelay _relay;
     private readonly CallTurnConnectionBuilder _turn;
+    private readonly UserSerializer _userSerializer;
 
-    public ConfirmCallHandler(IUnitOfWork unitOfWork, IBlockedPeersRepository blockedPeersRepository, IAuthorizationRepository authorizationRepository, IUserRepository userRepository, ICallRegistry registry,
+    public ConfirmCallHandler(IUnitOfWork unitOfWork, IBlockedPeersRepository blockedPeersRepository, IAuthorizationRepository authorizationRepository, IUserRepository userRepository, UserSerializer userSerializer, ICallRegistry registry,
         IUpdatesService updates, IMTProtoTime time, PrivacyEvaluator privacy,
         ICallMediaRelay relay, CallTurnConnectionBuilder turn)
         : base(unitOfWork, blockedPeersRepository, authorizationRepository, userRepository, registry, updates, time)
@@ -32,6 +32,7 @@ public sealed class ConfirmCallHandler : PhoneCallHandlerBase
         _privacy = privacy;
         _relay = relay;
         _turn = turn;
+        _userSerializer = userSerializer;
     }
 
     [TLFunction(Constructors.baseLayer_ConfirmCall)]
@@ -66,8 +67,6 @@ public sealed class ConfirmCallHandler : PhoneCallHandlerBase
             return Error(400, "CALL_PEER_INVALID"u8);
         }
 
-        // The caller commits to g_a via g_a_hash in requestCall; verify the
-        // revealed g_a matches that commitment before finalizing.
         if (!CommitmentMatches(gA, existing.GAHash))
         {
             return Error(400, "GA_INVALID"u8);
@@ -76,10 +75,8 @@ public sealed class ConfirmCallHandler : PhoneCallHandlerBase
         switch (existing.State)
         {
             case CallSessionState.Confirmed:
-                // Idempotent: return the existing immutable final call without a
-                // second reflector allocation or fresh credentials.
-                return BuildResult(BuildFinalCall(existing), existing.CallerUserId,
-                    existing.CalleeUserId);
+                return BuildResult(callerUserId, BuildFinalCall(existing), existing.CallerUserId,
+                    existing.CalleeUserId, _userSerializer);
             case CallSessionState.Discarded:
                 return Error(400, "CALL_ALREADY_DECLINED"u8);
             case CallSessionState.Requested:
@@ -87,8 +84,6 @@ public sealed class ConfirmCallHandler : PhoneCallHandlerBase
                 return Error(400, "CALL_PEER_INVALID"u8);
         }
 
-        // udp_p2p requires both a negotiated P2P offer and bilateral privacy so
-        // direct IP disclosure is limited to mutually-allowing participants.
         bool p2pAllowed = (existing.NegotiatedProtocol?.UdpP2p ?? false) &&
                           await _privacy.IsPhoneP2PAllowedBilateral(
                               existing.CallerUserId, existing.CalleeUserId);
@@ -117,13 +112,11 @@ public sealed class ConfirmCallHandler : PhoneCallHandlerBase
             case CallRegistryStatus.Ok:
                 break;
             case CallRegistryStatus.Duplicate:
-                // A concurrent confirm won; it shares this reflector allocation
-                // (allocation is keyed by call id), so nothing to compensate.
-                return BuildResult(BuildFinalCall(result.Call!),
-                    result.Call!.CallerUserId, result.Call.CalleeUserId);
+                return BuildResult(callerUserId, BuildFinalCall(result.Call!),
+                    result.Call!.CallerUserId, result.Call.CalleeUserId,
+                    _userSerializer);
             case CallRegistryStatus.AlreadyDiscarded:
             case CallRegistryStatus.InvalidState:
-                // Lost a discard/timeout race after allocating: compensate.
                 _relay.RemoveAllocation(callId);
                 return Error(400, "CALL_ALREADY_DECLINED"u8);
             default:
@@ -133,15 +126,14 @@ public sealed class ConfirmCallHandler : PhoneCallHandlerBase
 
         CallSnapshot call = result.Call!;
         byte[] finalCall = BuildFinalCall(call);
-        // The winning callee device receives the perspective-equivalent final
-        // call carrying g_a and the shared connection set.
         if (call.CalleeAuthKeyId is long calleeAuthKey)
         {
             await PushCallUpdate(call.CalleeUserId, finalCall,
                 UpdateDeliveryScope.ForAuthKey(calleeAuthKey));
         }
 
-        return BuildResult(finalCall, call.CallerUserId, call.CalleeUserId);
+        return BuildResult(callerUserId, finalCall, call.CallerUserId, call.CalleeUserId,
+            _userSerializer);
     }
 
     private static bool CommitmentMatches(byte[] gA, byte[] gAHash)

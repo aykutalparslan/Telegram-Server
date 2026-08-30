@@ -1,0 +1,273 @@
+#!/bin/sh
+set -eu
+
+MODE=build
+case "${1:-}" in
+  --metadata-only)
+    MODE=metadata
+    shift
+    ;;
+  "")
+    ;;
+  *)
+    echo "usage: $0 [--metadata-only]" >&2
+    exit 2
+    ;;
+esac
+[ "$#" -eq 0 ] || {
+  echo "usage: $0 [--metadata-only]" >&2
+  exit 2
+}
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PUBLIC_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
+PIN="$PUBLIC_ROOT/interop/upstream-clients/PIN"
+PATCH="$PUBLIC_ROOT/interop/upstream-clients/patches/ios/0001-ferrite-conformance.patch"
+PRIVATE_PATCH=${FERRITE_IOS_PRIVATE_PATCH:-}
+APPLE_SUPPORT_PATCH="$PUBLIC_ROOT/interop/upstream-clients/patches/ios-submodules/apple_support/0001-macos26-lc-uuid.patch"
+CONFIG="$PUBLIC_ROOT/interop/upstream-clients/config/ios-simulator.json"
+
+die() {
+  echo "build-ios: $*" >&2
+  exit 1
+}
+
+for command in awk python3 rg shasum; do
+  command -v "$command" >/dev/null 2>&1 || die "required command is missing: $command"
+done
+[ -f "$PIN" ] || die "PIN is missing"
+. "$PIN"
+
+: "${LAYER:?missing LAYER}"
+: "${IOS_REPOSITORY:?missing IOS_REPOSITORY}"
+: "${IOS_CANDIDATE_COMMIT:?missing IOS_CANDIDATE_COMMIT}"
+: "${IOS_CANDIDATE_VERSION:?missing IOS_CANDIDATE_VERSION}"
+: "${IOS_CANDIDATE_BAZEL:?missing IOS_CANDIDATE_BAZEL}"
+: "${IOS_CANDIDATE_BAZEL_SHA256:?missing IOS_CANDIDATE_BAZEL_SHA256}"
+: "${IOS_CANDIDATE_XCODE:?missing IOS_CANDIDATE_XCODE}"
+: "${IOS_CANDIDATE_PATCH_SHA256:?missing IOS_CANDIDATE_PATCH_SHA256}"
+: "${IOS_CANDIDATE_APPLE_SUPPORT_PATCH_SHA256:?missing IOS_CANDIDATE_APPLE_SUPPORT_PATCH_SHA256}"
+: "${IOS_IPA_SHA256:?missing IOS_IPA_SHA256}"
+
+[ "$LAYER" = "214" ] || die "candidate layer is $LAYER, expected 214"
+printf '%s\n' "$IOS_CANDIDATE_COMMIT" | rg -q '^[0-9a-f]{40}$' || \
+  die "IOS_CANDIDATE_COMMIT is not a lowercase Git object id"
+printf '%s\n' "$IOS_CANDIDATE_BAZEL_SHA256" | rg -q '^[0-9a-f]{64}$' || \
+  die "IOS_CANDIDATE_BAZEL_SHA256 is not a lowercase SHA-256 digest"
+printf '%s\n' "$IOS_CANDIDATE_PATCH_SHA256" | rg -q '^[0-9a-f]{64}$' || \
+  die "IOS_CANDIDATE_PATCH_SHA256 is not a lowercase SHA-256 digest"
+printf '%s\n' "$IOS_IPA_SHA256" | rg -q '^[0-9a-f]{64}$' || \
+  die "IOS_IPA_SHA256 is not a lowercase SHA-256 digest"
+
+[ -f "$PATCH" ] || die "candidate patch is missing"
+[ -f "$APPLE_SUPPORT_PATCH" ] || die "apple_support host-compatibility patch is missing"
+[ -f "$CONFIG" ] || die "Simulator configuration is missing"
+actual_patch=$(shasum -a 256 "$PATCH" | awk '{print $1}')
+[ "$actual_patch" = "$IOS_CANDIDATE_PATCH_SHA256" ] || \
+  die "candidate patch digest is $actual_patch, expected $IOS_CANDIDATE_PATCH_SHA256"
+private_patch_digest=
+expected_ipa=$IOS_IPA_SHA256
+if [ -n "$PRIVATE_PATCH" ]; then
+  : "${IOS_PRIVATE_PATCH_SHA256:?missing IOS_PRIVATE_PATCH_SHA256}"
+  : "${IOS_PRIVATE_IPA_SHA256:?missing IOS_PRIVATE_IPA_SHA256}"
+  [ -f "$PRIVATE_PATCH" ] || die "private iOS patch is missing: $PRIVATE_PATCH"
+  private_patch_digest=$(shasum -a 256 "$PRIVATE_PATCH" | awk '{print $1}')
+  [ "$private_patch_digest" = "$IOS_PRIVATE_PATCH_SHA256" ] || \
+    die "private iOS patch digest is $private_patch_digest, expected $IOS_PRIVATE_PATCH_SHA256"
+  printf '%s\n' "$IOS_PRIVATE_IPA_SHA256" | rg -q '^[0-9a-f]{64}$' || \
+    die "IOS_PRIVATE_IPA_SHA256 is not a lowercase SHA-256 digest"
+  expected_ipa=$IOS_PRIVATE_IPA_SHA256
+fi
+actual_apple_support=$(shasum -a 256 "$APPLE_SUPPORT_PATCH" | awk '{print $1}')
+[ "$actual_apple_support" = "$IOS_CANDIDATE_APPLE_SUPPORT_PATCH_SHA256" ] || \
+  die "apple_support patch digest is $actual_apple_support, expected $IOS_CANDIDATE_APPLE_SUPPORT_PATCH_SHA256"
+
+python3 - "$CONFIG" <<'PY'
+import json
+import re
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as stream:
+    value = json.load(stream)
+
+expected = {
+    "bundle_id": "org.ferrite.conformance",
+    "api_id": "11111",
+    "api_hash": "1" * 32,
+    "team_id": "FERRITETEST",
+    "app_center_id": "0",
+    "is_internal_build": "true",
+    "is_appstore_build": "false",
+    "appstore_id": "0",
+    "app_specific_url_scheme": "ferrite",
+    "premium_iap_product_id": "",
+    "enable_siri": False,
+    "enable_icloud": False,
+}
+if value != expected:
+    raise SystemExit(f"unexpected iOS Simulator configuration: {value!r}")
+if not re.fullmatch(r"[0-9a-f]{32}", value["api_hash"]):
+    raise SystemExit("api_hash must be exactly 32 lowercase hexadecimal characters")
+PY
+
+if [ "$MODE" = "metadata" ]; then
+  echo "iOS candidate metadata OK: layer=$LAYER commit=$IOS_CANDIDATE_COMMIT patch=$actual_patch"
+  exit 0
+fi
+
+[ "$(uname -s)" = "Darwin" ] || die "the iOS application requires macOS"
+for command in git xcodebuild xcrun; do
+  command -v "$command" >/dev/null 2>&1 || die "required command is missing: $command"
+done
+
+case "$(xcodebuild -version | sed -n '1p')" in
+  "Xcode 26.3") ;;
+  *) die "Xcode 26.3 is required by the public host pin" ;;
+esac
+xcrun --find metal >/dev/null 2>&1 || \
+  die "Xcode Metal Toolchain is missing; install it with xcodebuild -downloadComponent MetalToolchain"
+
+BAZEL_BIN=$("$SCRIPT_DIR/provision-bazel")
+[ -n "$BAZEL_BIN" ] || die "could not provision Bazel $IOS_CANDIDATE_BAZEL"
+[ -x "$BAZEL_BIN" ] || die "FERRITE_IOS_BAZEL is not executable: $BAZEL_BIN"
+actual_bazel=$(shasum -a 256 "$BAZEL_BIN" | awk '{print $1}')
+[ "$actual_bazel" = "$IOS_CANDIDATE_BAZEL_SHA256" ] || \
+  die "Bazel digest is $actual_bazel, expected $IOS_CANDIDATE_BAZEL_SHA256"
+"$BAZEL_BIN" --version | rg -q "bazel $IOS_CANDIDATE_BAZEL$" || \
+  die "FERRITE_IOS_BAZEL does not report Bazel $IOS_CANDIDATE_BAZEL"
+
+WORK="$PUBLIC_ROOT/interop/upstream-clients/work"
+SOURCE=${FERRITE_IOS_SOURCE_ROOT:-"$WORK/ios/source"}
+BUILD_ROOT=${FERRITE_IOS_BUILD_ROOT:-"$WORK/ios/build"}
+ARTIFACTS=${FERRITE_IOS_ARTIFACTS:-"$PUBLIC_ROOT/.ferrite/upstream-apps/artifacts/ios"}
+mkdir -p "$(dirname -- "$SOURCE")" "$BUILD_ROOT" "$ARTIFACTS"
+
+if [ -n "$PRIVATE_PATCH" ]; then
+  BUILD_ARTIFACTS="$BUILD_ROOT/artifacts-private"
+  ARTIFACT_NAME=Telegram-private.ipa
+else
+  BUILD_ARTIFACTS="$BUILD_ROOT/artifacts-public"
+  ARTIFACT_NAME=Telegram.ipa
+fi
+mkdir -p "$BUILD_ARTIFACTS"
+rm -f "$BUILD_ARTIFACTS/Telegram.ipa"
+
+if [ ! -d "$SOURCE/.git" ]; then
+  git clone --no-checkout "$IOS_REPOSITORY" "$SOURCE"
+  git -C "$SOURCE" fetch origin "$IOS_CANDIDATE_COMMIT"
+  git -C "$SOURCE" switch --detach "$IOS_CANDIDATE_COMMIT"
+fi
+
+current=$(git -C "$SOURCE" rev-parse HEAD 2>/dev/null || true)
+if [ "$current" != "$IOS_CANDIDATE_COMMIT" ]; then
+  [ -z "$(git -C "$SOURCE" status --short)" ] || \
+    die "source checkout has unrelated changes: $SOURCE"
+  git -C "$SOURCE" fetch origin "$IOS_CANDIDATE_COMMIT"
+  git -C "$SOURCE" switch --detach "$IOS_CANDIDATE_COMMIT"
+fi
+git -C "$SOURCE" submodule sync --recursive
+git -C "$SOURCE" submodule update --init --recursive
+
+if [ -n "$PRIVATE_PATCH" ] && \
+   git -C "$SOURCE" apply --reverse --check "$PRIVATE_PATCH" 2>/dev/null; then
+  : # The checkout already carries the complete public + private series.
+elif [ -z "$PRIVATE_PATCH" ] && \
+   git -C "$SOURCE" apply --reverse --check "$PATCH" 2>/dev/null; then
+  : # The checkout already carries the public provisioning patch.
+else
+  # A series the checkout already carries cannot be reversed by the patches
+  # that replaced it, so the paths this series owns are restored first.
+  # Anything else the checkout carries is not this script's to discard.
+  series_paths=$(mktemp)
+  checkout_paths=$(mktemp)
+  trap 'rm -f "$series_paths" "$checkout_paths"' EXIT
+  git -C "$SOURCE" apply --numstat "$PATCH" ${PRIVATE_PATCH:+"$PRIVATE_PATCH"} \
+    | cut -f3 | sort -u > "$series_paths"
+  # Bazel leaves its convenience symlinks in the source root. They are build
+  # output, not a change to the source.
+  git -C "$SOURCE" status --porcelain --untracked-files=all \
+    --ignore-submodules=all | awk '{ print $2 }' | sort -u \
+    | while IFS= read -r entry; do
+        [ -L "$SOURCE/$entry" ] || printf '%s\n' "$entry"
+      done > "$checkout_paths"
+  [ -z "$(comm -23 "$checkout_paths" "$series_paths")" ] || \
+    die "source checkout has unrelated changes: $SOURCE"
+  git -C "$SOURCE" status --porcelain --untracked-files=all \
+    --ignore-submodules=all | awk '$1 == "??" { print $2 }' \
+    | while IFS= read -r stale; do
+        [ -L "$SOURCE/$stale" ] || rm -f "$SOURCE/$stale"
+      done
+  git -C "$SOURCE" checkout --force -- .
+  git -C "$SOURCE" apply --check "$PATCH" 2>/dev/null || \
+    die "public provisioning patch does not apply to the pinned checkout"
+  git -C "$SOURCE" apply "$PATCH"
+  if [ -n "$PRIVATE_PATCH" ]; then
+    git -C "$SOURCE" apply --check "$PRIVATE_PATCH" 2>/dev/null || \
+      die "private iOS patch does not apply after the public patch"
+    git -C "$SOURCE" apply "$PRIVATE_PATCH"
+  fi
+  rm -f "$series_paths" "$checkout_paths"
+  trap - EXIT
+fi
+
+APPLE_SUPPORT="$SOURCE/build-system/bazel-rules/apple_support"
+if git -C "$APPLE_SUPPORT" apply --check "$APPLE_SUPPORT_PATCH" 2>/dev/null; then
+  git -C "$APPLE_SUPPORT" apply "$APPLE_SUPPORT_PATCH"
+elif ! git -C "$APPLE_SUPPORT" apply --reverse --check "$APPLE_SUPPORT_PATCH" 2>/dev/null; then
+  die "apple_support is neither clean nor exactly host-compatibility patched"
+fi
+
+rg -q 'return 214' \
+  "$SOURCE/submodules/TelegramCore/Sources/State/Serialization.swift" || \
+  die "candidate full application does not announce layer 214"
+
+# Upstream's --lock (--lockfile_mode=error) also compares bzlTransitiveDigest,
+# which covers Starlark embedded in the Bazel binary; the committed lock does not
+# reproduce under upstream's own pinned Bazel, and upstream never enforces it.
+# Pin what identifies the dependencies instead: the build may rewrite derived
+# extension state but must not change any resolved module version or content.
+COMMITTED_LOCK="$BUILD_ROOT/MODULE.bazel.lock.committed"
+git -C "$SOURCE" show "$IOS_CANDIDATE_COMMIT:MODULE.bazel.lock" > "$COMMITTED_LOCK"
+
+cd "$SOURCE"
+python3 build-system/Make/Make.py \
+  --bazel "$BAZEL_BIN" \
+  --bazelUserRoot "$BUILD_ROOT/bazel-user-root" \
+  --overrideXcodeVersion \
+  --cacheDir "$BUILD_ROOT/cache" \
+  --bazelArguments="--//Telegram:disableExtensions --//Telegram:disableProvisioningProfiles --@build_bazel_rules_swift//swift:copt=-no-warnings-as-errors" \
+  build \
+  --configurationPath "$CONFIG" \
+  --xcodeManagedCodesigning \
+  --buildNumber 10000 \
+  --configuration debug_sim_arm64 \
+  --outputBuildArtifactsPath "$BUILD_ARTIFACTS"
+
+python3 - "$COMMITTED_LOCK" "$SOURCE/MODULE.bazel.lock" <<'PY'
+import json
+import sys
+
+pinned = ("lockFileVersion", "registryFileHashes", "selectedYankedVersions")
+with open(sys.argv[1], encoding="utf-8") as stream:
+    before = json.load(stream)
+with open(sys.argv[2], encoding="utf-8") as stream:
+    after = json.load(stream)
+
+drift = [key for key in pinned if before.get(key) != after.get(key)]
+if drift:
+    raise SystemExit(
+        "the build changed pinned module dependencies in MODULE.bazel.lock: "
+        + ", ".join(drift))
+PY
+
+# Bazel rewrites derived extension state into the lock; drop it so the checkout
+# stays exactly candidate-patched and the patch keeps representing it.
+git -C "$SOURCE" checkout -- MODULE.bazel.lock
+
+[ -f "$BUILD_ARTIFACTS/Telegram.ipa" ] || die "build produced no Telegram.ipa"
+actual_ipa=$(shasum -a 256 "$BUILD_ARTIFACTS/Telegram.ipa" | awk '{print $1}')
+[ "$actual_ipa" = "$expected_ipa" ] || \
+  die "IPA digest is $actual_ipa, expected $expected_ipa"
+cp "$BUILD_ARTIFACTS/Telegram.ipa" "$ARTIFACTS/$ARTIFACT_NAME"
+echo "$ARTIFACTS/$ARTIFACT_NAME"

@@ -2,8 +2,8 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Scheduling;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.messages;
@@ -11,13 +11,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Flushes the named queue entries immediately. Pinned TDLib reaches this from
-/// `editMessageSchedulingState(..., null)` and always names exactly one entry
-/// (`MessagesManager.cpp:1787-1798`), but the request is a vector, so a batch is
-/// answered with one `updateDeleteScheduledMessages` whose `messages` and
-/// `sent_messages` vectors are index-aligned (/api/scheduled-messages).
-/// </summary>
 public sealed class SendScheduledMessagesHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -88,9 +81,6 @@ public sealed class SendScheduledMessagesHandler
                     scheduledId);
             if (entry == null)
             {
-                // A client that asks twice, or asks for an entry the coordinator
-                // already flushed, gets the ids that did move rather than an error
-                // that would hide them.
                 continue;
             }
 
@@ -98,8 +88,6 @@ public sealed class SendScheduledMessagesHandler
                 authKeyId, entry.Value, now);
             if (outcome.Error is { } failure)
             {
-                // A refusal for the FIRST entry is the caller's answer; a partial
-                // batch keeps what it already sent.
                 if (flushed.Count == 0)
                 {
                     return Error(failure.Code, failure.Message);
@@ -150,7 +138,7 @@ public sealed class SendScheduledMessagesHandler
             .GetUpdatesContext(authKeyId, resolved.UserId).IncrementSeq();
         _log.Debug($"⏰ SendScheduledMessages user:{resolved.UserId} " +
                    $"peer:{resolved.PeerType}:{resolved.PeerId} sent:{flushed.Count}");
-        return _fanout.BuildUpdates(updateBytes, userIds, chats, now, seq);
+        return _fanout.BuildUpdates(resolved.UserId, updateBytes, userIds, chats, now, seq);
     }
 
     private static TLUpdates Error(int code, string message) =>

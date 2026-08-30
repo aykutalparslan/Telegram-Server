@@ -10,12 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Resolves a channel post's comment thread through the link carried by the
-/// post and its automatically-forwarded discussion root. Discussion roots use
-/// a different channel-local message id, so the forward origin is the stable
-/// cross-channel identity.
-/// </summary>
 public sealed class GetDiscussionMessageHandler
 {
     private readonly IChatParticipantsRepository _chatParticipantsRepository;
@@ -215,7 +209,7 @@ public sealed class GetDiscussionMessageHandler
             chats.AppendTLObject(bytes);
         }
         var users = new Vector();
-        _fanout.AppendUsers(ref users, relatedUserIds);
+        _fanout.AppendUsers(userId, ref users, relatedUserIds);
 
         var builder = DiscussionMessage.Builder()
             .Messages(messages)

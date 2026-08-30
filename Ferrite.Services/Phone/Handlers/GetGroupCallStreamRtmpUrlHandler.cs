@@ -70,8 +70,6 @@ public sealed class GetGroupCallStreamRtmpUrlHandler
 
         try
         {
-            // Scheduled calls do not allocate pipelines until start, but admins
-            // may retrieve publisher credentials in advance.
             await _broadcast.CreateStreamAsync(callId, rtmpStream);
             GroupCallBroadcastCredentials credentials = await _broadcast
                 .GetCredentialsAsync(callId, revoke);

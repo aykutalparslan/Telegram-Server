@@ -8,7 +8,7 @@ using System.Text.Unicode;
 using Ferrite.Data.Repositories;
 using xxHash;
 
-namespace Ferrite.Data;
+namespace Ferrite.Data.Repositories;
 
 // encodes multi column keys to a single key using the memcomparable format
 // here: https://github.com/facebook/mysql-5.6/wiki/MyRocks-record-format#memcomparable-format

@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.Services.Calls.E2E;
@@ -14,12 +13,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// The E2E half of a join, shared by phone.joinGroupCall's flags.3 branch and by
-/// phone.createConferenceCall's inline join. It is one implementation on purpose:
-/// the client cannot tell the two apart, and a second copy of the fork-prevention
-/// ordering would be a second chance to get it wrong.
-/// </summary>
 public sealed class ConferenceJoinOperation : ConferenceCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -39,13 +32,6 @@ public sealed class ConferenceJoinOperation : ConferenceCallHandlerBase
         _media = media;
     }
 
-    /// <summary>
-    /// Joins a conference the caller resolved itself. The chain is the
-    /// fork-prevention point, so the block is appended after the transport exists
-    /// and before the participant is committed: a client that loses the height
-    /// gets BLOCK_HEIGHT_MISMATCH with no participant, no transport and no chain
-    /// growth, and its retry against the real head is safe.
-    /// </summary>
     public async ValueTask<TLUpdatesResult> JoinAsync(long authKeyId,
         ConferenceCallRef reference, byte[] publicKey, byte[] block, byte[] paramsJson,
         bool requestedMuted, bool videoStopped)
@@ -62,12 +48,6 @@ public sealed class ConferenceJoinOperation : ConferenceCallHandlerBase
             requestedMuted, videoStopped);
     }
 
-    /// <summary>
-    /// The same join against a call the caller has already resolved and owns.
-    /// createConferenceCall uses this so its brand-new row is not re-read, and so
-    /// the result it builds can lead with the updateGroupCall that teaches the
-    /// client the new call id.
-    /// </summary>
     public async ValueTask<ConferenceJoinOutcome> JoinResolvedForResultAsync(
         TLDto.TLGroupCallState call, long userId, bool isCreator, long accessHash,
         byte[] publicKey, byte[] block, byte[] paramsJson, bool requestedMuted,
@@ -89,8 +69,6 @@ public sealed class ConferenceJoinOperation : ConferenceCallHandlerBase
             return Error(outcome.Error);
         }
 
-        // Like every join answer, this carries the caller's own media credentials
-        // and must be applied unconditionally; see BuildUnsequencedResultAsync.
         return BuildUnsequencedConferenceResult(userId, outcome.Updates);
     }
 
@@ -98,8 +76,6 @@ public sealed class ConferenceJoinOperation : ConferenceCallHandlerBase
         long userId, bool isCreator, long accessHash, byte[] publicKey, byte[] block,
         byte[] paramsJson, bool requestedMuted, bool videoStopped)
     {
-        // The public key is what the block's signature is checked against inside
-        // the chain, so an absent or short one cannot produce a valid block.
         if (publicKey.Length != 32 || block.Length == 0)
         {
             return ConferenceJoinOutcome.Failed(GroupCallErrors.BlockInvalid);
@@ -121,8 +97,6 @@ public sealed class ConferenceJoinOperation : ConferenceCallHandlerBase
             return ConferenceJoinOutcome.Failed(GroupCallErrors.DataJsonInvalid);
         }
 
-        // media_id is the durable correlation between a participant row and its
-        // worker transport, so a rejoin keeps the same id.
         string mediaId;
         bool rejoining;
         using (TLDto.TLGroupCallParticipantState? existing = await _groupCallsRepository.GetParticipantAsync(callId, userId))
@@ -143,8 +117,6 @@ public sealed class ConferenceJoinOperation : ConferenceCallHandlerBase
         GroupCallMediaJoinResult joined;
         try
         {
-            // Idempotent: the room is allocated at create, but a worker that has
-            // restarted since then no longer has it.
             await _media.CreateRoomAsync(callId);
             joined = await _media.JoinAsync(new GroupCallMediaJoinRequest(callId, mediaId,
                 payload));
@@ -201,15 +173,6 @@ public sealed class ConferenceJoinOperation : ConferenceCallHandlerBase
         using TLDto.TLGroupCallState updatedCall = stored.Call!.Value;
         int videoCount = await CountUnmutedVideoAsync(callId);
 
-        // The container order is load-bearing and is the reverse of what reads
-        // naturally. TDLib keeps the connection params pending, buffers every
-        // chain-blocks update that arrives WHILE they are pending, and then
-        // consumes both when it processes updateGroupCall
-        // (GroupCallManager.cpp:5284 and :5512). So the connection must lead, the
-        // two sub-chains must follow it, and updateGroupCall must come last: a
-        // container that leads with the call update makes the client apply the
-        // join before it has a single block, log "Have no blocks", and leave the
-        // conference unencrypted with no server-side error to notice.
         var updates = new List<byte[]>(5);
         byte[] connectionParams = GroupCallJoinPayloadCodec.BuildConnectionParams(
             joined.Transport);
@@ -219,16 +182,6 @@ public sealed class ConferenceJoinOperation : ConferenceCallHandlerBase
             updates.Add(connection.AsSpan().ToArray());
         }
 
-        // Sub-chain 0 starts at the block this join just appended and runs
-        // contiguously from there. TDLib calls call_create(blocks[0][0]) and
-        // call_apply_block for the rest, and call_create rejects any block whose
-        // group state does not already contain the caller's key
-        // (Call::update_group_shared_key -> InvalidCallGroupState_NotParticipant).
-        // So the window may not start at height 0 for anyone but the creator: an
-        // earlier block would leave the client joined with no tde2e call at all,
-        // which later aborts the whole process inside its own reconciliation.
-        // Sub-chain 1 is always sent too, as its head alone, so the client learns
-        // the right next offset even when there is nothing to apply yet.
         updates.Add(await BuildChainBlocksBytesAsync(callId, accessHash,
             GroupCallSubChain.Blocks, offset: appended.Height,
             limit: GroupCallChainService.MaxWindow));
@@ -259,12 +212,6 @@ public sealed class ConferenceJoinOperation : ConferenceCallHandlerBase
         return ConferenceJoinOutcome.Succeeded(updates);
     }
 
-    /// <summary>
-    /// Every other joined participant learns about the new participant, the new
-    /// call version, and the block that admitted them. The block matters: a
-    /// member that only polled would stay on the old group state until its next
-    /// poll and could not decrypt the joiner.
-    /// </summary>
     private async Task<int> PushConferenceJoinAsync(TLDto.TLGroupCallState call,
         TLDto.TLGroupCallParticipantState participant, long joinerUserId,
         long accessHash, int height, int videoCount)
@@ -300,9 +247,6 @@ public sealed class ConferenceJoinOperation : ConferenceCallHandlerBase
             return UpdateGroupCall.Builder().Call(built.AsSpan()).Build();
         });
 
-        // One window ending at the new head: TDLib applies the last
-        // (next_offset - its own next offset) entries, so a member that is only
-        // one block behind applies exactly this block.
         byte[] blocksUpdate = await BuildChainBlocksBytesAsync(callId, accessHash,
             GroupCallSubChain.Blocks, offset: height,
             limit: GroupCallChainService.MaxWindow);
@@ -311,11 +255,6 @@ public sealed class ConferenceJoinOperation : ConferenceCallHandlerBase
     }
 }
 
-/// <summary>
-/// A conference join's result as bytes, so the caller can decide what leads the
-/// Updates container: a join answer leads with the connection, while a create
-/// leads with the updateGroupCall that teaches the client the new call id.
-/// </summary>
 public sealed record ConferenceJoinOutcome(string? Error, IReadOnlyList<byte[]> Updates)
 {
     public static ConferenceJoinOutcome Failed(string error) =>

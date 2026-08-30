@@ -10,14 +10,20 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class SuggestShortNameHandler : StickerHandlerBase
 {
-    public SuggestShortNameHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerSetEditor _editor;
+
+    public SuggestShortNameHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerSetEditor store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _editor = store;
+    }
 
     [TLFunction(Constructors.baseLayer_SuggestShortName)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
     {
         string title = Encoding.UTF8.GetString(((SuggestShortName)q).Title);
         return await GetUserIdAsync(authKeyId) is not null
-            ? await Store.SuggestShortNameAsync(title) : AuthError();
+            ? await _editor.SuggestShortNameAsync(title) : AuthError();
     }
 }

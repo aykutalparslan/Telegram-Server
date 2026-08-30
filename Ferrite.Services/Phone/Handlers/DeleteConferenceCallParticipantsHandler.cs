@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.Services.Calls.E2E;
@@ -15,17 +14,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.deleteConferenceCallParticipants. The block is the authority on who is
-/// in the call: it removes the named keys from the group state, and the server's
-/// job is to check that the ids the client claims to be removing are exactly the
-/// ones the block removes, then make the participant rows and media agree.
-///
-/// Nothing bars a removed account separately. The chain already does: a key that
-/// is no longer in the group state can only be added back by an author that
-/// holds AddUsers, so a server-side ban list would be a second, weaker copy of a
-/// rule the clients already enforce cryptographically.
-/// </summary>
 public sealed class DeleteConferenceCallParticipantsHandler : ConferenceCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -77,8 +65,6 @@ public sealed class DeleteConferenceCallParticipantsHandler : ConferenceCallHand
             return Error(GroupCallErrors.BlockInvalid);
         }
 
-        // Read the removal out of the block WITHOUT applying it: a claim that
-        // disagrees with the block must not advance the chain.
         if (!TryReadRemovedUserIds(block, before, out List<long> removed))
         {
             return Error(GroupCallErrors.BlockInvalid);
@@ -94,8 +80,6 @@ public sealed class DeleteConferenceCallParticipantsHandler : ConferenceCallHand
 
         if (onlyLeft)
         {
-            // only_left is the caller asserting it is merely cleaning up: an
-            // account that is still in the call must not disappear under it.
             foreach (long userId in ids)
             {
                 if (await IsActiveParticipantAsync(callId, userId))
@@ -167,11 +151,6 @@ public sealed class DeleteConferenceCallParticipantsHandler : ConferenceCallHand
             updates, ids);
     }
 
-    /// <summary>
-    /// The removal as the block states it: every user id in the current group
-    /// state that the block's new group state no longer names. A block with no
-    /// group-state change removes nobody.
-    /// </summary>
     private static bool TryReadRemovedUserIds(byte[] block, ChainGroupStateValue before,
         out List<long> removed)
     {
@@ -226,8 +205,6 @@ public sealed class DeleteConferenceCallParticipantsHandler : ConferenceCallHand
         long callId = view.Id;
         long creatorUserId = view.CreatorUserId;
         long removedUserId = removed.AsGroupCallParticipantState().UserId;
-        // The removed account is told too: its row is gone, and it has no other
-        // way to learn that the call ended for it.
         List<long> members = await GetConferenceMemberIdsAsync(callId, invokerUserId);
         if (removedUserId != invokerUserId && !members.Contains(removedUserId))
         {

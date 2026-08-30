@@ -24,9 +24,6 @@ public abstract class AccountAudioHandlerBase
     protected static bool TryReadDocument(InputDocumentView view,
         out AudioDocumentInput input)
     {
-        // A document id is a full-range int64 (IRandomGenerator.NextLong is
-        // signed), so only zero is meaningless here; identity is proven by the
-        // access hash and file reference, not by the sign.
         if (view.Is(out InputDocument document) && document.Id != 0)
         {
             input = new AudioDocumentInput(document.Id, document.AccessHash,

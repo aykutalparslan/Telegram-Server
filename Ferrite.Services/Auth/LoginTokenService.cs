@@ -14,7 +14,7 @@ using TLAuthAuthorization = Ferrite.TL.baseLayer.auth.TLAuthorization;
 using TLSessionAuthorization = Ferrite.TL.baseLayer.TLAuthorization;
 using TLDto = Ferrite.TL.baseLayer.dto;
 
-namespace Ferrite.Services;
+namespace Ferrite.Services.Auth;
 
 public interface ILoginTokenService
 {
@@ -31,9 +31,6 @@ public interface ILoginTokenService
         string apiHash, string webAuthorizationToken);
 }
 
-/// <summary>
-/// Owns the QR and externally validated web-login state machines.
-/// </summary>
 public sealed class LoginTokenService : ILoginTokenService
 {
     private readonly IAppInfoRepository _appInfoRepository;

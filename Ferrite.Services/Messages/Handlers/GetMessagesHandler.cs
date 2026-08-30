@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -30,6 +29,29 @@ public sealed class GetMessagesHandler : MessagesHandlerBase
         _authorizationRepository = authorizationRepository;
         _messageRepository = messageRepository;
 
+    }
+
+    [TLFunction(Constructors.layer2_MessagesGetMessages)]
+    public async Task<TLMessages> HandleLayer2(long authKeyId, TLBytes q)
+    {
+        using var current = ToCurrentGetMessagesRequest(q);
+        return await Handle(authKeyId, current);
+    }
+
+    private static TLBytes ToCurrentGetMessagesRequest(TLBytes q)
+    {
+        var sent = new TL.layer2.messages.MessagesGetMessages(q.AsSpan());
+        var ids = new Vector();
+        VectorOfInt sentIds = sent.Id;
+        for (int i = 0; i < sentIds.Count; i++)
+        {
+            using var id = InputMessageID.Builder().Id(sentIds[i]).Build();
+            ids.AppendTLObject(id.ToReadOnlySpan());
+        }
+        using var current = MessagesGetMessages.Builder()
+            .Id(ids)
+            .Build();
+        return current.TLBytes!.Value;
     }
 
     [TLFunction(Constructors.baseLayer_MessagesGetMessages)]
@@ -72,14 +94,14 @@ public sealed class GetMessagesHandler : MessagesHandlerBase
                 messageVector.AppendTLObject(message);
             }
             var userVector = new Vector();
-            AppendUsers(ref userVector, relatedUserIds);
+            AppendUsers(userId, ref userVector, relatedUserIds);
             var chatVector = new Vector();
             foreach (byte[] chat in relatedChatBytes)
             {
                 chatVector.AppendTLObject(chat);
             }
 
-            return Messages.Builder()
+            return Ferrite.TL.baseLayer.messages.Messages.Builder()
                 .MessagesProperty(messageVector)
                 .Chats(chatVector)
                 .Users(userVector)

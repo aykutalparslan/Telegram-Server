@@ -6,9 +6,6 @@ using System.Security.Cryptography;
 
 namespace Ferrite.Crypto;
 
-/// <summary>
-/// The outcome of validating a Telegram SRP-6a password proof.
-/// </summary>
 public enum PasswordSrpVerificationResult
 {
     Success,
@@ -18,17 +15,10 @@ public enum PasswordSrpVerificationResult
     InvalidClientProof
 }
 
-/// <summary>
-/// A server-side Telegram password SRP challenge. Both values are unsigned,
-/// 256-byte, big-endian integers.
-/// </summary>
 public readonly record struct PasswordSrpChallenge(
     byte[] ServerSecret,
     byte[] PublicValue);
 
-/// <summary>
-/// Implements the server half of Telegram's password SRP-6a exchange.
-/// </summary>
 public static class PasswordSrp
 {
     public const int PaddedLength = 256;
@@ -45,28 +35,16 @@ public static class PasswordSrp
     private static readonly byte[] s_primeGeneratorHashXor =
         Xor(Hash(TelegramDhParameters.Prime), Hash(s_generatorPadded));
 
-    /// <summary>
-    /// Returns whether a value is a canonical 2048-bit Telegram password
-    /// verifier in the range (0, p).
-    /// </summary>
     public static bool IsValidVerifier(ReadOnlySpan<byte> verifier) =>
         IsValidGroupElement(verifier);
 
-    /// <summary>
-    /// Generates a cryptographically random server challenge for a stored
-    /// password verifier.
-    /// </summary>
-    /// <exception cref="ArgumentException">
-    /// Thrown when <paramref name="verifier"/> isn't a canonical Telegram
-    /// verifier.
-    /// </exception>
     public static PasswordSrpChallenge CreateChallenge(
         ReadOnlySpan<byte> verifier)
     {
         if (!IsValidGroupElement(verifier))
         {
             throw new ArgumentException(
-                "The password verifier must be a 256-byte value in the range (0, p).",
+                "The password verifier must be at most 256 bytes and in the range (0, p).",
                 nameof(verifier));
         }
 
@@ -82,11 +60,6 @@ public static class PasswordSrp
         }
     }
 
-    /// <summary>
-    /// Creates a challenge from an injected server secret. This overload is
-    /// useful when challenge generation and persistence must be atomic, and for
-    /// deterministic protocol-vector tests.
-    /// </summary>
     public static bool TryCreateChallenge(
         ReadOnlySpan<byte> verifier,
         ReadOnlySpan<byte> serverSecret,
@@ -115,10 +88,6 @@ public static class PasswordSrp
         return true;
     }
 
-    /// <summary>
-    /// Verifies the client's A and M1 values against the stored password
-    /// verifier and the one-time server secret used to create the challenge.
-    /// </summary>
     public static PasswordSrpVerificationResult VerifyProof(
         ReadOnlySpan<byte> verifier,
         ReadOnlySpan<byte> salt1,
@@ -159,7 +128,8 @@ public static class PasswordSrp
         }
 
         byte[] serverPublicValue = PadInteger(serverPublicInteger);
-        byte[] scramblingHash = Hash(clientPublicValue, serverPublicValue);
+        byte[] clientPublicPadded = PadInteger(clientPublicInteger);
+        byte[] scramblingHash = Hash(clientPublicPadded, serverPublicValue);
         BigInteger scramblingParameter = ToInteger(scramblingHash);
         if (scramblingParameter.IsZero)
         {
@@ -181,7 +151,7 @@ public static class PasswordSrp
             s_primeGeneratorHashXor,
             Hash(salt1),
             Hash(salt2),
-            clientPublicValue,
+            clientPublicPadded,
             serverPublicValue,
             sessionKey);
 
@@ -198,7 +168,7 @@ public static class PasswordSrp
 
     private static bool IsValidGroupElement(ReadOnlySpan<byte> value)
     {
-        if (value.Length != PaddedLength)
+        if (value.Length > PaddedLength)
         {
             return false;
         }

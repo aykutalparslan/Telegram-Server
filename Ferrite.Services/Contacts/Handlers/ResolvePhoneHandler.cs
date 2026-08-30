@@ -3,7 +3,6 @@
 
 using System.Text;
 using DotNext.Collections.Generic;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -18,9 +17,9 @@ public sealed class ResolvePhoneHandler : ContactsHandlerBase
     private readonly IAuthorizationRepository _authorizationRepository;
     private readonly IUserRepository _userRepository;
 
-    public ResolvePhoneHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
+    public ResolvePhoneHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IContactsRepository contactsRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
         IUpdatesService updates, IUpdatesContextFactory updatesContextFactory)
-        : base(unitOfWork, userRepository, userStatusRepository, search, updates, updatesContextFactory)
+        : base(unitOfWork, contactsRepository, userRepository, userStatusRepository, search, updates, updatesContextFactory)
     {
         _authorizationRepository = authorizationRepository;
         _userRepository = userRepository;
@@ -37,16 +36,17 @@ public sealed class ResolvePhoneHandler : ContactsHandlerBase
             }
 
             var phone = Encoding.UTF8.GetString(new ResolvePhone(q.AsSpan()).Phone);
-            var peerUser = _userRepository.GetUser(phone);
-            if (peerUser == null)
+            var found = _userRepository.GetUser(phone);
+            if (found == null)
             {
                 return PhoneNotOccupiedResolvedPeer();
             }
 
-            using TLPeer peer = new PeerUser(peerUser.Value.AsUser().Id);
+            var peerUser = await WithStatus(auth.Value.AsAuthInfo().UserId, found.Value);
+            using TLPeer peer = new PeerUser(peerUser.AsUser().Id);
             return ResolvedPeer.Builder()
                 .Peer(peer.AsSpan())
-                .Users(ToUserVector(new List<TLUser> { peerUser.Value }))
+                .Users(ToUserVector(new List<TLUser> { peerUser }))
                 .Chats(new Vector())
                 .Build();
         }

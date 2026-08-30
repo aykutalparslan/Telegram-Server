@@ -1,0 +1,12 @@
+diff --git a/crosstool/osx_cc_configure.bzl b/crosstool/osx_cc_configure.bzl
+index 9716e43..9ec7d1b 100644
+--- a/crosstool/osx_cc_configure.bzl
++++ b/crosstool/osx_cc_configure.bzl
+@@ -103,7 +103,6 @@ def _compile_cc_file(repository_ctx, src_name, out_name):
+         "-arch",
+         "x86_64",
+         "-Wl,-no_adhoc_codesign",
+-        "-Wl,-no_uuid",
+         "-O3",
+         "-o",
+         out_name,

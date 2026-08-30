@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -53,8 +52,6 @@ public sealed class ExportChatInviteHandler : MessagesHandlerBase
             TLChatInviteInfo newInvite;
             if (legacyRevokePermanent)
             {
-                // Replacing the primary link: revoke the current permanent link and mint
-                // a new permanent one owned by the caller.
                 var invites = await _invites.GetStoredInvitesAsync(chatId);
                 foreach (var invite in invites)
                 {
@@ -70,7 +67,6 @@ public sealed class ExportChatInviteHandler : MessagesHandlerBase
             }
             else
             {
-                // Additional links created next to the primary one are not permanent.
                 newInvite = ChatInvites.BuildInviteInfo(chatId, hash, context!.CurrentUserId,
                     date, permanent: false, revoked: false, requestNeeded, expireDate,
                     usageLimit, usage: 0, title.Length > 0 ? title : null);

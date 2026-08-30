@@ -13,19 +13,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.StatsMethods;
 
-/// <summary>
-/// Which public channels re-posted a given channel post.
-///
-/// The answer comes from the forward index `messages.forwardMessages` writes,
-/// which only records a forward whose DESTINATION is a public channel. A forward
-/// into a private chat or channel is therefore invisible here — deliberately, as
-/// reporting it would tell the source channel's admins about a conversation they
-/// were never part of.
-///
-/// The `offset` is opaque to the client and is this server's own cursor: the sort
-/// key of the last row of the previous page. A cursor rather than an index means
-/// a forward recorded between two pages cannot shift the second page's contents.
-/// </summary>
 public sealed class GetMessagePublicForwardsHandler : StatsHandlerBase
 {
     private readonly IStatisticsRepository _statisticsRepository;
@@ -33,16 +20,11 @@ public sealed class GetMessagePublicForwardsHandler : StatsHandlerBase
     private readonly IChannelMessagesRepository _channelMessagesRepository;
     private readonly IChatRepository _chatRepository;
 
-    /// <summary>
-    /// The page cap. Pinned TDLib clamps its own request to the same number and
-    /// calls it the server-side limit
-    /// (`MAX_MESSAGE_FORWARDS`, `StatisticsManager.cpp:899-902`).
-    /// </summary>
     private const int MaxLimit = 100;
 
-    public GetMessagePublicForwardsHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IStatisticsRepository statisticsRepository, IAuthorizationRepository authorizationRepository, IChannelAdminRepository channelAdminRepository, IChannelMessagesRepository channelMessagesRepository, IChatRepository chatRepository, IUserRepository userRepository,
+    public GetMessagePublicForwardsHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IStatisticsRepository statisticsRepository, IAuthorizationRepository authorizationRepository, IChannelAdminRepository channelAdminRepository, IChannelMessagesRepository channelMessagesRepository, IChatRepository chatRepository, UserSerializer userSerializer,
         StatisticsStore statistics, StatsGraphTokens tokens, ILogger log)
-        : base(unitOfWork, chatParticipantsRepository, authorizationRepository, channelAdminRepository, chatRepository, userRepository, statistics, tokens, log)
+        : base(unitOfWork, chatParticipantsRepository, authorizationRepository, channelAdminRepository, chatRepository, userSerializer, statistics, tokens, log)
     {
         _statisticsRepository = statisticsRepository;
 
@@ -84,8 +66,6 @@ public sealed class GetMessagePublicForwardsHandler : StatsHandlerBase
             }
         }
 
-        // Newest first, with the channel and message ids breaking ties so the
-        // order is total and the cursor can name exactly one row.
         all.Sort(static (left, right) => right.CompareTo(left));
         int start = 0;
         if (offset.Length > 0)
@@ -101,8 +81,6 @@ public sealed class GetMessagePublicForwardsHandler : StatsHandlerBase
             }
         }
 
-        // Every row the page needs is resolved BEFORE a vector exists: `Vector`
-        // is a ref struct and cannot be preserved across an await.
         List<ForwardCursor> page = all.Skip(start).Take(limit).ToList();
         var messages = new List<byte[]>(page.Count);
         var channelRows = new List<byte[]>();
@@ -112,9 +90,6 @@ public sealed class GetMessagePublicForwardsHandler : StatsHandlerBase
             byte[]? messageBytes = await ReadForwardedMessageAsync(entry);
             if (messageBytes == null)
             {
-                // The destination copy is gone; pinned TDLib decrements its own
-                // total for a forward it cannot materialize, so dropping the row
-                // is the same outcome without the wasted round trip.
                 continue;
             }
             messages.Add(messageBytes);
@@ -145,7 +120,7 @@ public sealed class GetMessagePublicForwardsHandler : StatsHandlerBase
             chats.AppendTLObject(channelBytes);
         }
         var users = new Vector();
-        AppendUsers(ref users, messages.Select(ReadSenderUserId).Where(x => x > 0));
+        AppendUsers(access.UserId, ref users, messages.Select(ReadSenderUserId).Where(x => x > 0));
 
         var builder = PublicForwards.Builder()
             .Count(all.Count)
@@ -164,9 +139,6 @@ public sealed class GetMessagePublicForwardsHandler : StatsHandlerBase
         return builder.Build();
     }
 
-    /// <summary>
-    /// The destination copy of one forward, or null when it no longer exists.
-    /// </summary>
     private async Task<byte[]?> ReadForwardedMessageAsync(ForwardCursor entry)
     {
         using TLSavedMessage? stored = await _channelMessagesRepository
@@ -176,8 +148,6 @@ public sealed class GetMessagePublicForwardsHandler : StatsHandlerBase
             return null;
         }
 
-        // Copied out rather than referenced: the stored row is disposed at the
-        // end of this frame and the answer is built well after it.
         TLMessage message = stored.Value.AsSavedMessage().Get_OriginalMessage();
         return message.AsSpan().ToArray();
     }
@@ -195,10 +165,6 @@ public sealed class GetMessagePublicForwardsHandler : StatsHandlerBase
             : 0;
     }
 
-    /// <summary>
-    /// One indexed forward and, in its string form, the opaque paging cursor.
-    /// Ordering is by recency first so a page reads newest-first.
-    /// </summary>
     private readonly record struct ForwardCursor(int Date, long ChannelId,
         int MessageId) : IComparable<ForwardCursor>
     {

@@ -6,10 +6,6 @@ using Ferrite.TL.baseLayer;
 
 namespace Ferrite.Services.Calls;
 
-/// <summary>
-/// Builds the owned PhoneCallDiscardReason for a stored discard-reason
-/// constructor. An unknown constructor falls back to hangup.
-/// </summary>
 public static class PhoneCallReasons
 {
     public static TLPhoneCallDiscardReason Build(int reasonConstructor)

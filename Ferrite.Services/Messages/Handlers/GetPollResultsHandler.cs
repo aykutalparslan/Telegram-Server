@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -11,13 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Returns the caller's current view of a poll without changing anything. Pinned
-/// TDLib only ever sends this from its own refresh timer, which fires at
-/// <c>60 * Random::fast(70,100) * 0.01</c> seconds while online
-/// (<c>PollManager.cpp:1362-1365</c>), so the deterministic gate for this method
-/// is its Function/RPC integration rather than a bounded client flow.
-/// </summary>
 public sealed class GetPollResultsHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -82,7 +74,6 @@ public sealed class GetPollResultsHandler
             updateBytes = update.AsSpan().ToArray();
         }
 
-        // A read never advances the caller's seq, so the result is unsequenced.
         var userIds = new List<long> { userId };
         if (peer.Type == TLPeer.PeerType.PeerUser)
         {
@@ -91,7 +82,7 @@ public sealed class GetPollResultsHandler
         List<byte[]> chats = peer.Type == TLPeer.PeerType.PeerUser
             ? new List<byte[]>()
             : await _fanout.GetChatBytesForViewerAsync(userId, new[] { peer.Id });
-        return _fanout.BuildUpdates(new[] { updateBytes }, userIds, chats, now, 0);
+        return _fanout.BuildUpdates(userId, new[] { updateBytes }, userIds, chats, now, 0);
     }
 
     private static TLUpdates Error(int code, string message) =>

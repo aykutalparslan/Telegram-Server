@@ -3,7 +3,6 @@
 
 using System.Text;
 using DotNext.Collections.Generic;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -19,9 +18,9 @@ public sealed class GetBlockedHandler : ContactsHandlerBase
     private readonly IBlockedPeersRepository _blockedPeersRepository;
     private readonly IUserRepository _userRepository;
 
-    public GetBlockedHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IBlockedPeersRepository blockedPeersRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
+    public GetBlockedHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IBlockedPeersRepository blockedPeersRepository, IContactsRepository contactsRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
         IUpdatesService updates, IUpdatesContextFactory updatesContextFactory)
-        : base(unitOfWork, userRepository, userStatusRepository, search, updates, updatesContextFactory)
+        : base(unitOfWork, contactsRepository, userRepository, userStatusRepository, search, updates, updatesContextFactory)
     {
         _authorizationRepository = authorizationRepository;
         _blockedPeersRepository = blockedPeersRepository;
@@ -56,11 +55,10 @@ public sealed class GetBlockedHandler : ContactsHandlerBase
             {
                 if (c.PeerType == PeerType.User)
                 {
-                    var user = _userRepository.GetUser(c.PeerId);
+                    var user = await GetUserInternal(auth.Value.AsAuthInfo().UserId, c.PeerId);
                     if(user != null) userList.Add(user.Value);
                 }
             }
-            //TODO: also fetch the chats from the db
             var blocked = ToPeerBlockedVector(page);
             var users = ToUserVector(userList);
             if (ShouldReturnBlockedSlice(blockedPeers.Count, page.Count, offset, limit))

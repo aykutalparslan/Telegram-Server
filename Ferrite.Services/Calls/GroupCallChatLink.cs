@@ -8,9 +8,6 @@ using TLDto = Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Calls;
 
-// The call link a full-chat/full-channel row carries for one viewer: the active
-// call itself plus that viewer's own default join-as peer. Both members own
-// pooled memory, so the builder disposes them after the full row is built.
 public sealed class GroupCallFullLink : IDisposable
 {
     public static readonly GroupCallFullLink None = new(null, null);
@@ -32,10 +29,6 @@ public sealed class GroupCallFullLink : IDisposable
     }
 }
 
-// Keeps the stored chat/channel rows agreeing with group-call state: the compact
-// row's call_active/call_not_empty flags, and the per-viewer call/default-join-as
-// fields of the full rows. Row mutation itself stays in ChatRowStore, which is
-// where every other compact-row write lives.
 public sealed class GroupCallChatLink
 {
     private readonly IChatRepository _chatRepository;
@@ -53,23 +46,15 @@ public sealed class GroupCallChatLink
         _chatRows = chatRows;
     }
 
-    // Writes the compact-row call flags for the hosting peer and returns the
-    // updated row bytes, so callers can put the fresh chat into their Updates
-    // result without a second read. A basic-group row bumps its version; a
-    // channel row has none.
     public byte[] SetCallFlags(GroupCallPeerKind kind, byte[] chatBytes, bool callActive,
         bool callNotEmpty) => SetCallFlagsForRow(kind == GroupCallPeerKind.BasicGroup,
         chatBytes, callActive, callNotEmpty);
 
-    // Only the row shape matters here: a basic group stores a chat# row, and both
-    // megagroups and broadcast channels store a channel# row.
     private byte[] SetCallFlagsForRow(bool isBasicGroup, byte[] chatBytes,
         bool callActive, bool callNotEmpty) => isBasicGroup
         ? _chatRows.UpdateStoredChatCallState(chatBytes, callActive, callNotEmpty)
         : _chatRows.UpdateStoredChannelCallState(chatBytes, callActive, callNotEmpty);
 
-    // Reads the hosting peer's row, applies the call flags, and returns the
-    // updated bytes. Used by the paths that do not already hold the row.
     public async ValueTask<byte[]?> SetCallFlagsAsync(GroupCallPeerRef peer,
         bool callActive, bool callNotEmpty)
     {
@@ -83,9 +68,6 @@ public sealed class GroupCallChatLink
             stored.Value.AsSpan().ToArray(), callActive, callNotEmpty);
     }
 
-    // The full-chat/full-channel link for one viewer. Resolved before the full-row
-    // builder is created because the builders are ref structs that cannot span an
-    // await, and because a viewer must never receive another account's join-as.
     public async ValueTask<GroupCallFullLink> ResolveFullLinkAsync(
         GroupCallPeerType peerType, long peerId, long viewerUserId,
         CancellationToken cancellationToken = default)
@@ -107,9 +89,6 @@ public sealed class GroupCallChatLink
             if (stored != null)
             {
                 var row = stored.Value.AsGroupCallDefaultJoinAs();
-                // The supported identity boundary is self-only. Do not let a
-                // stale or externally-written channel/chat row widen that boundary
-                // when a full chat is rendered.
                 if (row.JoinAsPeerType == (int)TLPeer.PeerType.PeerUser &&
                     row.JoinAsPeerId == viewerUserId)
                 {

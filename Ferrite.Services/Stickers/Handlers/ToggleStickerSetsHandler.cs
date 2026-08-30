@@ -10,8 +10,17 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class ToggleStickerSetsHandler : StickerHandlerBase
 {
-    public ToggleStickerSetsHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerSetLookup _lookup;
+    private readonly StickerCollectionStore _collections;
+
+    public ToggleStickerSetsHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository,
+        StickerSetLookup lookup, StickerCollectionStore store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _lookup = lookup;
+        _collections = store;
+    }
 
     [TLFunction(Constructors.baseLayer_ToggleStickerSets)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
@@ -25,14 +34,14 @@ public sealed class ToggleStickerSetsHandler : StickerHandlerBase
         var inputs = new List<(long? Id, long? AccessHash, string? ShortName)>(count);
         for (int i = 0; i < count; i++)
         {
-            inputs.Add(StickerStore.ReadInputSet(
+            inputs.Add(StickerInput.ReadInputSet(
                 (InputStickerSetView)source.ReadTLObject()));
         }
         long? userId = await GetUserIdAsync(authKeyId);
         if (!userId.HasValue) return AuthError();
-        long[]? ids = await Store.ResolveSetIdsAsync(inputs);
+        long[]? ids = await _lookup.ResolveSetIdsAsync(inputs);
         return ids is null ? Invalid("STICKERSET_INVALID")
-            : await Store.ToggleSetsAsync(userId.Value, authKeyId, ids,
+            : await _collections.ToggleSetsAsync(userId.Value, authKeyId, ids,
                 uninstall, archive, unarchive);
     }
 }

@@ -10,7 +10,7 @@ using Ferrite.TL.baseLayer.auth;
 using Ferrite.TL.baseLayer.dto;
 using TLAuthorization = Ferrite.TL.baseLayer.auth.TLAuthorization;
 
-namespace Ferrite.Services;
+namespace Ferrite.Services.Account;
 
 public interface IPasswordRecoveryService
 {

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -137,7 +136,7 @@ public sealed class GetRepliesHandler
         var chats = new Vector();
         chats.AppendTLObject(channelBytes);
         var users = new Vector();
-        _fanout.AppendUsers(ref users, relatedUsers);
+        _fanout.AppendUsers(userId, ref users, relatedUsers);
         return ChannelMessages.Builder().Pts(pts).Count(total)
             .Messages(messages).Topics(topics).Chats(chats).Users(users).Build();
     }

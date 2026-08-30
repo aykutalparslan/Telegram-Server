@@ -3,22 +3,9 @@
 
 namespace Ferrite.Data.Repositories;
 
-/// <summary>
-/// Keeps the data in RAM only and never saves it in persistent storage.
-/// </summary>
 public interface IVolatileKVStore
 {
-    /// <summary>
-    /// Sets the schema.
-    /// </summary>
-    /// <param name="table"></param>
     void SetSchema(TableDefinition table);
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="value"></param>
-    /// <param name="Ttl">Time-to-live in milliseconds. null is treated as infinity.</param>
-    /// <param name="keys"></param>
     public void Put(byte[] value, TimeSpan? ttl = null, params object[] keys);
     public void UpdateTtl(TimeSpan? ttl = null, params object[] keys);
     public bool ListAdd(long score, byte[] value, TimeSpan? ttl = null, params object[] keys);

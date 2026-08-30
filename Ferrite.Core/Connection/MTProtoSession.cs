@@ -5,8 +5,7 @@ using System.Buffers;
 using System.Net;
 using System.Security.Cryptography;
 using Ferrite.Crypto;
-using Ferrite.Data;
-using Ferrite.Services;
+using Ferrite.Services.Sessions;
 using Ferrite.TL.mtproto;
 using Ferrite.Utils;
 
@@ -31,22 +30,25 @@ public class MTProtoSession : IMTProtoSession
     private int _serverSaltValidUntil;
     private bool _serverSaltInitialized;
     private int _seq = 0;
-    private long _lastMessageId;
+    private readonly IMessageIdGenerator _messageIds;
+    private readonly IReceivedMessageIdRegistry _receivedMessageIds;
     private readonly CircularQueue<long> _lastMessageIds = new CircularQueue<long>(10);
-    private readonly CircularQueue<long> _receivedMessageIds = new CircularQueue<long>(10);
     private readonly object _sentMessagesLock = new();
     private readonly Dictionary<long, MTProtoSentMessage> _sentMessages = new();
     private readonly Queue<long> _sentMessageOrder = new();
     private Dictionary<string, object> _sessionData = new();
 
     public MTProtoSession(IMTProtoService mtproto, ILogger log,
-        IMTProtoTime time, ISessionService sessionService, IRandomGenerator random)
+        IMTProtoTime time, ISessionService sessionService, IRandomGenerator random,
+        IMessageIdGenerator messageIds, IReceivedMessageIdRegistry receivedMessageIds)
     {
         _mtproto = mtproto;
         _log = log;
         _time = time;
         _sessionService = sessionService;
         _random = random;
+        _messageIds = messageIds;
+        _receivedMessageIds = receivedMessageIds;
     }
     
     public long AuthKeyId => _authKeyId;
@@ -90,6 +92,8 @@ public class MTProtoSession : IMTProtoSession
 
         return _authKey != null;
     }
+
+    public bool TryResolvePermAuthKeyId() => TryGetPermAuthKeyId();
 
     private bool TryGetPermAuthKeyId()
     {
@@ -173,39 +177,7 @@ public class MTProtoSession : IMTProtoSession
         }
     }
 
-    /// <summary>
-    /// Gets the next Message Identifier (msg_id) for this session.
-    /// </summary>
-    /// <param name="response">If the message is a response to a client message.</param>
-    /// <returns></returns>
-    public long NextMessageId(bool response)
-    {
-        long id = _time.GetUnixTimeInSeconds();
-        id *= 4294967296L;
-        long r1 = (4 - id % 4) % 4;
-        id += (response ? r1 + 1 : r1 + 3);
-        long last = _lastMessageId;
-        long r2 = 4 - (last + 1) % 4;
-        if (id <= last)
-        {
-            id = Interlocked.Add(ref _lastMessageId,
-                response ? r2 + 2 : r2 + 4);
-            if ((response && id % 4 == 1) || (!response && id % 4 == 3))
-            {
-                return id;
-            }
-        }
-        else if (Interlocked.CompareExchange(ref _lastMessageId, id, last) == last)
-        {
-            return id;
-        }
-        do
-        {
-            r2 = 4 - (_lastMessageId + 1) % 4;
-            id = Interlocked.Add(ref _lastMessageId, response ? r2 + 2 : r2 + 4);
-        } while (!((response && id % 4 != 1) || (!response && id % 4 != 3)));
-        return id;
-    }
+    public long NextMessageId(bool response) => _messageIds.NextMessageId(response);
     public long CreateNewSession(long sessionId, long firstMessageId)
     {
         _sessionId = sessionId;
@@ -213,11 +185,6 @@ public class MTProtoSession : IMTProtoSession
        return SaveCurrentSession(_permAuthKeyId != 0 ? 
                 _permAuthKeyId : _authKeyId);
     }
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="authKeyId"></param>
-    /// <returns>Current Server Salt</returns>
     public long SaveCurrentSession(long authKeyId)
     {
         if (_authKeyId != 0 &&
@@ -235,35 +202,27 @@ public class MTProtoSession : IMTProtoSession
         }
         return _serverSalt;
     }
-    /// <summary>
-    /// Checks if the given message Id is valid and adds it to the last N messages list
-    /// </summary>
-    /// <param name="messageId"></param>
-    /// <returns></returns>
-    public bool IsValidMessageId(long messageId)
+    public bool IsValidMessageId(long sessionId, long messageId)
     {
-        return TryValidateMessageId(messageId, out _);
+        return TryValidateMessageId(sessionId, messageId, out _);
     }
 
-    public bool TryValidateMessageId(long messageId, out int errorCode,
+    public bool TryValidateMessageId(long sessionId, long messageId, out int errorCode,
         bool isContainer = false)
     {
-        if (messageId >= _time.ThirtySecondsLater || //msg_id values that belong over 30 seconds in the future
-            messageId <= _time.FiveMinutesAgo || //or over 300 seconds in the past are to be ignored
-            messageId % 4 != 0 || //client message ids must be divisible by 4
-            _receivedMessageIds.Contains(messageId) || //must not be equal to any
+        if (messageId >= _time.ThirtySecondsLater ||
+            messageId <= _time.FiveMinutesAgo ||
+            messageId % 4 != 0 ||
+            WasReceived(sessionId, messageId) ||
             (!isContainer && _lastMessageIds.Count != 0 &&
-             messageId <= _lastMessageIds.Min()) //must not be lower than all non-container messages
+             messageId <= _lastMessageIds.Min())
            )
         {
-            errorCode = GetInvalidMessageIdErrorCode(messageId);
+            errorCode = GetInvalidMessageIdErrorCode(sessionId, messageId);
             return false;
         }
 
-        _receivedMessageIds.Enqueue(messageId);
-        // A container's msg_id is newer than every message it contains. Do not
-        // use it as the lower bound: contained messages may later be resent
-        // individually or regrouped in a different container.
+        _receivedMessageIds.Add(DedupAuthKeyId, sessionId, messageId);
         if (!isContainer)
         {
             _lastMessageIds.Enqueue(messageId);
@@ -315,7 +274,12 @@ public class MTProtoSession : IMTProtoSession
         _serverSaltInitialized = true;
     }
 
-    private int GetInvalidMessageIdErrorCode(long messageId)
+    private long DedupAuthKeyId => _permAuthKeyId != 0 ? _permAuthKeyId : _authKeyId;
+
+    private bool WasReceived(long sessionId, long messageId) =>
+        _receivedMessageIds.Contains(DedupAuthKeyId, sessionId, messageId);
+
+    private int GetInvalidMessageIdErrorCode(long sessionId, long messageId)
     {
         if (messageId <= _time.FiveMinutesAgo)
         {
@@ -332,7 +296,7 @@ public class MTProtoSession : IMTProtoSession
             return 18;
         }
 
-        if (_receivedMessageIds.Contains(messageId))
+        if (WasReceived(sessionId, messageId))
         {
             return 19;
         }

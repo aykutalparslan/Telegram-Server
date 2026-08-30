@@ -2,10 +2,10 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System;
+using System.Collections.Concurrent;
 using Ferrite.Core.Execution;
 using Ferrite.Core.Execution.Functions;
-using Ferrite.Data;
-using Ferrite.Services;
+using Ferrite.Services.Sessions;
 using Ferrite.TL;
 using Ferrite.Utils;
 
@@ -13,10 +13,15 @@ namespace Ferrite.Core.RequestChain;
 
 public class MTProtoRequestProcessor : ILinkedHandler
 {
+    private const int AnsweredMessageLimit = 4096;
+
     private readonly ISessionService _sessionManager;
     private readonly IMessagePipe _pipe;
     private readonly IExecutionEngine _api;
     private readonly ILogger _log;
+    private readonly ConcurrentDictionary<(long Session, long MessageId),
+        Lazy<Task<byte[]?>>> _answers = new();
+    private readonly ConcurrentQueue<(long, long)> _answered = new();
     public MTProtoRequestProcessor(ISessionService sessionManager, IMessagePipe pipe,
         IExecutionEngine api, ILogger log)
     {
@@ -49,7 +54,8 @@ public class MTProtoRequestProcessor : ILinkedHandler
     {
         try
         {
-            await ProcessAndSend(connection, ctx, () => _api.Invoke(input, ctx), ack: true);
+            await ProcessAndSend(connection, ctx, () => _api.Invoke(input, ctx), ack: true,
+                input.Constructor);
         }
         catch (Exception e)
         {
@@ -87,15 +93,14 @@ public class MTProtoRequestProcessor : ILinkedHandler
             }
             else
             {
-                await ProcessAndSend(connection, ctx, () => _api.Invoke(input, ctx), RequiresEarlyAck(input.Constructor));
+                await ProcessAndSend(connection, ctx, () => _api.Invoke(input, ctx),
+                    RequiresEarlyAck(input.Constructor), input.Constructor);
             }
         }
         else if (await _api.Invoke(input, ctx) is { } result)
         {
             using (result)
             {
-                // No local connection: the result belongs to a session owned by
-                // another node, so forward it over the message pipe.
                 await ForwardToRemoteSession(ctx, result.AsSpan().ToArray());
             }
         }
@@ -104,15 +109,48 @@ public class MTProtoRequestProcessor : ILinkedHandler
     }
 
     private async Task ProcessAndSend(IMTProtoConnection connection, TLExecutionContext ctx,
-        Func<ValueTask<TLBytes?>> invoke, bool ack)
+        Func<ValueTask<TLBytes?>> invoke, bool ack, int constructor)
     {
         if (ack) await Send(connection, ctx, BuildMsgsAckPayload(ctx.MessageId));
-        if (await invoke() is { } result)
+        if (await AnswerOnce(ctx, invoke, constructor) is { } data)
         {
-            using (result)
-            {
-                await Send(connection, ctx, result.AsSpan().ToArray());
-            }
+            await Send(connection, ctx, data);
+        }
+    }
+
+    private Task<byte[]?> AnswerOnce(TLExecutionContext ctx, Func<ValueTask<TLBytes?>> invoke,
+        int constructor)
+    {
+        _log.Debug($"📥 request #{constructor.ToString("x")} session={ctx.SessionId} " +
+                   $"msgId={ctx.MessageId} authKey={ctx.AuthKeyId} " +
+                   $"permAuthKey={ctx.PermAuthKeyId}");
+        var identity = (ctx.SessionId, ctx.MessageId);
+        var answer = _answers.GetOrAdd(identity, _ => new Lazy<Task<byte[]?>>(
+            () => InvokeAsync(invoke), LazyThreadSafetyMode.ExecutionAndPublication));
+        if (answer.IsValueCreated)
+        {
+            _log.Debug($"repeated message {ctx.MessageId} in session {ctx.SessionId} " +
+                       "is answered from its first execution");
+        }
+        else
+        {
+            RememberAnswer(identity);
+        }
+        return answer.Value;
+    }
+
+    private static async Task<byte[]?> InvokeAsync(Func<ValueTask<TLBytes?>> invoke)
+    {
+        if (await invoke() is not { } result) return null;
+        using (result) return result.AsSpan().ToArray();
+    }
+
+    private void RememberAnswer((long, long) identity)
+    {
+        _answered.Enqueue(identity);
+        while (_answered.Count > AnsweredMessageLimit && _answered.TryDequeue(out var evicted))
+        {
+            _answers.TryRemove(evicted, out _);
         }
     }
 
@@ -132,8 +170,6 @@ public class MTProtoRequestProcessor : ILinkedHandler
 
     private static bool RequiresEarlyAck(int constructor)
     {
-        // saveFilePart/saveBigFilePart are dispatched on the streaming path and
-        // ack there; only buffered uploads reach this TLBytes path.
         return constructor is Constructors.baseLayer_UploadProfilePhoto;
     }
 

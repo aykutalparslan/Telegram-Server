@@ -63,8 +63,6 @@ public class PhotoRepository : IPhotoRepository
                 continue;
             }
 
-            // Compatibility for profile associations created before the canonical
-            // photos store existed.
             var photoSizes = GetPhotoSizes(association.Id);
             var photo = association.Clone().Sizes(photoSizes).Build();
             photos.Add((association.Date, photo.TLBytes!.Value));
@@ -139,8 +137,6 @@ public class PhotoRepository : IPhotoRepository
             thumbs.Add(new TLBytes(thumbBytes, 0, thumbBytes.Length));
         }
 
-        // Ladder order: thumbnail types are not alphabetical (s=100 < m=320),
-        // so sort by the stored pixel width instead.
         return thumbs
             .OrderBy(thumb => new PhotoSize(
                 ((Thumbnail)thumb.AsSpan()).PhotoSize.ToArray().AsSpan()).W)

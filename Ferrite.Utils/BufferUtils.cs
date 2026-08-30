@@ -45,12 +45,6 @@ public class BufferUtils
 
         return lenBytes;
     }
-    /// <summary>
-    /// Decodes the size of a TL serialized bare string including the padding bytes.
-    /// </summary>
-    /// <param name="buffer">Source buffer.</param>
-    /// <param name="offset">Offset in the source buffer.</param>
-    /// <returns></returns>
     public static int GetTLBytesLength(Span<byte> buffer, int offset)
     {
         if (buffer.Length - offset < 4) return 0;
@@ -63,12 +57,6 @@ public class BufferUtils
         rem = (4 - len % 4) % 4;
         return len + 4 + rem;
     }
-    /// <summary>
-    /// Decodes the value of a TL serialized bare string.
-    /// </summary>
-    /// <param name="buffer">Source buffer.</param>
-    /// <param name="offset">Offset in the source buffer.</param>
-    /// <returns></returns>
     public static unsafe Span<byte> GetTLBytes(Span<byte> buffer, int offset)
     {
         if (buffer.Length - offset < 4) return new Span<byte>();

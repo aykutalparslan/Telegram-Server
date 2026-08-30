@@ -11,8 +11,14 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class SearchCustomEmojiHandler : StickerHandlerBase
 {
-    public SearchCustomEmojiHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerSearchIndex _search;
+
+    public SearchCustomEmojiHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerSearchIndex store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _search = store;
+    }
 
     [TLFunction(Constructors.baseLayer_SearchCustomEmoji)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
@@ -21,6 +27,6 @@ public sealed class SearchCustomEmojiHandler : StickerHandlerBase
         string emoticon = Encoding.UTF8.GetString(request.Emoticon);
         long hash = request.Hash;
         return await GetUserIdAsync(authKeyId) is not null
-            ? await Store.SearchCustomEmojiAsync(emoticon, hash) : AuthError();
+            ? await _search.SearchCustomEmojiAsync(emoticon, hash) : AuthError();
     }
 }

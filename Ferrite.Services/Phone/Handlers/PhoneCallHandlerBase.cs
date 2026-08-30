@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -12,11 +11,6 @@ using TLDto = Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// Shared mechanics for the 1:1 phone.* handlers: identity resolution, call
-/// value/result construction, and exact-device update delivery. It holds no
-/// endpoint behavior; each concrete handler owns its own transition.
-/// </summary>
 public abstract class PhoneCallHandlerBase
 {
     private readonly IBlockedPeersRepository _blockedPeersRepository;
@@ -81,11 +75,6 @@ public abstract class PhoneCallHandlerBase
         return false;
     }
 
-    /// <summary>
-    /// Reads a serialized phoneCallProtocol span into the transient
-    /// CallProtocol record. Must run synchronously before any await because
-    /// the span is backed by the request's pooled memory.
-    /// </summary>
     protected static CallProtocol ReadProtocol(Span<byte> protocolSpan)
     {
         var concrete = (PhoneCallProtocol)protocolSpan;
@@ -196,42 +185,24 @@ public abstract class PhoneCallHandlerBase
         return reason.AsSpan().ToArray();
     }
 
-    /// <summary>
-    /// Builds a phone.phoneCall result carrying the serialized call plus both
-    /// participant user rows.
-    /// </summary>
-    protected PhoneResult BuildResult(byte[] callBytes, long callerUserId,
-        long calleeUserId)
+    protected PhoneResult BuildResult(long viewerUserId, byte[] callBytes, long callerUserId,
+        long calleeUserId, UserSerializer userSerializer)
     {
-        var users = BuildParticipantUsers(callerUserId, calleeUserId);
+        var users = BuildParticipantUsers(viewerUserId, callerUserId, calleeUserId,
+            userSerializer);
         return Ferrite.TL.baseLayer.phone.PhonePhoneCall.Builder()
             .PhoneCall(callBytes)
             .Users(users)
             .Build();
     }
 
-    /// <summary>
-    /// Builds a Vector of both participant user rows. Vector is a ref struct;
-    /// the append helper must take it by ref so the regrown buffer and advanced
-    /// offset are visible. Passing it by value bumps the count through the
-    /// shared backing array but drops the element bytes, yielding a truncated
-    /// users vector that clients reject with "Wrong vector length".
-    /// </summary>
-    protected Vector BuildParticipantUsers(long callerUserId, long calleeUserId)
+    protected Vector BuildParticipantUsers(long viewerUserId, long callerUserId, long calleeUserId,
+        UserSerializer userSerializer)
     {
         var users = new Vector();
-        AppendUser(ref users, callerUserId);
-        AppendUser(ref users, calleeUserId);
+        userSerializer.Append(viewerUserId, ref users, callerUserId);
+        userSerializer.Append(viewerUserId, ref users, calleeUserId);
         return users;
-    }
-
-    private void AppendUser(ref Vector users, long userId)
-    {
-        using TLUser? user = _userRepository.GetUser(userId);
-        if (user != null)
-        {
-            users.AppendTLObject(user.Value.AsSpan());
-        }
     }
 
     protected async Task PushCallUpdate(long userId, byte[] callBytes,
@@ -247,11 +218,6 @@ public abstract class PhoneCallHandlerBase
         return (peer.Id, peer.AccessHash);
     }
 
-    /// <summary>
-    /// Resolves a call the user participates in, including a short-lived
-    /// discarded tombstone, validating the access hash. Returns null when the
-    /// call is unknown, the hash mismatches, or the user is not a participant.
-    /// </summary>
     protected CallSnapshot? ResolveParticipantCall(long callId,
         long accessHash, long userId)
     {
@@ -269,12 +235,6 @@ public abstract class PhoneCallHandlerBase
         return call;
     }
 
-    /// <summary>
-    /// Builds the serialized final phoneCall carried in the caller's result and
-    /// the callee's update. Both sides share one value: g_a_or_b is g_a, the
-    /// key fingerprint is the client-supplied value, and the connection set and
-    /// protocol are identical.
-    /// </summary>
     protected static byte[] BuildFinalCall(CallSnapshot call)
     {
         byte[] protocol = BuildProtocol(call.NegotiatedProtocol ?? call.CallerProtocol);
@@ -304,11 +264,6 @@ public abstract class PhoneCallHandlerBase
         return built.ToReadOnlySpan().ToArray();
     }
 
-    /// <summary>
-    /// Builds one reflector phoneConnection row. The id must be nonzero (the
-    /// client ranks reflector ids to derive a 1-based reflector index), and the
-    /// 16-byte peer tag is shared by both parties.
-    /// </summary>
     protected static byte[] BuildReflectorConnection(long id, string ip, int port,
         ReadOnlySpan<byte> peerTag)
     {

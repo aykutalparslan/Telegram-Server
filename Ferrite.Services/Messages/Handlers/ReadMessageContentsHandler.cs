@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -12,15 +11,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Marks the content of common-box messages read. The request carries only the
-/// caller's own local ids, so each id is resolved in the caller's box and the
-/// mention/media-unread flags are cleared there. Every other live copy of the
-/// same logical message keeps its own flags, except the sender's outgoing copy:
-/// clearing its media-unread flag is exactly what the peer notification reports,
-/// and the notification carries the peer's own copy ids because a client resolves
-/// updateReadMessagesContents in its own id space.
-/// </summary>
 public sealed class ReadMessageContentsHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -89,10 +79,6 @@ public sealed class ReadMessageContentsHandler
             return Error("INTERNAL_SERVER_ERROR");
         }
 
-        // One read event advances the box by a single pts step regardless of how
-        // many message ids it covers, so pts_count is 1 on every side.
-        // EnqueueUpdate owns the value it is handed and disposes it, so these
-        // pooled updates are transferred rather than scoped with `using`.
         int date = checked((int)_timeProvider.GetUtcNow().ToUnixTimeSeconds());
         int pts = await callerCtx.IncrementPts();
         await _updates.EnqueueUpdate(userId, BuildUpdate(callerIds, pts, date));
@@ -109,11 +95,6 @@ public sealed class ReadMessageContentsHandler
         return AffectedMessages.Builder().Pts(pts).PtsCount(1).Build();
     }
 
-    /// <summary>
-    /// Clears the caller's own copy when it is an incoming regular message that
-    /// still carries a mention or unread media. The unread-mention count is
-    /// derived from these stored flags, so clearing them is the whole update.
-    /// </summary>
     private bool TryClearCallerCopy(IReadOnlyList<StoredMessageLocation> copies,
         long userId, int messageId)
     {

@@ -6,11 +6,6 @@ using System.Text.Json;
 
 namespace Ferrite.Services.Calls;
 
-/// <summary>
-/// Raised when a client <c>joinGroupCall.params</c> payload is malformed,
-/// oversized, or carries an unsupported shape. Handlers translate this into the
-/// <c>DATA_JSON_INVALID</c> wire error.
-/// </summary>
 public sealed class GroupCallDataJsonException : Exception
 {
     public GroupCallDataJsonException(string message, Exception? innerException = null)
@@ -19,17 +14,6 @@ public sealed class GroupCallDataJsonException : Exception
     }
 }
 
-/// <summary>
-/// The strict codec for the tgcalls group-call JSON contract. It parses the
-/// client audio offer (<c>joinGroupCall.params</c>) and serializes the connection
-/// answer (<c>updateGroupCallConnection.params</c>). This is an external protocol
-/// boundary, so JSON is decoded/encoded here and never persisted.
-///
-/// Reference: tgcalls <c>group/GroupJoinPayloadInternal.cpp</c> in the Telegram Android client.
-/// The client serializes exactly <c>ssrc/ufrag/pwd/fingerprints</c> plus an
-/// optional video <c>ssrc-groups</c> array carrying the <c>SIM</c>/<c>FID</c>
-/// groups it advertises. Anything else is rejected.
-/// </summary>
 public static class GroupCallJoinPayloadCodec
 {
     public const int MaxPayloadBytes = 8 * 1024;
@@ -45,13 +29,6 @@ public static class GroupCallJoinPayloadCodec
 
     private const string ExpectedSetup = "passive";
 
-    /// <summary>
-    /// Parse and strictly validate a client <c>joinGroupCall.params</c> payload.
-    /// </summary>
-    /// <exception cref="GroupCallDataJsonException">
-    /// The payload is empty, oversized, malformed, missing a required field, has a
-    /// duplicate/unknown key, an unusable SSRC, or a non-<c>passive</c> role.
-    /// </exception>
     public static GroupCallJoinPayload ParseJoinPayload(ReadOnlySpan<byte> utf8Json)
     {
         if (utf8Json.Length == 0)
@@ -80,11 +57,6 @@ public static class GroupCallJoinPayloadCodec
         }
     }
 
-    /// <summary>
-    /// Serialize a validated worker transport into <c>updateGroupCallConnection.params</c>.
-    /// Every candidate field is a string; the video section is emitted only when
-    /// the worker returned one.
-    /// </summary>
     public static byte[] BuildConnectionParams(GroupCallMediaTransport transport)
     {
         ArgumentNullException.ThrowIfNull(transport);
@@ -126,11 +98,6 @@ public static class GroupCallJoinPayloadCodec
             }
             writer.WriteEndArray();
 
-            // Closes "transport". The client looks "video" up on the response
-            // ROOT, in the same scope it finds "transport"
-            // (GroupJoinPayloadInternal.cpp:365), so the video object must be
-            // written AFTER this call. Nesting it inside "transport" silently
-            // degrades every join to audio-only.
             writer.WriteEndObject();
 
             if (transport.Video is { } video)
@@ -151,9 +118,6 @@ public static class GroupCallJoinPayloadCodec
                     writer.WriteNumber("clockrate", payloadType.ClockRate);
                     writer.WriteNumber("channels", payloadType.Channels);
 
-                    // parsePayloadType reads a parameter only when is_string()
-                    // holds (GroupJoinPayloadInternal.cpp:207); a numeric value
-                    // is silently dropped, so every value is written as a string.
                     writer.WriteStartObject("parameters");
                     foreach (var parameter in payloadType.Parameters)
                     {

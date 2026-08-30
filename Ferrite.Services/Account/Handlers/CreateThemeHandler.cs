@@ -12,6 +12,30 @@ public sealed class CreateThemeHandler : ThemeHandlerBase
     public CreateThemeHandler(ThemeStore store, ProfileStore profiles)
         : base(store, profiles) { }
 
+    [TLFunction(Constructors.layer107_AccountCreateTheme)]
+    public async Task<TLBytes> HandleLayer107(long authKeyId, TLBytes q)
+    {
+        using var current = ToCurrentCreateThemeRequest(q);
+        return await Handle(authKeyId, current);
+    }
+
+    private static TLBytes ToCurrentCreateThemeRequest(TLBytes q)
+    {
+        var sent = new TL.layer107.account.AccountCreateTheme(q.AsSpan());
+        var builder = CreateTheme.Builder()
+            .Slug(sent.Slug)
+            .Title(sent.Title);
+        if (sent.Flags[2]) builder = builder.Document(sent.Document);
+        if (sent.Flags[3])
+        {
+            var settings = new Vector();
+            settings.AppendTLObject(sent.Settings);
+            builder = builder.Settings(settings);
+        }
+        using var current = builder.Build();
+        return current.TLBytes!.Value;
+    }
+
     [TLFunction(Constructors.baseLayer_CreateTheme)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
     {

@@ -28,10 +28,6 @@ public abstract class WallpaperHandlerBase
         {
             value = new WallpaperInput(WallpaperInputKind.Id, id.Id,
                 id.AccessHash, string.Empty);
-            // A wallpaper id is a full-range int64: it is the uploaded
-            // document's id, and IRandomGenerator.NextLong is signed. Demanding
-            // a positive id rejected roughly half of all uploaded wallpapers,
-            // which is what the access hash exists to validate instead.
             return id.Id != 0;
         }
         if (input.Is(out InputWallPaperSlug slug))

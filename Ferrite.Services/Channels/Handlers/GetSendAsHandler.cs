@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -33,6 +32,23 @@ public sealed class GetSendAsHandler
         _timeProvider = timeProvider;
     }
 
+    [TLFunction(Constructors.layer135_ChannelsGetSendAs)]
+    public async ValueTask<TLSendAsPeers> HandleLayer135(long authKeyId,
+        TLBytes q)
+    {
+        using var current = ToCurrentGetSendAsRequest(q);
+        return await Handle(authKeyId, current);
+    }
+
+    private static TLBytes ToCurrentGetSendAsRequest(TLBytes q)
+    {
+        var sent = new TL.layer135.channels.ChannelsGetSendAs(q.AsSpan());
+        using var current = GetSendAs.Builder()
+            .Peer(sent.Peer)
+            .Build();
+        return current.TLBytes!.Value;
+    }
+
     [TLFunction(Constructors.baseLayer_GetSendAs)]
     public async ValueTask<TLSendAsPeers> Handle(long authKeyId, TLBytes q)
     {
@@ -47,7 +63,6 @@ public sealed class GetSendAsHandler
             userId = auth.Value.AsAuthInfo().UserId;
         }
 
-        // Resolve inputPeerSelf only after the permanent principal is known.
         var request = (GetSendAs)q;
         DialogPeerKey? destination = PeerResolver.ResolveOptionalDialogPeer(
             request.Get_PeerView(), userId);
@@ -64,8 +79,6 @@ public sealed class GetSendAsHandler
             return Error("AUTH_KEY_INVALID");
         }
 
-        // Ref-struct vectors cannot cross an await, so every owned sender row is
-        // resolved first and the result is assembled synchronously below.
         List<long> candidates = await SendAsResolver
             .GetOwnedSenderChannelIdsAsync(_chatParticipantsRepository, userId);
 

@@ -24,11 +24,6 @@ public readonly record struct SecretChatEncryptedFileInput(
     SecretChatEncryptedFileInputKind Kind, long Id, long AccessHash, int Parts,
     string? Md5Checksum, int KeyFingerprint);
 
-/// <summary>
-/// Resolves the outer encrypted-file envelope over multipart storage.
-/// Ciphertext remains opaque; only part shape and an optional small-file MD5
-/// are validated.
-/// </summary>
 public sealed class SecretChatEncryptedFileResolver
 {
     private readonly IFileInfoRepository _fileInfoRepository;

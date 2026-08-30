@@ -8,20 +8,8 @@ using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Channels;
 
-/// <summary>
-/// Builds `dto.adminLogEvent` rows and maps a recorded action onto the
-/// `channelAdminLogEventsFilter` bits that select it.
-///
-/// The mapping is a pure function of the action's constructor id, so the ledger
-/// stores no derived category that could drift from the action it describes. The
-/// only thing the row carries beyond the TL action itself is `search_text`: the
-/// text the appending mutation knew, which is what `q` matches against. A reader
-/// cannot recover it later — the actor's display name and a restricted member's
-/// name are not in the action — so the writer records it once.
-/// </summary>
 public static class ChannelAdminLogRows
 {
-    // channelAdminLogEventsFilter#ea107ae4 flag indices, in schema order.
     private const int Join = 1 << 0;
     private const int Leave = 1 << 1;
     private const int Invite = 1 << 2;
@@ -42,23 +30,10 @@ public static class ChannelAdminLogRows
     private const int Forums = 1 << 17;
     private const int SubExtend = 1 << 18;
 
-    /// <summary>
-    /// The restriction and promotion filters are each one td_api switch that
-    /// pinned TDLib expands into four and two adjacent bits respectively
-    /// (`get_input_channel_admin_log_events_filter`, `DialogEventLog.cpp:621-626`
-    /// sends `member_restrictions_` four times and `member_promotions_` twice), so
-    /// a ban event has to answer to any of its four and a promotion to either of
-    /// its two.
-    /// </summary>
     private const int Restrictions = Ban | Unban | Kick | Unkick;
 
     private const int Promotions = Promote | Demote;
 
-    /// <summary>
-    /// The five settings actions Ferrite appends that carry nothing but
-    /// <c>new_value:Bool</c>. They share one factory so the boxed `Bool` and the
-    /// array-only handoff to the ledger are written once rather than five times.
-    /// </summary>
     public enum BoolActionKind
     {
         PreHistoryHidden,
@@ -101,12 +76,6 @@ public static class ChannelAdminLogRows
             .SearchText(Encoding.UTF8.GetBytes(searchText))
             .Build();
 
-    /// <summary>
-    /// The filter bits that select one action. Zero means no filter bit selects
-    /// it, so it is only ever returned by an unfiltered request; every action
-    /// Ferrite appends is mapped, which `Phase10hAdminLogTests` asserts against
-    /// the append sites rather than against this table alone.
-    /// </summary>
     public static int FilterMask(int actionConstructor) => actionConstructor switch
     {
         Constructors.baseLayer_ChannelAdminLogEventActionParticipantJoin => Join,
@@ -163,11 +132,6 @@ public static class ChannelAdminLogRows
         _ => 0,
     };
 
-    /// <summary>
-    /// The bits a request's `events_filter` asked for. A filter with no bit set
-    /// selects nothing, which is what the schema means: the flag word IS the
-    /// selection, and an empty one is not the same as an absent filter.
-    /// </summary>
     public static int RequestedMask(ChannelAdminLogEventsFilter filter)
     {
         Flags flags = filter.Flags;

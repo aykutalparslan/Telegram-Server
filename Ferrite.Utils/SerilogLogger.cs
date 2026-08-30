@@ -12,11 +12,15 @@ public class SerilogLogger : ILogger
     private Logger log;
     public SerilogLogger()
     {
-        //clear the log at the start of the application
-        File.WriteAllText("ferrite.log", string.Empty);
+        var path = Environment.GetEnvironmentVariable("FERRITE_LOG_PATH");
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            path = "ferrite.log";
+        }
+        File.WriteAllText(path, string.Empty);
         log = new LoggerConfiguration()
             .MinimumLevel.Debug()
-            .WriteTo.File("ferrite.log")
+            .WriteTo.File(path)
             .CreateLogger();
     }
 
@@ -92,5 +96,4 @@ public class SerilogLogger : ILogger
         log.Warning(exception, message);
     }
 }
-
 

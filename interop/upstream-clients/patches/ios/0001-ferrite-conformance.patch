@@ -1,0 +1,818 @@
+diff --git a/build-system/Make/Make.py b/build-system/Make/Make.py
+index 1bdd0f7412e40ec01e662af5a2fbfc3fe99ce932..c602b5afb8f94b0e592316caee218cb699fcb6de 100644
+--- a/build-system/Make/Make.py
++++ b/build-system/Make/Make.py
+@@ -93,8 +93,6 @@ class BazelCommandLine:
+             # https://docs.bazel.build/versions/master/command-line-reference.html
+             # Set the number of parallel jobs per module to saturate the available CPU resources.
+             #'--swiftcopt=-j{}'.format(os.cpu_count() - 1),
+-            '--@build_bazel_rules_swift//swift:copt="-j{}"'.format(os.cpu_count() - 1),
+-            '--@build_bazel_rules_swift//swift:copt="-whole-module-optimization"',
+         ]
+
+         self.common_release_args = [
+@@ -280,6 +278,9 @@ class BazelCommandLine:
+         if self.lock:
+             combined_arguments += ['--lockfile_mode=error']
+
++        if self.additional_args is not None:
++            combined_arguments += self.additional_args
++
+         if self.custom_target is not None:
+             combined_arguments += [self.custom_target]
+         else:
+@@ -650,6 +651,9 @@ def build(bazel, arguments):
+     if arguments.lock:
+         bazel_command_line.set_lock(True)
+
++    if arguments.bazelArguments is not None:
++        bazel_command_line.add_additional_args(shlex.split(arguments.bazelArguments))
++
+     if arguments.cacheDir is not None:
+         bazel_command_line.add_cache_dir(arguments.cacheDir)
+     elif arguments.cacheHost is not None:
+diff --git a/submodules/MtProtoKit/Sources/MTDatacenterAuthMessageService.m b/submodules/MtProtoKit/Sources/MTDatacenterAuthMessageService.m
+index 882d6c6118f6876febbcc0356bcef825fe384d4a..66957b157fd012d2e03413ccb5f87a86566422ae 100644
+--- a/submodules/MtProtoKit/Sources/MTDatacenterAuthMessageService.m
++++ b/submodules/MtProtoKit/Sources/MTDatacenterAuthMessageService.m
+@@ -14,6 +14,8 @@
+ #import "MTBuffer.h"
+ #import <MtProtoKit/MTEncryption.h>
+ #import <CommonCrypto/CommonCrypto.h>
++#import <stdlib.h>
++#import <string.h>
+
+ #import "MTInternalMessageParser.h"
+ #import "MTServerDhInnerDataMessage.h"
+@@ -45,6 +47,7 @@ - (uint64_t)fingerprintWithEncryptionProvider:(id<EncryptionProvider>)encryption
+
+ static NSArray<MTDatacenterAuthPublicKey *> *defaultPublicKeys(bool isProduction) {
+     static NSArray<MTDatacenterAuthPublicKey *> *testingPublicKeys = nil;
++    static NSArray<MTDatacenterAuthPublicKey *> *ferriteTestingPublicKeys = nil;
+     static NSArray<MTDatacenterAuthPublicKey *> *productionPublicKeys = nil;
+     static dispatch_once_t onceToken;
+     dispatch_once(&onceToken, ^{
+@@ -59,6 +62,17 @@ - (uint64_t)fingerprintWithEncryptionProvider:(id<EncryptionProvider>)encryption
+              "-----END RSA PUBLIC KEY-----"]
+         ];
+
++        ferriteTestingPublicKeys = @[
++            [[MTDatacenterAuthPublicKey alloc] initWithPublicKey:@"-----BEGIN RSA PUBLIC KEY-----\n"
++             "MIIBCgKCAQEAt1YElR7/5enRYr788g210K6QZzUAmaithnSzmQsKb+XL5KhQHrJw\n"
++             "VNMINO17SkB6i4fxG7ydDyFDbLA0Ls6jQZ0mX33Gl8vYWsczPbkbqzs9N6GkOo10\n"
++             "dDVoGObvSHRSwT9zkDixGiq/3b+WPhFcpdJ4OY+5ElD89+fXYgUIhskjYoI8P/PJ\n"
++             "LCf6GLfneJ00N+wDVxAiwOaD6dxvj8kiUDHSwdTXWQ56Nc/Il121fIGbEmho+ShA\n"
++             "fzwQPynnEsA0EyTsqtYHle+KowMhnQYpcvK/iv290NXwRjB4jWtH7tNT/PgB5tud\n"
++             "1LJ9Ta3FusvnDE35w97G6q+yXltErSpM/QIDAQAB\n"
++             "-----END RSA PUBLIC KEY-----"]
++        ];
++
+         productionPublicKeys = @[
+             [[MTDatacenterAuthPublicKey alloc] initWithPublicKey:@"-----BEGIN RSA PUBLIC KEY-----\n"
+              "MIIBCgKCAQEA6LszBcC1LGzyr992NzE0ieY+BSaOW622Aa9Bd4ZHLl+TuFQ4lo4g\n"
+@@ -73,6 +87,10 @@ - (uint64_t)fingerprintWithEncryptionProvider:(id<EncryptionProvider>)encryption
+     if (isProduction) {
+         return productionPublicKeys;
+     } else {
++        const char *conformance = getenv("FERRITE_CONFORMANCE");
++        if (conformance != NULL && strcmp(conformance, "1") == 0) {
++            return ferriteTestingPublicKeys;
++        }
+         return testingPublicKeys;
+     }
+ }
+diff --git a/submodules/TelegramCore/Sources/FerriteConformanceConfig.swift b/submodules/TelegramCore/Sources/FerriteConformanceConfig.swift
+new file mode 100644
+index 0000000000000000000000000000000000000000..6eae3cb7868ad5472d23dbdd503c4e9bd4a4fbb3
+--- /dev/null
++++ b/submodules/TelegramCore/Sources/FerriteConformanceConfig.swift
+@@ -0,0 +1,108 @@
++import Foundation
++import MtProtoKit
++import SwiftSignalKit
++import TelegramApi
++
++public struct FerriteConformanceConfig {
++    public let host: String
++    public let port: UInt16
++    public let bridgePort: UInt16
++    public let runToken: String
++    public let instanceId: String
++    public let phone: String
++    public let firstName: String
++    public let lastName: String
++    public let peers: [String]
++    public let apiId: Int32
++    public let apiHash: String
++
++    public static var current: FerriteConformanceConfig? {
++        #if targetEnvironment(simulator)
++        let values = ProcessInfo.processInfo.environment
++        guard values["FERRITE_CONFORMANCE"] == "1" else {
++            return nil
++        }
++        guard values["FERRITE_HOST"] == "127.0.0.1" else {
++            return nil
++        }
++        guard let port = checkedPort(values["FERRITE_PORT"]),
++              let bridgePort = checkedPort(values["FERRITE_BRIDGE_PORT"]),
++              port != bridgePort else {
++            return nil
++        }
++        guard let runToken = values["FERRITE_RUN_TOKEN"],
++              runToken.utf8.count == 32,
++              runToken.utf8.allSatisfy({ byte in
++                  return (byte >= 48 && byte <= 57) || (byte >= 97 && byte <= 102)
++              }) else {
++            return nil
++        }
++        guard let instanceId = checkedIdentifier(values["FERRITE_INSTANCE_ID"]),
++              let phone = checkedPhone(values["FERRITE_PHONE"]),
++              let apiIdValue = values["FERRITE_API_ID"],
++              let apiId = Int32(apiIdValue),
++              apiId > 0,
++              let apiHash = values["FERRITE_API_HASH"],
++              apiHash.utf8.count == 32,
++              apiHash.utf8.allSatisfy({ byte in
++                  return (byte >= 48 && byte <= 57) || (byte >= 97 && byte <= 102)
++              }) else {
++            return nil
++        }
++        let peers = (values["FERRITE_PEERS"] ?? "")
++            .split(separator: ",")
++            .compactMap { checkedPhone(String($0)) }
++        let requestedPeers = (values["FERRITE_PEERS"] ?? "")
++            .split(separator: ",")
++        guard peers.count == requestedPeers.count,
++              !peers.contains(phone) else {
++            return nil
++        }
++        return FerriteConformanceConfig(
++            host: "127.0.0.1",
++            port: port,
++            bridgePort: bridgePort,
++            runToken: runToken,
++            instanceId: instanceId,
++            phone: phone,
++            firstName: values["FERRITE_FIRST_NAME"] ?? instanceId,
++            lastName: values["FERRITE_LAST_NAME"] ?? "",
++            peers: peers,
++            apiId: apiId,
++            apiHash: apiHash
++        )
++        #else
++        return nil
++        #endif
++    }
++
++    private static func checkedPort(_ value: String?) -> UInt16? {
++        guard let value, let port = UInt16(value), port > 0 else {
++            return nil
++        }
++        return port
++    }
++
++    private static func checkedIdentifier(_ value: String?) -> String? {
++        guard let value, !value.isEmpty, value.utf8.count <= 64,
++              value.utf8.allSatisfy({ byte in
++                  return (byte >= 48 && byte <= 57)
++                      || (byte >= 65 && byte <= 90)
++                      || (byte >= 97 && byte <= 122)
++                      || byte == 45
++              }) else {
++            return nil
++        }
++        return value
++    }
++
++    private static func checkedPhone(_ value: String?) -> String? {
++        guard let value, value.utf8.count >= 2, value.utf8.count <= 20,
++              value.utf8.first == 43,
++              value.utf8.dropFirst().allSatisfy({ $0 >= 48 && $0 <= 57 }) else {
++            return nil
++        }
++        return value
++    }
++}
++
+diff --git a/submodules/TelegramCore/Sources/Network/Network.swift b/submodules/TelegramCore/Sources/Network/Network.swift
+index f9dd1d6c1e6262ff8b70a01f38f1683704fbbe61..98baf581c551ee49b6f172df9dbc5cc02afd1ca3 100644
+--- a/submodules/TelegramCore/Sources/Network/Network.swift
++++ b/submodules/TelegramCore/Sources/Network/Network.swift
+@@ -526,26 +526,32 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
+                 }
+             }
+             
+-            let seedAddressList: [Int: [String]]
+-            
+-            if testingEnvironment {
+-                seedAddressList = [
+-                    1: ["149.154.175.10"],
+-                    2: ["149.154.167.40"],
+-                    3: ["149.154.175.117"]
+-                ]
++            if testingEnvironment, let conformance = FerriteConformanceConfig.current {
++                for id in 1 ... 3 {
++                    context.setSeedAddressSetForDatacenterWithId(id, seedAddressSet: MTDatacenterAddressSet(addressList: [
++                        MTDatacenterAddress(ip: conformance.host, port: conformance.port, preferForMedia: false, restrictToTcp: true, cdn: false, preferForProxy: false, secret: nil)
++                    ]))
++                }
+             } else {
+-                seedAddressList = [
+-                    1: ["149.154.175.50", "2001:b28:f23d:f001::a"],
+-                    2: ["149.154.167.50", "95.161.76.100", "2001:67c:4e8:f002::a"],
+-                    3: ["149.154.175.100", "2001:b28:f23d:f003::a"],
+-                    4: ["149.154.167.91", "2001:67c:4e8:f004::a"],
+-                    5: ["149.154.171.5", "2001:b28:f23f:f005::a"]
+-                ]
+-            }
+-            
+-            for (id, ips) in seedAddressList {
+-                context.setSeedAddressSetForDatacenterWithId(id, seedAddressSet: MTDatacenterAddressSet(addressList: ips.map { MTDatacenterAddress(ip: $0, port: 443, preferForMedia: false, restrictToTcp: false, cdn: false, preferForProxy: false, secret: nil) }))
++                let seedAddressList: [Int: [String]]
++                if testingEnvironment {
++                    seedAddressList = [
++                        1: ["149.154.175.10"],
++                        2: ["149.154.167.40"],
++                        3: ["149.154.175.117"]
++                    ]
++                } else {
++                    seedAddressList = [
++                        1: ["149.154.175.50", "2001:b28:f23d:f001::a"],
++                        2: ["149.154.167.50", "95.161.76.100", "2001:67c:4e8:f002::a"],
++                        3: ["149.154.175.100", "2001:b28:f23d:f003::a"],
++                        4: ["149.154.167.91", "2001:67c:4e8:f004::a"],
++                        5: ["149.154.171.5", "2001:b28:f23f:f005::a"]
++                    ]
++                }
++                for (id, ips) in seedAddressList {
++                    context.setSeedAddressSetForDatacenterWithId(id, seedAddressSet: MTDatacenterAddressSet(addressList: ips.map { MTDatacenterAddress(ip: $0, port: 443, preferForMedia: false, restrictToTcp: false, cdn: false, preferForProxy: false, secret: nil) }))
++                }
+             }
+             
+             context.keychain = keychain
+@@ -842,7 +848,7 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
+     public func dropConnectionStatus() {
+         _connectionStatus.set(.single(.waitingForNetwork))
+     }
+-    
++
+     public let shouldKeepConnection = Promise<Bool>(false)
+     private let shouldKeepConnectionDisposable = MetaDisposable()
+     
+diff --git a/submodules/TelegramUI/Sources/AppDelegate.swift b/submodules/TelegramUI/Sources/AppDelegate.swift
+index 4c836d070ca7d289e0a54bc7f504b4f9ee57c41a..2b27999b17effc138ab6b1cee0e19e1716df0052 100644
+--- a/submodules/TelegramUI/Sources/AppDelegate.swift
++++ b/submodules/TelegramUI/Sources/AppDelegate.swift
+@@ -227,6 +227,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
+     let hasActiveAudioSession = Promise<Bool>(false)
+     
+     private let sharedContextPromise = Promise<SharedApplicationContext>()
++    private var ferriteConformanceController: FerriteConformanceController?
+
+     private var accountManager: AccountManager<TelegramAccountManagerTypes>?
+     private var accountManagerState: AccountManagerState?
+@@ -987,6 +988,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
+                     }
+                 }
+             }, appDelegate: self)
++
++            if let config = FerriteConformanceConfig.current {
++                let controller = FerriteConformanceController(config: config, context: sharedContext)
++                self.ferriteConformanceController = controller
++                controller.start()
++            }
+             
+             presentationDataPromise.set(sharedContext.presentationData)
+             
+diff --git a/submodules/TelegramUI/Sources/FerriteConformanceController.swift b/submodules/TelegramUI/Sources/FerriteConformanceController.swift
+new file mode 100644
+index 0000000000000000000000000000000000000000..a89eb594d5bb1dbefa9b71c99fba771c89489e0b
+--- /dev/null
++++ b/submodules/TelegramUI/Sources/FerriteConformanceController.swift
+@@ -0,0 +1,512 @@
++import Foundation
++import Network
++import AccountContext
++import Postbox
++import SwiftSignalKit
++import TelegramCore
++import UIKit
++
++private enum FerriteConformanceProvisioningState: String {
++    case starting = "STARTING"
++    case awaitingCode = "AWAITING_CODE"
++    case authorizing = "AUTHORIZING"
++    case importingContacts = "IMPORTING_CONTACTS"
++    case ready = "READY"
++    case failed = "FAILED"
++}
++
++final class FerriteConformanceController {
++    private let config: FerriteConformanceConfig
++    private let context: SharedAccountContextImpl
++    private let queue = DispatchQueue(label: "org.ferrite.provisioning.ios")
++    private let disposables = DisposableSet()
++    private var listener: NWListener?
++    private var provisioningState: FerriteConformanceProvisioningState = .starting
++    private var provisioningHistory: [FerriteConformanceProvisioningState] = [.starting]
++    private var provisioningFailure: String?
++    private var provisioningStage: String = "created"
++    private var requestedAuthorizationCode = false
++    private var unauthorizedAccount: UnauthorizedAccount?
++    private var account: Account?
++    private var accountContext: AccountContext?
++    private var contactsDeadline: Double = 0.0
++
++    init(config: FerriteConformanceConfig, context: SharedAccountContextImpl) {
++        self.config = config
++        self.context = context
++    }
++
++    deinit {
++        self.listener?.cancel()
++        self.disposables.dispose()
++    }
++
++    func start() {
++        self.startListener()
++        self.startProvisioning()
++    }
++
++    private func startListener() {
++        let parameters = NWParameters.tcp
++        parameters.requiredLocalEndpoint = .hostPort(
++            host: NWEndpoint.Host("127.0.0.1"),
++            port: NWEndpoint.Port(rawValue: self.config.bridgePort)!
++        )
++        do {
++            let listener = try NWListener(using: parameters)
++            self.listener = listener
++            listener.newConnectionHandler = { [weak self] connection in
++                self?.handle(connection: connection)
++            }
++            listener.stateUpdateHandler = { [weak self] state in
++                if case let .failed(error) = state {
++                    self?.fail("provisioning listener failed: \(error)")
++                }
++            }
++            listener.start(queue: self.queue)
++        } catch {
++            self.fail("provisioning listener could not start: \(error)")
++        }
++    }
++
++    private func handle(connection: NWConnection) {
++        connection.start(queue: self.queue)
++        self.receive(connection: connection, buffer: Data())
++    }
++
++    private func receive(connection: NWConnection, buffer: Data) {
++        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, complete, error in
++            guard let self else {
++                connection.cancel()
++                return
++            }
++            var updated = buffer
++            if let data {
++                updated.append(data)
++            }
++            if updated.count > 65536 {
++                self.send(connection: connection, value: self.errorResponse("request exceeds 65536 bytes"))
++                return
++            }
++            if let newline = updated.firstIndex(of: 10) {
++                let requestData = updated[..<newline]
++                guard updated[updated.index(after: newline)...].allSatisfy({ $0 == 10 || $0 == 13 }) else {
++                    self.send(connection: connection, value: self.errorResponse("one request is allowed per connection"))
++                    return
++                }
++                self.dispatch(data: Data(requestData)) { value in
++                    self.queue.async {
++                        self.send(connection: connection, value: value)
++                    }
++                }
++            } else if complete || error != nil {
++                self.send(connection: connection, value: self.errorResponse("bridge closed before a complete request"))
++            } else {
++                self.receive(connection: connection, buffer: updated)
++            }
++        }
++    }
++
++    private func send(connection: NWConnection, value: [String: Any]) {
++        var response = value
++        response["run_token"] = self.config.runToken
++        guard JSONSerialization.isValidJSONObject(response),
++              var data = try? JSONSerialization.data(withJSONObject: response) else {
++            connection.cancel()
++            return
++        }
++        data.append(10)
++        connection.send(
++            content: data,
++            contentContext: .defaultMessage,
++            isComplete: true,
++            completion: .contentProcessed { _ in connection.cancel() }
++        )
++    }
++
++    private func dispatch(data: Data, completion: @escaping ([String: Any]) -> Void) {
++        guard let value = try? JSONSerialization.jsonObject(with: data),
++              let request = value as? [String: Any] else {
++            completion(self.errorResponse("request is not a JSON object"))
++            return
++        }
++        guard request["run_token"] as? String == self.config.runToken else {
++            completion(self.errorResponse("run token rejected"))
++            return
++        }
++        guard let type = request["type"] as? String else {
++            completion(self.errorResponse("request type is missing"))
++            return
++        }
++        DispatchQueue.main.async { [weak self] in
++            guard let self else {
++                completion(["ok": false, "error": "provisioning endpoint stopped"])
++                return
++            }
++            switch type {
++            case "status":
++                self.status(completion: completion)
++            case "deliver-code":
++                guard let code = request["code"] as? String,
++                      !code.isEmpty,
++                      code.utf8.count <= 32 else {
++                    completion(self.errorResponse("authorization code is invalid"))
++                    return
++                }
++                self.deliver(code: code, completion: completion)
++            default:
++                completion(self.errorResponse("unknown provisioning command: \(type)"))
++            }
++        }
++    }
++
++    private func errorResponse(_ message: String) -> [String: Any] {
++        return ["ok": false, "error": message]
++    }
++
++    private func successResponse(_ values: [String: Any] = [:]) -> [String: Any] {
++        var response = values
++        response["ok"] = true
++        return response
++    }
++
++    private func startProvisioning() {
++        self.provisioningStage = "awaiting-active-contexts"
++        self.disposables.add((self.context.activeAccountContexts
++        |> take(1)
++        |> deliverOnMainQueue).start(next: { [weak self] primary, _, currentAuth in
++            guard let self else {
++                return
++            }
++            if let primary, primary.account.testingEnvironment {
++                self.provisioningStage = "primary-test-account"
++                self.accountContext = primary
++                self.beginContactImport(account: primary.account)
++            } else if let currentAuth, currentAuth.testingEnvironment {
++                self.provisioningStage = "current-test-auth"
++                self.requestAuthorizationCode(account: currentAuth)
++            } else {
++                self.provisioningStage = "begin-new-auth"
++                    + "(primary=\(primary != nil),primaryTest=\(primary?.account.testingEnvironment ?? false)"
++                    + ",auth=\(currentAuth != nil),authTest=\(currentAuth?.testingEnvironment ?? false))"
++                self.context.beginNewAuth(testingEnvironment: true)
++                self.awaitUnauthorizedAccount()
++            }
++        }))
++    }
++
++    private func awaitUnauthorizedAccount() {
++        self.disposables.add((self.context.activeAccountContexts
++        |> deliverOnMainQueue).start(next: { [weak self] _, _, currentAuth in
++            guard let self else {
++                return
++            }
++            self.provisioningStage = "unauthorized-account"
++                + "(present=\(currentAuth != nil),test=\(currentAuth?.testingEnvironment ?? false))"
++            guard let currentAuth, currentAuth.testingEnvironment,
++                  !self.requestedAuthorizationCode else {
++                return
++            }
++            self.requestedAuthorizationCode = true
++            self.provisioningStage = "requesting-code"
++            self.requestAuthorizationCode(account: currentAuth)
++        }))
++    }
++
++    private func requestAuthorizationCode(account: UnauthorizedAccount) {
++        self.unauthorizedAccount = account
++        self.disposables.add((sendAuthorizationCode(
++            accountManager: self.context.accountManager,
++            account: account,
++            phoneNumber: self.config.phone,
++            apiId: self.config.apiId,
++            apiHash: self.config.apiHash,
++            pushNotificationConfiguration: nil,
++            firebaseSecretStream: .never(),
++            syncContacts: false,
++            disableAuthTokens: true,
++            forcedPasswordSetupNotice: { _ in nil }
++        )
++        |> deliverOnMainQueue).start(next: { [weak self] result in
++            guard let self else {
++                return
++            }
++            switch result {
++            case let .sentCode(account):
++                self.unauthorizedAccount = account
++                self.setProvisioningState(.awaitingCode)
++            case .loggedIn:
++                self.awaitAuthorizedAccount()
++            }
++        }, error: { [weak self] error in
++            self?.fail("sendAuthorizationCode failed: \(error)")
++        }))
++    }
++
++    private func deliver(code: String, completion: @escaping ([String: Any]) -> Void) {
++        guard self.provisioningState == .awaitingCode,
++              let account = self.unauthorizedAccount else {
++            completion(self.errorResponse("application is not awaiting an authorization code"))
++            return
++        }
++        self.setProvisioningState(.authorizing)
++        self.disposables.add((authorizeWithCode(
++            accountManager: self.context.accountManager,
++            account: account,
++            code: .phoneCode(code),
++            termsOfService: nil,
++            forcedPasswordSetupNotice: { _ in nil }
++        )
++        |> deliverOnMainQueue).start(next: { [weak self] result in
++            guard let self else {
++                return
++            }
++            switch result {
++            case .loggedIn:
++                completion(self.successResponse(["accepted": true]))
++                self.awaitAuthorizedAccount()
++            case let .signUp(data):
++                self.beginSignUp(account: account, data: data, completion: completion)
++            }
++        }, error: { [weak self] error in
++            guard let self else {
++                return
++            }
++            self.fail("authorizeWithCode failed: \(error)")
++            completion(self.errorResponse("authorization code was rejected"))
++        }))
++    }
++
++    private func beginSignUp(
++        account: UnauthorizedAccount,
++        data: AuthorizationSignUpData,
++        completion: @escaping ([String: Any]) -> Void
++    ) {
++        self.disposables.add((TelegramCore.beginSignUp(account: account, data: data)
++        |> deliverOnMainQueue).start(completed: { [weak self] in
++            guard let self else {
++                return
++            }
++            self.disposables.add((signUpWithName(
++                accountManager: self.context.accountManager,
++                account: account,
++                firstName: self.config.firstName,
++                lastName: self.config.lastName,
++                avatarData: nil,
++                avatarVideo: nil,
++                videoStartTimestamp: nil,
++                disableJoinNotifications: true,
++                forcedPasswordSetupNotice: { _ in nil }
++            )
++            |> deliverOnMainQueue).start(error: { [weak self] error in
++                guard let self else {
++                    return
++                }
++                self.fail("signUpWithName failed: \(error)")
++                completion(self.errorResponse("authorization sign-up failed"))
++            }, completed: { [weak self] in
++                guard let self else {
++                    return
++                }
++                completion(self.successResponse(["accepted": true, "signed_up": true]))
++                self.awaitAuthorizedAccount()
++            }))
++        }))
++    }
++
++    private func awaitAuthorizedAccount() {
++        self.disposables.add((self.context.activeAccountContexts
++        |> filter { primary, _, _ in primary?.account.testingEnvironment == true }
++        |> take(1)
++        |> deliverOnMainQueue).start(next: { [weak self] primary, _, _ in
++            guard let self, let primary else {
++                return
++            }
++            self.accountContext = primary
++            self.beginContactImport(account: primary.account)
++        }))
++    }
++
++    private func beginContactImport(account: Account) {
++        self.account = account
++        self.setProvisioningState(.importingContacts)
++        self.contactsDeadline = Date().timeIntervalSince1970 + 480.0
++        self.provisioningStage = "awaiting-self-peer"
++        account.viewTracker.forceUpdateCachedPeerData(peerId: account.peerId)
++        self.awaitSelfPeer()
++    }
++
++    private func awaitSelfPeer() {
++        guard let account = self.account else {
++            self.fail("authorized account disappeared before self peer sync")
++            return
++        }
++        self.disposables.add((account.postbox.transaction { transaction -> Bool in
++            transaction.getPeer(account.peerId) != nil
++        }
++        |> deliverOnMainQueue).start(next: { [weak self] stored in
++            guard let self else {
++                return
++            }
++            if stored {
++                self.provisioningStage = "importing-contacts"
++                self.attemptContactImport()
++            } else if Date().timeIntervalSince1970 >= self.contactsDeadline {
++                self.fail("the application never stored its own peer")
++            } else {
++                account.viewTracker.forceUpdateCachedPeerData(peerId: account.peerId)
++                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
++                    self?.awaitSelfPeer()
++                }
++            }
++        }))
++    }
++
++    private func attemptContactImport() {
++        guard let account = self.account else {
++            self.fail("authorized account disappeared during contact import")
++            return
++        }
++        if self.config.peers.isEmpty {
++            self.setProvisioningState(.ready)
++            return
++        }
++        let engine = TelegramEngine(account: account)
++        let signals = self.config.peers.map { phone in
++            engine.contacts.importContact(firstName: phone, lastName: "", phoneNumber: phone)
++        }
++        self.disposables.add((combineLatest(queue: .mainQueue(), signals)
++        |> deliverOnMainQueue).start(next: { [weak self] _ in
++            self?.verifyImportedContacts()
++        }))
++    }
++
++    private func verifyImportedContacts() {
++        guard let account = self.account else {
++            self.fail("authorized account disappeared before contact verification")
++            return
++        }
++        self.disposables.add((account.postbox.transaction { transaction -> Set<String> in
++            Set(transaction.getContactPeerIds().compactMap { peerId -> String? in
++                (transaction.getPeer(peerId) as? TelegramUser)?.phone.map {
++                    FerriteConformanceController.canonicalPhone($0)
++                }
++            })
++        }
++        |> deliverOnMainQueue).start(next: { [weak self] phones in
++            guard let self else {
++                return
++            }
++            if Set(self.config.peers).isSubset(of: phones) {
++                self.setProvisioningState(.ready)
++            } else if Date().timeIntervalSince1970 >= self.contactsDeadline {
++                self.fail("Postbox does not contain every configured peer contact")
++            } else {
++                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
++                    self?.attemptContactImport()
++                }
++            }
++        }))
++    }
++
++    private static func canonicalPhone(_ value: String) -> String {
++        return "+" + value.filter { $0.isNumber }
++    }
++
++    private func setProvisioningState(_ value: FerriteConformanceProvisioningState) {
++        self.provisioningState = value
++        if self.provisioningHistory.last != value {
++            self.provisioningHistory.append(value)
++        }
++    }
++
++    private func fail(_ message: String) {
++        if Thread.isMainThread {
++            self.provisioningFailure = message
++            self.setProvisioningState(.failed)
++        } else {
++            DispatchQueue.main.async { [weak self] in
++                self?.provisioningFailure = message
++                self?.setProvisioningState(.failed)
++            }
++        }
++    }
++
++    private func status(completion: @escaping ([String: Any]) -> Void) {
++        guard let account = self.account else {
++            var value: [String: Any] = [
++                "instance_id": self.config.instanceId,
++                "phone": self.config.phone,
++                "provisioning": self.provisioningState.rawValue,
++                "provisioning_history": self.provisioningHistory.map(\.rawValue),
++                "stage": self.provisioningStage,
++                "client_activated": false,
++                "user_id": 0,
++                "layer": Serialization().currentLayer(),
++                "contacts": [],
++            ]
++            if let failure = self.provisioningFailure {
++                value["provisioning_failure"] = failure
++            }
++            completion(self.successResponse(value))
++            return
++        }
++        let selfPeerStored = account.postbox.transaction { transaction -> Bool in
++            transaction.getPeer(account.peerId) != nil
++        }
++        let contacts = account.postbox.transaction { transaction -> [[String: Any]] in
++            transaction.getContactPeerIds().compactMap { peerId -> [String: Any]? in
++                guard let user = transaction.getPeer(peerId) as? TelegramUser else {
++                    return nil
++                }
++                return [
++                    "user_id": user.id.id._internalGetInt64Value(),
++                    "phone": user.phone.map { FerriteConformanceController.canonicalPhone($0) } ?? "",
++                    "first_name": user.firstName ?? "",
++                    "last_name": user.lastName ?? "",
++                ]
++            }
++        }
++        self.disposables.add((combineLatest(
++            contacts,
++            account.network.connectionStatus |> take(1),
++            selfPeerStored
++        )
++        |> deliverOnMainQueue).start(next: { [weak self] contacts, connectionStatus, selfPeerStored in
++            guard let self else {
++                return
++            }
++            let connection: String
++            switch connectionStatus {
++            case .waitingForNetwork:
++                connection = "waiting-for-network"
++            case .connecting:
++                connection = "connecting"
++            case .updating:
++                connection = "updating"
++            case .online:
++                connection = "online"
++            }
++            var value: [String: Any] = [
++                "instance_id": self.config.instanceId,
++                "phone": self.config.phone,
++                "provisioning": self.provisioningState.rawValue,
++                "provisioning_history": self.provisioningHistory.map(\.rawValue),
++                "stage": self.provisioningStage,
++                "client_activated": true,
++                "user_id": account.peerId.id._internalGetInt64Value(),
++                "layer": Serialization().currentLayer(),
++                "datacenter_id": account.network.datacenterId,
++                "server_time": Int64(account.network.globalTime),
++                "connection_state": connection == "waiting-for-network" ? 2 : 3,
++                "connection_status": connection,
++                "self_peer_stored": selfPeerStored,
++                "contacts": contacts,
++            ]
++            if let failure = self.provisioningFailure {
++                value["provisioning_failure"] = failure
++            }
++            completion(self.successResponse(value))
++        }))
++    }
++}
+diff --git a/submodules/TelegramUI/Sources/SharedAccountContext.swift b/submodules/TelegramUI/Sources/SharedAccountContext.swift
+index 59b425118f5b6119406a7b0c8debfe8c841653c3..0167ede1f69e6fcfcd12649c7f58c98c94692ebd 100644
+--- a/submodules/TelegramUI/Sources/SharedAccountContext.swift
++++ b/submodules/TelegramUI/Sources/SharedAccountContext.swift
+@@ -757,7 +757,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
+                 }
+                 
+                 if self.activeAccountsValue!.primary == nil && self.activeAccountsValue!.currentAuth == nil {
+-                    self.beginNewAuth(testingEnvironment: false)
++                    self.beginNewAuth(testingEnvironment: FerriteConformanceConfig.current != nil)
+                 }
+             }))
+         })

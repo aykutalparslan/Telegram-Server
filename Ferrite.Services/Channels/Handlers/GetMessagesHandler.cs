@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -36,6 +35,32 @@ public sealed class GetMessagesHandler : ChannelsHandlerBase
 
     }
 
+    [TLFunction(Constructors.layer51_ChannelsGetMessages)]
+    public async Task<Ferrite.TL.baseLayer.messages.TLMessages> HandleLayer51(
+        long authKeyId, TLBytes q)
+    {
+        using var current = ToCurrentGetMessagesRequest(q);
+        return await Handle(authKeyId, current);
+    }
+
+    private static TLBytes ToCurrentGetMessagesRequest(TLBytes q)
+    {
+        var sent = new TL.layer51.channels.ChannelsGetMessages(q.AsSpan());
+        var currentIds = new Vector();
+        VectorOfInt sentIds = sent.Id;
+        for (int i = 0; i < sentIds.Count; i++)
+        {
+            using var message = InputMessageID.Builder().Id(sentIds[i]).Build();
+            currentIds.AppendTLObject(message.ToReadOnlySpan());
+        }
+
+        using var current = ChannelsGetMessages.Builder()
+            .Channel(sent.Channel)
+            .Id(currentIds)
+            .Build();
+        return current.TLBytes!.Value;
+    }
+
     [TLFunction(Constructors.baseLayer_ChannelsGetMessages)]
     public async Task<Ferrite.TL.baseLayer.messages.TLMessages> Handle(long authKeyId, TLBytes q)
     {
@@ -48,7 +73,6 @@ public sealed class GetMessagesHandler : ChannelsHandlerBase
 
         long currentUserId = auth.Value.AsAuthInfo().UserId;
 
-        // Resolve everything off the ref-struct request before any await.
         var requestedIds = new List<int>();
         var request = (ChannelsGetMessages)q;
         long? channelId = ResolveInputChannelId(request.Get_ChannelView());
@@ -139,7 +163,7 @@ public sealed class GetMessagesHandler : ChannelsHandlerBase
             messageVector.AppendTLObject(bytes);
         }
         var userVector = new Vector();
-        AppendUsers(ref userVector, senderIds);
+        AppendUsers(currentUserId, ref userVector, senderIds);
         var chatVector = new Vector();
         foreach (byte[] relatedChatBytesItem in relatedChatBytes)
         {

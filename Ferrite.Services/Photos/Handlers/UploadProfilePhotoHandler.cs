@@ -3,7 +3,6 @@
 
 using System.Text;
 using Ferrite.Crypto;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.Utils;
@@ -23,16 +22,18 @@ public sealed class UploadProfilePhotoHandler : PhotosHandlerBase
 {
     private readonly IPhotoRepository _photoRepository;
     private readonly IUserRepository _userRepository;
+    private readonly UserSerializer _userSerializer;
 
     private readonly IUploadService _upload;
     private readonly IPhotoProcessingService _photoProcessing;
 
-    public UploadProfilePhotoHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IContactsRepository contactsRepository, IPhotoRepository photoRepository, IUserRepository userRepository, IUploadService upload,
+    public UploadProfilePhotoHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IContactsRepository contactsRepository, IPhotoRepository photoRepository, IUserRepository userRepository, UserSerializer userSerializer, IUploadService upload,
         IPhotoProcessingService photoProcessing, IUpdatesService updates, ILogger log)
         : base(unitOfWork, authorizationRepository, contactsRepository, photoRepository, userRepository, updates, log)
     {
         _photoRepository = photoRepository;
         _userRepository = userRepository;
+        _userSerializer = userSerializer;
 
         _upload = upload;
         _photoProcessing = photoProcessing;
@@ -90,6 +91,6 @@ public sealed class UploadProfilePhotoHandler : PhotosHandlerBase
 
             _log.Debug($"📷 UploadProfilePhoto user:{identity.Value.UserId} photo:{photoId}");
             await PushUserInvalidation(identity.Value.UserId);
-            return BuildPhotoResult(photo, updatedUser);
+            return BuildPhotoResult(identity.Value.UserId, photo, updatedUser, _userSerializer);
         }
 }

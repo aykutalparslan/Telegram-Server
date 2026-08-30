@@ -2,9 +2,9 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Channels;
+using Ferrite.Services.Scheduling;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.dto;
@@ -13,13 +13,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Copies existing messages into another dialog. The copied text/media go through
-/// the ordinary send target, persistence, pts, and fan-out machinery; what makes a
-/// forward a forward is the `messageFwdHeader` that credits the original author.
-/// Source ids are read in the box that owns them: the caller's own common box for
-/// a user or basic group, the shared channel box for a channel.
-/// </summary>
 public sealed class ForwardMessagesHandler
 {
     private readonly IChatParticipantsRepository _chatParticipantsRepository;
@@ -84,9 +77,18 @@ public sealed class ForwardMessagesHandler
         }
 
         var view = (ForwardMessages)q;
-        if (!PeerResolver.TryResolveInputPeerDialogKey(view.Get_FromPeerView(),
-                userId, out DialogPeerKey fromPeer) ||
-            !PeerResolver.TryResolveInputPeerDialogKey(view.Get_ToPeerView(),
+        bool emptyFromPeer = view.Get_FromPeerView().Is(out InputPeerEmpty _);
+        DialogPeerKey? fromPeer = null;
+        if (!emptyFromPeer)
+        {
+            if (!PeerResolver.TryResolveInputPeerDialogKey(view.Get_FromPeerView(),
+                    userId, out DialogPeerKey resolved))
+            {
+                return Error(400, "PEER_ID_INVALID");
+            }
+            fromPeer = resolved;
+        }
+        if (!PeerResolver.TryResolveInputPeerDialogKey(view.Get_ToPeerView(),
                 userId, out DialogPeerKey toPeer))
         {
             return Error(400, "PEER_ID_INVALID");
@@ -95,8 +97,6 @@ public sealed class ForwardMessagesHandler
 
         if (request.QuickReply || request.SuggestedPost)
         {
-            // Business quick replies and paid suggested posts are products Ferrite
-            // does not run; 403 keeps the refusal out of the client's retry path.
             return Error(403, "METHOD_DISABLED");
         }
         if (request.Ids.Length == 0)
@@ -116,6 +116,11 @@ public sealed class ForwardMessagesHandler
             await LoadSourcesAsync(userId, request);
         if (sourceError != null)
         {
+            _log.Debug($"↪️ ForwardMessages REFUSED user:{userId} " +
+                       $"ids:[{string.Join(",", request.Ids)}] " +
+                       $"from:{FromPeerLabel(request.FromPeer)} " +
+                       $"to:{request.ToPeer.Type}:{request.ToPeer.Id} " +
+                       $"error:{sourceCode} {sourceError}");
             return Error(sourceCode, sourceError);
         }
 
@@ -127,15 +132,11 @@ public sealed class ForwardMessagesHandler
             hasExplicitSender: request.HasSendAs);
         if (target.Error != null)
         {
-            // The shared send-target resolver's errors are reported with the same
-            // code the ordinary send handlers use for them.
             return Error(400, target.Error);
         }
 
         bool destinationIsSelf = target.PeerType == TLPeer.PeerType.PeerUser &&
                                  target.PeerId == userId;
-        // Resolved here rather than inside the send loop: the destination row is a
-        // ref-struct view and every send in that loop is an await.
         bool destinationIsPublicChannel = IsPublicChannel(target);
         int date = UnixNow();
         bool queued = request.ScheduleDate > 0 &&
@@ -150,9 +151,6 @@ public sealed class ForwardMessagesHandler
             long groupedId = 0;
             if (source.GroupedId != 0)
             {
-                // An album stays one album in the destination, but under a fresh
-                // grouping key so re-forwarding it does not merge with the first
-                // copy already in that dialog.
                 if (!groupedIds.TryGetValue(source.GroupedId, out groupedId))
                 {
                     groupedId = await _ids.NextMediaGroupIdAsync();
@@ -163,9 +161,6 @@ public sealed class ForwardMessagesHandler
             long randomId = request.RandomIds[i];
             if (queued)
             {
-                // A scheduled forward stores exactly the row an immediate forward
-                // would have written, so the flush copies the same provenance,
-                // media and grouping the client asked for.
                 byte[] queuedTemplate = BuildTemplate(source, request, target,
                     request.ScheduleDate, groupedId, destinationIsSelf);
                 ScheduledMessageStore.ScheduledSnapshot? entry = await _scheduled
@@ -206,24 +201,31 @@ public sealed class ForwardMessagesHandler
             _log.Debug($"↪️ ForwardMessages user:{userId} scheduled:{scheduled.Count} " +
                        $"to:{target.PeerType}:{target.PeerId} at:{request.ScheduleDate}");
             return await BuildScheduledResultAsync(authKeyId, userId, request, target,
-                scheduled, date);
+                sources, scheduled, date);
         }
 
         await RecordPublicForwardsAsync(request, target, destinationIsPublicChannel,
             sources, sent, date);
 
+        DialogPeerKey loggedOrigin = sources[0].Origin;
         _log.Debug($"↪️ ForwardMessages user:{userId} " +
-                   $"from:{request.FromPeer.Type}:{request.FromPeer.Id} " +
-                   $"to:{target.PeerType}:{target.PeerId} count:{sent.Count}");
-        return await BuildResultAsync(authKeyId, userId, request, target, sent, date);
+                   $"from:{loggedOrigin.Type}:{loggedOrigin.Id} " +
+                   $"to:{target.PeerType}:{target.PeerId} count:{sent.Count} " +
+                   $"sources:[{string.Join(",", sources.Select(ResolvedLabel))}]");
+        return await BuildResultAsync(authKeyId, userId, request, target, sources,
+            sent, date);
     }
 
-    /// <summary>
-    /// Whether the destination is a channel a stranger could also have found,
-    /// which is what makes a forward into it PUBLIC. An ACTIVE username is the
-    /// test rather than the editable one, because a deactivated username no
-    /// longer resolves.
-    /// </summary>
+    private static string FromPeerLabel(DialogPeerKey? fromPeer) =>
+        fromPeer is { } named ? $"{named.Type}:{named.Id}" : "empty";
+
+    private static string ResolvedLabel(ForwardSource source)
+    {
+        byte[] bytes = source.MessageBytes;
+        using var stored = new TLMessage(bytes, 0, bytes.Length);
+        return $"{source.MessageId}->date:{stored.AsMessage().Date}";
+    }
+
     private static bool IsPublicChannel(PreparedMessageTarget target)
     {
         if (target.PeerType != TLPeer.PeerType.PeerChannel ||
@@ -238,101 +240,61 @@ public sealed class ForwardMessagesHandler
                    ChannelUsernames.Read(chat.AsChannel()));
     }
 
-    /// <summary>
-    /// Indexes the forwards `stats.getMessagePublicForwards` reads back, keyed by
-    /// the SOURCE post. Only a channel post forwarded into a PUBLIC channel is
-    /// indexed: a forward into a private destination is not something a stranger
-    /// could have observed, and reporting it would leak the destination to the
-    /// source channel's admins.
-    ///
-    /// The index is written here rather than in the send pipeline because this is
-    /// the only place that knows both ends of the forward, and it FLUSHES ITSELF:
-    /// the send pipeline's own flush has already happened by now, and a write
-    /// left pending when the request's storage scope ends is an error rather
-    /// than a lost row.
-    /// </summary>
     private async Task RecordPublicForwardsAsync(ForwardRequest request,
         PreparedMessageTarget target, bool destinationIsPublicChannel,
         List<ForwardSource> sources, List<ForwardedMessage> sent, int date)
     {
-        if (!destinationIsPublicChannel ||
-            request.FromPeer.Type != TLPeer.PeerType.PeerChannel ||
-            sent.Count == 0)
+        if (!destinationIsPublicChannel || sent.Count == 0)
         {
             return;
         }
 
-        // Every non-queued iteration appends exactly one sent row, so the two
-        // lists are index-paired; a queued forward returns before reaching here.
+        bool wrote = false;
         for (int i = 0; i < sent.Count && i < sources.Count; i++)
         {
+            DialogPeerKey origin = sources[i].Origin;
+            if (origin.Type != TLPeer.PeerType.PeerChannel)
+            {
+                continue;
+            }
             using TLPublicForwardRef row = PublicForwardRef.Builder()
-                .ChannelId(request.FromPeer.Id)
+                .ChannelId(origin.Id)
                 .MsgId(sources[i].MessageId)
                 .FwdChannelId(target.PeerId)
                 .FwdMsgId(sent[i].Id)
                 .Date(date)
                 .Build();
             _statisticsRepository.PutPublicForward(row);
+            wrote = true;
         }
 
-        await _unitOfWork.SaveAsync();
+        if (wrote)
+        {
+            await _unitOfWork.SaveAsync();
+        }
     }
 
-    /// <summary>
-    /// Reads every source row and rejects the whole request if one id cannot be
-    /// forwarded. A partial forward would leave the client's random ids unpaired
-    /// with no way to tell which copy is missing.
-    /// </summary>
     private async Task<(List<ForwardSource> Sources, string? Error, int Code)>
         LoadSourcesAsync(long userId, ForwardRequest request)
     {
         var empty = new List<ForwardSource>();
-        if (request.FromPeer.Id <= 0)
+        bool channelSource = request.FromPeer is
+            { Type: TLPeer.PeerType.PeerChannel };
+        if (request.FromPeer is { } named)
         {
-            return (empty, "PEER_ID_INVALID", 400);
-        }
-
-        if (request.FromPeer.Type == TLPeer.PeerType.PeerChannel)
-        {
-            using (TLChat? channel = await _chatRepository
-                       .GetChatAsync(request.FromPeer.Id))
+            if (named.Id <= 0)
             {
-                if (channel == null || channel.Value.Type != TLChat.ChatType.Channel)
-                {
-                    return (empty, "CHANNEL_INVALID", 400);
-                }
-                if (channel.Value.AsChannel().Noforwards)
-                {
-                    return (empty, "CHAT_FORWARDS_RESTRICTED", 403);
-                }
+                return (empty, "PEER_ID_INVALID", 400);
             }
-            using (TLChatParticipantInfo? participant = await _chatParticipantsRepository.GetParticipantAsync(
-                           request.FromPeer.Id, userId))
+            (string? error, int code) = await ValidateOriginAsync(userId, named);
+            if (error != null)
             {
-                if (participant == null ||
-                    !MessageEditRules.IsActiveParticipant(participant.Value))
-                {
-                    return (empty, "CHANNEL_PRIVATE", 400);
-                }
-            }
-        }
-        else if (request.FromPeer.Type == TLPeer.PeerType.PeerChat)
-        {
-            using TLChat? chat = await _chatRepository
-                .GetChatAsync(request.FromPeer.Id);
-            if (chat == null || chat.Value.Type != TLChat.ChatType.Chat ||
-                chat.Value.AsChat().Deactivated)
-            {
-                return (empty, "CHAT_ID_INVALID", 400);
-            }
-            if (chat.Value.AsChat().Noforwards)
-            {
-                return (empty, "CHAT_FORWARDS_RESTRICTED", 403);
+                return (empty, error, code);
             }
         }
 
         var sources = new List<ForwardSource>(request.Ids.Length);
+        var validated = new HashSet<DialogPeerKey>();
         foreach (int messageId in request.Ids)
         {
             if (messageId <= 0)
@@ -340,37 +302,90 @@ public sealed class ForwardMessagesHandler
                 return (empty, "MESSAGE_ID_INVALID", 400);
             }
 
-            StoredMessageLocation? location =
-                request.FromPeer.Type == TLPeer.PeerType.PeerChannel
-                    ? await _locator.FindChannelAsync(request.FromPeer.Id, messageId)
-                    : await _locator.FindCommonAsync(userId, messageId);
+            StoredMessageLocation? location = channelSource
+                ? await _locator.FindChannelAsync(request.FromPeer!.Value.Id, messageId)
+                : await _locator.FindCommonAsync(userId, messageId);
             if (location == null)
             {
                 return (empty, "MESSAGE_ID_INVALID", 400);
             }
 
-            (ForwardSource? source, string? error) = ReadSource(location.Value,
+            (ForwardSource? source, string? sourceError) = ReadSource(location.Value,
                 messageId, request.FromPeer);
-            if (error != null)
+            if (sourceError != null)
             {
-                return (empty, error, error == "CHAT_FORWARDS_RESTRICTED" ? 403 : 400);
+                return (empty, sourceError,
+                    sourceError == "CHAT_FORWARDS_RESTRICTED" ? 403 : 400);
+            }
+            if (request.FromPeer == null && validated.Add(source!.Value.Origin))
+            {
+                (string? originError, int originCode) =
+                    await ValidateOriginAsync(userId, source.Value.Origin);
+                if (originError != null)
+                {
+                    return (empty, originError, originCode);
+                }
             }
             sources.Add(source!.Value);
         }
         return (sources, null, 0);
     }
 
+    private async Task<(string? Error, int Code)> ValidateOriginAsync(long userId,
+        DialogPeerKey origin)
+    {
+        if (origin.Type == TLPeer.PeerType.PeerChannel)
+        {
+            using (TLChat? channel = await _chatRepository.GetChatAsync(origin.Id))
+            {
+                if (channel == null || channel.Value.Type != TLChat.ChatType.Channel)
+                {
+                    return ("CHANNEL_INVALID", 400);
+                }
+                if (channel.Value.AsChannel().Noforwards)
+                {
+                    return ("CHAT_FORWARDS_RESTRICTED", 403);
+                }
+            }
+            using (TLChatParticipantInfo? participant = await _chatParticipantsRepository.GetParticipantAsync(
+                           origin.Id, userId))
+            {
+                if (participant == null ||
+                    !MessageEditRules.IsActiveParticipant(participant.Value))
+                {
+                    return ("CHANNEL_PRIVATE", 400);
+                }
+            }
+        }
+        else if (origin.Type == TLPeer.PeerType.PeerChat)
+        {
+            using TLChat? chat = await _chatRepository.GetChatAsync(origin.Id);
+            if (chat == null || chat.Value.Type != TLChat.ChatType.Chat ||
+                chat.Value.AsChat().Deactivated)
+            {
+                return ("CHAT_ID_INVALID", 400);
+            }
+            if (chat.Value.AsChat().Noforwards)
+            {
+                return ("CHAT_FORWARDS_RESTRICTED", 403);
+            }
+        }
+        return (null, 0);
+    }
+
     private static (ForwardSource? Source, string? Error) ReadSource(
-        StoredMessageLocation location, int messageId, DialogPeerKey fromPeer)
+        StoredMessageLocation location, int messageId, DialogPeerKey? fromPeer)
     {
         byte[] bytes = location.MessageBytes;
         using var stored = new TLMessage(bytes, 0, bytes.Length);
         if (stored.Type != TLMessage.MessageType.Message ||
-            !MessageStore.TryReadStoredMessageInfo(stored, out StoredMessageInfo info) ||
-            info.PeerType != fromPeer.Type || info.PeerId != fromPeer.Id)
+            !MessageStore.TryReadStoredMessageInfo(stored, out StoredMessageInfo info))
         {
-            // Service messages have no content to copy, and an id from another
-            // conversation must not be reachable by naming an unrelated peer.
+            return (null, "MESSAGE_ID_INVALID");
+        }
+        if (fromPeer is { } named &&
+            (info.PeerType != named.Type || info.PeerId != named.Id))
+        {
             return (null, "MESSAGE_ID_INVALID");
         }
 
@@ -379,7 +394,8 @@ public sealed class ForwardMessagesHandler
         {
             return (null, "CHAT_FORWARDS_RESTRICTED");
         }
-        return (new ForwardSource(messageId, bytes, message.GroupedId), null);
+        return (new ForwardSource(messageId, bytes, message.GroupedId,
+            new DialogPeerKey(info.PeerType, info.PeerId)), null);
     }
 
     private static byte[] BuildTemplate(ForwardSource source, ForwardRequest request,
@@ -395,7 +411,7 @@ public sealed class ForwardMessagesHandler
         bool dropCaption = request.DropMediaCaptions && hasMedia;
         byte[]? fwdHeader = request.DropAuthor
             ? null
-            : BuildForwardHeader(message, request.FromPeer, source.MessageId,
+            : BuildForwardHeader(message, source.Origin, source.MessageId,
                 destinationIsSelf);
         byte[]? replyHeader = BuildReplyHeader(request, target);
 
@@ -444,11 +460,6 @@ public sealed class ForwardMessagesHandler
         return template.AsSpan().ToArray();
     }
 
-    /// <summary>
-    /// A re-forward keeps the provenance of the FIRST author, which is what the
-    /// source row already carries. A fresh header credits a channel post to its
-    /// channel and anything else to its sending user.
-    /// </summary>
     private static byte[] BuildForwardHeader(Message message, DialogPeerKey fromPeer,
         int messageId, bool destinationIsSelf)
     {
@@ -468,8 +479,6 @@ public sealed class ForwardMessagesHandler
         var builder = MessageFwdHeader.Builder().Date(message.Date);
         if (message.Flags[2])
         {
-            // Preserve the original credit, then add the jump-back pointer that
-            // only a Saved Messages copy carries.
             var original = (MessageFwdHeaderView)message.FwdFrom;
             if (original.Is(out MessageFwdHeader existing))
             {
@@ -504,8 +513,6 @@ public sealed class ForwardMessagesHandler
         return header.AsSpan().ToArray();
     }
 
-    // A forward carries a reply header only to name where the copy lands: an
-    // explicit reply_to, or the forum topic the destination request selected.
     private static byte[]? BuildReplyHeader(ForwardRequest request,
         PreparedMessageTarget target)
     {
@@ -530,6 +537,7 @@ public sealed class ForwardMessagesHandler
 
     private async Task<TLUpdates> BuildResultAsync(long authKeyId, long userId,
         ForwardRequest request, PreparedMessageTarget target,
+        IReadOnlyList<ForwardSource> origins,
         IReadOnlyList<ForwardedMessage> sent, int date)
     {
         var updateBytes = new List<byte[]>(sent.Count * 2);
@@ -559,8 +567,6 @@ public sealed class ForwardMessagesHandler
                 updateBytes.Add(newMessage.AsSpan().ToArray());
             }
 
-            // The client needs the ORIGINAL author's row to render "forwarded
-            // from", not just the destination's participants.
             byte[] bytes = message.MessageBytes;
             using var stored = new TLMessage(bytes, 0, bytes.Length);
             MessageStore.AddMessageRelatedPeers(stored, userIds, chatIds);
@@ -575,28 +581,17 @@ public sealed class ForwardMessagesHandler
         {
             chatIds.Add(target.PeerId);
         }
-        if (request.FromPeer.Type == TLPeer.PeerType.PeerUser)
-        {
-            userIds.Add(request.FromPeer.Id);
-        }
-        else
-        {
-            chatIds.Add(request.FromPeer.Id);
-        }
+        AddOriginPeers(origins, userIds, chatIds);
 
         List<byte[]> chats = await _fanout.GetChatBytesForViewerAsync(userId, chatIds);
         int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
             .IncrementSeq();
-        return _fanout.BuildUpdates(updateBytes, userIds, chats, date, seq);
+        return _fanout.BuildUpdates(userId, updateBytes, userIds, chats, date, seq);
     }
 
-    /// <summary>
-    /// The answer to a forward that went into the schedule queue: the same
-    /// `updateMessageID` plus `updateNewScheduledMessage` pair an ordinary scheduled
-    /// send produces, so the client pairs each random id with its new queue entry.
-    /// </summary>
     private async Task<TLUpdates> BuildScheduledResultAsync(long authKeyId,
         long userId, ForwardRequest request, PreparedMessageTarget target,
+        IReadOnlyList<ForwardSource> origins,
         IReadOnlyList<ScheduledMessageStore.ScheduledSnapshot> scheduled, int date)
     {
         if (!await _unitOfWork.SaveAsync())
@@ -634,19 +629,32 @@ public sealed class ForwardMessagesHandler
 
         if (target.PeerType == TLPeer.PeerType.PeerUser) userIds.Add(target.PeerId);
         else chatIds.Add(target.PeerId);
-        if (request.FromPeer.Type == TLPeer.PeerType.PeerUser)
-        {
-            userIds.Add(request.FromPeer.Id);
-        }
-        else
-        {
-            chatIds.Add(request.FromPeer.Id);
-        }
+        AddOriginPeers(origins, userIds, chatIds);
 
         List<byte[]> chats = await _fanout.GetChatBytesForViewerAsync(userId, chatIds);
         int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
             .IncrementSeq();
-        return _fanout.BuildUpdates(updateBytes, userIds, chats, date, seq);
+        return _fanout.BuildUpdates(userId, updateBytes, userIds, chats, date, seq);
+    }
+
+    private static void AddOriginPeers(IReadOnlyList<ForwardSource> origins,
+        HashSet<long> userIds, HashSet<long> chatIds)
+    {
+        foreach (ForwardSource source in origins)
+        {
+            if (source.Origin.Id <= 0)
+            {
+                continue;
+            }
+            if (source.Origin.Type == TLPeer.PeerType.PeerUser)
+            {
+                userIds.Add(source.Origin.Id);
+            }
+            else
+            {
+                chatIds.Add(source.Origin.Id);
+            }
+        }
     }
 
     private static void AddForwardOriginPeers(TLMessage message,
@@ -678,21 +686,20 @@ public sealed class ForwardMessagesHandler
         }
     }
 
-    // Await-safe snapshot of the request; every ref-struct view is read here.
-    private sealed record ForwardRequest(DialogPeerKey FromPeer, DialogPeerKey ToPeer,
+    private sealed record ForwardRequest(DialogPeerKey? FromPeer, DialogPeerKey ToPeer,
         int[] Ids, long[] RandomIds, bool Silent, bool DropAuthor,
         bool DropMediaCaptions, bool Noforwards, int ForumTopicId,
         int ReplyToMessageId, int ScheduleDate, bool QuickReply,
         bool SuggestedPost, bool HasSendAs, DialogPeerKey? SendAs);
 
     private readonly record struct ForwardSource(int MessageId, byte[] MessageBytes,
-        long GroupedId);
+        long GroupedId, DialogPeerKey Origin);
 
     private readonly record struct ForwardedMessage(int Id, long RandomId, int Pts,
         byte[] MessageBytes, bool Channel);
 
     private static ForwardRequest ReadRequest(ForwardMessages view,
-        DialogPeerKey fromPeer, DialogPeerKey toPeer, long userId)
+        DialogPeerKey? fromPeer, DialogPeerKey toPeer, long userId)
     {
         VectorOfInt ids = view.Id;
         var messageIds = new int[ids.Count];
@@ -716,8 +723,6 @@ public sealed class ForwardMessagesHandler
             replyTopId = replyTo.Flags[0] ? replyTo.TopMsgId : 0;
         }
 
-        // The destination topic is named by top_msg_id, or by the reply's own
-        // thread; topic 1 is the General topic every forum has.
         int forumTopicId = view.Flags[9] && view.TopMsgId > 0
             ? view.TopMsgId
             : replyTopId > 0

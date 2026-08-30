@@ -10,8 +10,14 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class SearchEmojiStickerSetsHandler : StickerHandlerBase
 {
-    public SearchEmojiStickerSetsHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository,
-        StickerStore store) : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerSetCatalog _catalog;
+
+    public SearchEmojiStickerSetsHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerSetCatalog store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _catalog = store;
+    }
 
     [TLFunction(Constructors.baseLayer_SearchEmojiStickerSets)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
@@ -20,7 +26,7 @@ public sealed class SearchEmojiStickerSetsHandler : StickerHandlerBase
         byte[] query = request.Q.ToArray();
         long hash = request.Hash;
         return await GetUserIdAsync(authKeyId) is not null
-            ? await Store.SearchSetsAsync(StickerSetKind.Emoji, query, hash)
+            ? await _catalog.SearchSetsAsync(StickerSetKind.Emoji, query, hash)
             : AuthError();
     }
 }

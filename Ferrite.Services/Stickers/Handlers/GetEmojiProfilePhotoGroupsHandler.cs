@@ -10,8 +10,9 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class GetEmojiProfilePhotoGroupsHandler : StickerHandlerBase
 {
-    public GetEmojiProfilePhotoGroupsHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository,
-        StickerStore store) : base(unitOfWork, authorizationRepository, store) { }
+    public GetEmojiProfilePhotoGroupsHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository)
+        : base(unitOfWork, authorizationRepository) { }
 
     [TLFunction(Constructors.baseLayer_GetEmojiProfilePhotoGroups)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)

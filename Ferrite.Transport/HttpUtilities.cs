@@ -11,7 +11,7 @@ using System.Text;
 
 namespace Ferrite.Transport;
 
-internal static partial class HttpUtilities
+internal static class HttpUtilities
 {
     public const string HttpUriScheme = "http://";
     public const string HttpsUriScheme = "https://";

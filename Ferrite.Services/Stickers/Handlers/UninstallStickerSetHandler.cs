@@ -10,17 +10,23 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class UninstallStickerSetHandler : StickerHandlerBase
 {
-    public UninstallStickerSetHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerCollectionStore _collections;
+
+    public UninstallStickerSetHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerCollectionStore store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _collections = store;
+    }
 
     [TLFunction(Constructors.baseLayer_UninstallStickerSet)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
     {
-        var input = StickerStore.ReadInputSet(
+        var input = StickerInput.ReadInputSet(
             ((UninstallStickerSet)q).Get_StickersetView());
         long? userId = await GetUserIdAsync(authKeyId);
         return userId.HasValue
-            ? await Store.UninstallAsync(userId.Value, authKeyId, input.Id,
+            ? await _collections.UninstallAsync(userId.Value, authKeyId, input.Id,
                 input.AccessHash, input.ShortName)
             : AuthError();
     }

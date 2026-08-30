@@ -3,7 +3,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import NodeMediaServer from 'node-media-server';
 import nodeMediaLogger from 'node-media-server/src/node_core_logger.js';
@@ -137,7 +137,13 @@ export function buildRtpTapFfmpegArguments({
         '-analyzeduration', '0', '-f', 'ivf', '-i', 'pipe:3');
   }
   input.push('-protocol_whitelist', 'file,udp,rtp',
-      '-fflags', '+genpts+nobuffer', '-f', 'sdp', '-i', sdpPath);
+      '-fflags', '+genpts+nobuffer',
+      // Internal taps are loopback-only and mediasoup already handles network
+      // loss/reordering. Arrival-time PTS and a disabled RTP reorder queue keep
+      // a sender sequence/timestamp discontinuity from freezing FFmpeg's
+      // long-lived segment muxer after otherwise healthy packets resume.
+      '-use_wallclock_as_timestamps', '1', '-reorder_queue_size', '0',
+      '-f', 'sdp', '-i', sdpPath);
   return [
     ...input,
     '-map', vp9Pipe ? '1:a:0?' : '0:a:0?', '-c:a', 'libopus',
@@ -376,6 +382,14 @@ export class GroupCallBroadcastService {
     return true;
   }
 
+  async endAllStreams() {
+    const callIds = [...this.#calls.keys()];
+    for (const callId of callIds) {
+      await this.endStream(callId);
+    }
+    return callIds.length;
+  }
+
   async credentials(callId, revoke = false) {
     const call = this.#requireCall(callId);
     if (!call.rtmpStream) {
@@ -453,15 +467,42 @@ export class GroupCallBroadcastService {
     const deadline = Date.now() + waitMs;
     let latestTimestamp = 0;
     do {
-      latestTimestamp = call.ring.channels()[0]?.lastTimestampMs ?? 0;
+      // The public broadcast edge is deliberately the common completed
+      // audio/video timestamp. Recording finalization copies only video, so an
+      // audio muxer lag must not hide already completed video segments.
+      latestTimestamp = call.ring.latestTimestampForChannel(1);
       if (latestTimestamp >= firstTimestamp) {
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
     } while (Date.now() < deadline);
+    // A segment can complete during the final sleep that crosses the deadline.
+    // Observe the channel once more before classifying the tap as unavailable.
+    latestTimestamp = Math.max(latestTimestamp,
+        call.ring.latestTimestampForChannel(1));
     if (latestTimestamp < firstTimestamp) {
+      const channels = call.ring.channels();
+      let tap = null;
+      try {
+        tap = await this.#mediaPlane?.getRtpTapDiagnostics?.(
+            call.callId, call.tapSubscriberId) ?? null;
+      } catch (error) {
+        tap = { diagnosticError: error?.message ?? String(error) };
+      }
+      const diagnostic = JSON.stringify({
+        firstTimestamp,
+        latestTimestamp,
+        epoch: call.epoch,
+        processRunning: Boolean(call.process),
+        sourceAttached: call.sourceSignature !== null,
+        channels,
+        lastFailure: call.lastError,
+        ffmpegDiagnostic: call.stderr || null,
+        segmenter: await this.#readSegmenterState(call),
+        tap
+      });
       throw new BroadcastError('NOT_READY',
-          'shared video segments are not ready for recording');
+          `shared video segments are not ready for recording: ${diagnostic}`);
     }
 
     await mkdir(directory, { recursive: true });
@@ -570,9 +611,7 @@ export class GroupCallBroadcastService {
 
   async close() {
     this.#stopping = true;
-    for (const callId of [...this.#calls.keys()]) {
-      await this.endStream(callId);
-    }
+    await this.endAllStreams();
     if (this.#rtmpListeners) {
       for (const [event, listener] of this.#rtmpListeners) {
         nodeMediaContext.nodeEvent.off(event, listener);
@@ -1030,6 +1069,36 @@ export class GroupCallBroadcastService {
         call.indexing = null;
       }
     }
+  }
+
+  // A frozen video edge is either FFmpeg no longer completing segments or the
+  // indexer no longer publishing the ones on disk. Only the segmenter's own
+  // output separates the two, so report it alongside the ring's view.
+  async #readSegmenterState(call) {
+    const state = {
+      videoListEntries: 0,
+      lastVideoEntry: null,
+      indexedVideo: call.indexedVideo?.size ?? 0,
+      unindexedFiles: 0
+    };
+    try {
+      const entries = parseCompletedList(
+          await readFile(join(call.directory, 'video.csv'), 'utf8'));
+      state.videoListEntries = entries.length;
+      state.lastVideoEntry = entries.at(-1) ?? null;
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        state.listError = error?.message ?? String(error);
+      }
+    }
+    try {
+      const files = await readdir(call.directory);
+      state.unindexedFiles = files.filter((name) =>
+        /^video-\d+\.mp4$/.test(name)).length;
+    } catch (error) {
+      state.directoryError = error?.message ?? String(error);
+    }
+    return state;
   }
 
   async #indexList(call, listName, indexed, channel, video, includeFinal) {

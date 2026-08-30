@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -11,22 +10,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Channels recommended from SHARED MEMBERSHIP, the only recommendation signal
-/// Ferrite genuinely holds. One method, two td_api entry points switched by the
-/// optional `channel` field: `td_api::getChatSimilarChats` (`Requests.cpp:2980`)
-/// names a channel and asks what resembles it, `td_api::getRecommendedChats`
-/// (`Requests.cpp:2974`) omits it and asks what suits the caller.
-///
-/// An EMPTY answer is a real answer. A deployment where no two channels share a
-/// member has no basis for a recommendation, and inventing a channel list is
-/// exactly the placeholder outcome this phase rejected.
-///
-/// Only PUBLIC broadcast channels are ever recommended. Recommending a private
-/// channel would disclose its existence, and its access hash, to someone who
-/// was never told about it — the recommendation signal is shared membership,
-/// which the subject never consented to being surfaced by.
-/// </summary>
 public sealed class GetChannelRecommendationsHandler : ChannelCatalogueHandlerBase
 {
     private readonly IChatParticipantsRepository _chatParticipantsRepository;
@@ -77,9 +60,6 @@ public sealed class GetChannelRecommendationsHandler : ChannelCatalogueHandlerBa
             {
                 return ErrorChats("CHANNEL_INVALID"u8);
             }
-            // Pinned TDLib answers a non-broadcast locally without ever asking
-            // the server (`ChannelRecommendationManager.cpp:319-328`); the
-            // server agrees rather than inventing an answer for one.
             if (!subject.Value.Broadcast)
             {
                 return await BuildChatsAsync(callerUserId.Value, []);
@@ -94,7 +74,8 @@ public sealed class GetChannelRecommendationsHandler : ChannelCatalogueHandlerBa
                 .Select(x => x.ChannelId).ToList();
         }
 
-        Dictionary<long, int> shared = await CountSharedMembershipAsync(seeds, excluded);
+        Dictionary<long, int> shared = await CountSharedMembershipAsync(
+            seeds, excluded, callerUserId.Value);
         var candidates = new List<(long ChannelId, int Shared)>();
         foreach ((long candidateId, int count) in shared)
         {
@@ -106,8 +87,6 @@ public sealed class GetChannelRecommendationsHandler : ChannelCatalogueHandlerBa
             }
         }
 
-        // Strongest signal first, then by id so equal scores never reorder
-        // between two calls that saw identical storage.
         candidates.Sort((left, right) => left.Shared != right.Shared
             ? right.Shared.CompareTo(left.Shared)
             : left.ChannelId.CompareTo(right.ChannelId));
@@ -119,13 +98,8 @@ public sealed class GetChannelRecommendationsHandler : ChannelCatalogueHandlerBa
         return await BuildChatsAsync(callerUserId.Value, selected);
     }
 
-    /// <summary>
-    /// How many members each other channel shares with the seed set. Only
-    /// ACTIVE participants count on both ends: a member who left is not a signal
-    /// that the two channels have an audience in common.
-    /// </summary>
     private async Task<Dictionary<long, int>> CountSharedMembershipAsync(
-        IReadOnlyList<long> seeds, HashSet<long> excluded)
+        IReadOnlyList<long> seeds, HashSet<long> excluded, long callerUserId)
     {
         var counted = new Dictionary<long, int>();
         var seenMembers = new HashSet<long>();
@@ -138,7 +112,8 @@ public sealed class GetChannelRecommendationsHandler : ChannelCatalogueHandlerBa
             {
                 using TLChatParticipantInfo owned = participant;
                 var info = owned.AsChatParticipantInfo();
-                if (IsActiveRole(info.Role) && seenMembers.Add(info.UserId))
+                if (info.UserId != callerUserId && IsActiveRole(info.Role) &&
+                    seenMembers.Add(info.UserId))
                 {
                     memberIds.Add(info.UserId);
                 }

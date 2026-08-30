@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -51,17 +50,9 @@ public sealed class DeleteHistoryHandler : MessagesHandlerBase
                 return AffectedHistory.Builder().Pts(currentPts).PtsCount(0).Offset(0).Build();
             }
 
-            // Caller side: clear the caller's own copy of the conversation up to maxId.
             var (pts, callerCount) = await DeleteConversation(userId, peerType,
                 peerId, maxId, minDate, maxDate, userCtx);
 
-            // Revoke (delete for everyone): also clear the partner's copy, but ONLY when the
-            // request can be honored exactly. The partner stores its own message ids, so the
-            // caller's maxId cannot be mapped onto them; a partial-by-id revoke would over-delete.
-            // We therefore only clear the partner side for a full-history revoke (no maxId/date
-            // bound), where "remove every message in this conversation" is unambiguous on both
-            // sides. Partial or date/id-bounded revokes clear only the caller copy for now.
-            // Group revokes need per-member id mapping and are deferred with the send fan-out.
             bool fullHistoryRevoke = maxId <= 0 && !minDate.HasValue && !maxDate.HasValue;
             if (revoke && !justClear && peerType == TLPeer.PeerType.PeerUser &&
                 peerId != userId && fullHistoryRevoke)

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Services;
 using Ferrite.Core.Execution;
 using Ferrite.TL;
 
@@ -18,7 +17,7 @@ public class SignUpFunc : ITLFunction
     }
     public async ValueTask<TLBytes?> Process(TLBytes q, TLExecutionContext ctx)
     {
-        using var cancelCode = await _auth.SignUp(ctx.AuthKeyId, q);
+        using var cancelCode = await _auth.SignUp(ctx.CurrentAuthKeyId, q);
         var rpcResult = RpcResultGenerator.Generate(cancelCode, ctx.MessageId);
         return rpcResult;
     }

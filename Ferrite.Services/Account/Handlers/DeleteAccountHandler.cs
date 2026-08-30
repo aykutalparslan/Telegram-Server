@@ -5,7 +5,6 @@ using System.Numerics;
 using System.Text;
 using System.Text.RegularExpressions;
 using Ferrite.Crypto;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Gateway;
 using Ferrite.TL;
@@ -44,6 +43,22 @@ public sealed class DeleteAccountHandler : AccountHandlerBase
         _userRepository = userRepository;
 
         _passwords = passwords;
+    }
+
+    [TLFunction(Constructors.layer23_AccountDeleteAccount)]
+    public async ValueTask<TLBool> HandleLayer23(long authKeyId, TLBytes q)
+    {
+        using var current = ToCurrentDeleteAccountRequest(q);
+        return await Handle(authKeyId, current);
+    }
+
+    private static TLBytes ToCurrentDeleteAccountRequest(TLBytes q)
+    {
+        var sent = new TL.layer23.account.AccountDeleteAccount(q.AsSpan());
+        using var current = DeleteAccount.Builder()
+            .Reason(sent.Reason)
+            .Build();
+        return current.TLBytes!.Value;
     }
 
     [TLFunction(Constructors.baseLayer_DeleteAccount)]

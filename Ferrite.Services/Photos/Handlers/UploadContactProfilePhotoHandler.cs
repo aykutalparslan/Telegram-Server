@@ -9,8 +9,6 @@ using TLPhotosPhoto = Ferrite.TL.baseLayer.photos.TLPhoto;
 
 namespace Ferrite.Services.Handlers.PhotoMethods;
 
-// Contact-specific profile-photo suggestions/storage are out of scope. Keep
-// the method registered and reject it with Telegram's typed target-user error.
 public sealed class UploadContactProfilePhotoHandler
 {
     [TLFunction(Constructors.baseLayer_UploadContactProfilePhoto)]

@@ -6,10 +6,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = DistributedApplication.CreateBuilder(args);
+TraceStartup("builder-created");
 
-// Development-only secrets for loopback containers. Never deployment credentials.
 const string turnSecret = "ferrite-dev-turn-secret";
 const string groupCallSecret = "ferrite-dev-groupcall-secret";
+string appHostRunId = NormalizeRunId(
+    Environment.GetEnvironmentVariable("FERRITE_APPHOST_RUN_ID") ?? "dev");
+
+bool ramStorage =
+    Environment.GetEnvironmentVariable("FERRITE_APPHOST_RAM_STORAGE") is "1" or "true";
 
 builder.Services.AddHealthChecks()
     .AddCheck("cassandra-cql", () => CqlHealth("127.0.0.1", 19042))
@@ -18,6 +23,7 @@ builder.Services.AddHealthChecks()
     .AddCheck("coturn-tcp", () => TcpHealth("127.0.0.1", 3478))
     .AddCheck("group-call-worker-http",
         () => WorkerHealth("http://127.0.0.1:9090/health", groupCallSecret));
+TraceStartup("health-checks-registered");
 
 var cassandra = builder.AddContainer("cassandra", "cassandra", "5.0.8")
     .WithEnvironment("MAX_HEAP_SIZE", "512M")
@@ -25,21 +31,17 @@ var cassandra = builder.AddContainer("cassandra", "cassandra", "5.0.8")
     .WithEndpoint(targetPort: 9042, port: 19042, name: "cql",
         isProxied: false)
     .WithHealthCheck("cassandra-cql");
+TraceStartup("cassandra-registered");
 
 var redis = builder.AddContainer("redis", "redis", "7.4-alpine")
     .WithEndpoint(targetPort: 6379, port: 16379, name: "tcp",
         isProxied: false)
     .WithHealthCheck("redis-tcp");
+TraceStartup("redis-registered");
 
 var kafka = builder.AddContainer("kafka", "apache/kafka", "4.1.1")
     .WithEnvironment("KAFKA_NODE_ID", "1")
     .WithEnvironment("KAFKA_PROCESS_ROLES", "broker,controller")
-    // Two client listeners, because a broker advertises one address per
-    // listener and host and container clients need different ones. A client
-    // inside a container that bootstraps on the PLAINTEXT listener is told to
-    // reconnect to 127.0.0.1:19092, which is that container itself, so it can
-    // never reach the broker. DOCKER advertises an address that resolves from
-    // inside a container instead.
     .WithEnvironment("KAFKA_LISTENERS",
         "PLAINTEXT://:9092,DOCKER://:9094,CONTROLLER://:9093")
     .WithEnvironment("KAFKA_ADVERTISED_LISTENERS",
@@ -58,6 +60,7 @@ var kafka = builder.AddContainer("kafka", "apache/kafka", "4.1.1")
     .WithEndpoint(targetPort: 9094, port: 19094, name: "tcp-docker",
         isProxied: false)
     .WithHealthCheck("kafka-tcp");
+TraceStartup("kafka-registered");
 
 var minio = builder.AddContainer("minio", "minio/minio",
         "RELEASE.2025-04-22T22-12-26Z")
@@ -69,6 +72,7 @@ var minio = builder.AddContainer("minio", "minio/minio",
     .WithEndpoint(targetPort: 9001, port: 19001, scheme: "http", name: "console",
         isProxied: false)
     .WithHttpHealthCheck("/minio/health/ready", endpointName: "s3");
+TraceStartup("minio-registered");
 
 var elasticsearch = builder.AddContainer("elasticsearch",
         "docker.elastic.co/elasticsearch/elasticsearch", "7.17.29")
@@ -78,6 +82,17 @@ var elasticsearch = builder.AddContainer("elasticsearch",
     .WithEndpoint(targetPort: 9200, port: 19200, name: "http", scheme: "http",
         isProxied: false)
     .WithHttpHealthCheck("/_cluster/health", endpointName: "http");
+TraceStartup("elasticsearch-registered");
+
+if (ramStorage)
+{
+    cassandra.WithContainerRuntimeArgs("--tmpfs", "/var/lib/cassandra:size=1g");
+    redis.WithContainerRuntimeArgs("--tmpfs", "/data:size=256m");
+    kafka.WithContainerRuntimeArgs("--tmpfs", "/tmp/kraft-combined-logs:size=1g");
+    minio.WithContainerRuntimeArgs("--tmpfs", "/data:size=1g");
+    elasticsearch.WithContainerRuntimeArgs(
+        "--tmpfs", "/usr/share/elasticsearch/data:size=1g");
+}
 
 var coturn = builder.AddContainer("coturn", "coturn/coturn", "4.6")
     .WithBindMount("../deploy/coturn/turnserver.dev.conf",
@@ -88,14 +103,10 @@ var coturn = builder.AddContainer("coturn", "coturn/coturn", "4.6")
         isProxied: false)
     .WithEndpoint(targetPort: 3478, port: 3478, name: "turn-udp",
         isProxied: false, protocol: ProtocolType.Udp)
-    // Aspire endpoints are per-port, so the relay range is published with a raw
-    // container runtime argument instead of 41 endpoint declarations.
     .WithContainerRuntimeArgs("-p", "49160-49200:49160-49200/udp")
     .WithHealthCheck("coturn-tcp");
+TraceStartup("coturn-registered");
 
-// The same image deploy/docker-compose.yml builds. That compose file's
-// own ferrite service is deliberately not carried over: the test fixture runs the
-// server in-process.
 var groupCallWorker = builder.AddDockerfile("group-call-worker",
         "../group-call-worker")
     .WithEnvironment("FERRITE_GROUP_CALL_AUTH_SECRET", groupCallSecret)
@@ -135,8 +146,10 @@ var groupCallWorker = builder.AddDockerfile("group-call-worker",
     .WithContainerRuntimeArgs("-p", "40000-40100:40000-40100/udp")
     .WithContainerRuntimeArgs("--tmpfs",
         "/segments:size=1g,mode=0700,uid=1000,gid=1000")
-    .WithVolume("ferrite-group-call-recordings", "/recordings")
+    .WithVolume($"ferrite-apphost-{appHostRunId}-group-call-recordings",
+        "/recordings")
     .WithHealthCheck("group-call-worker-http");
+TraceStartup("group-call-worker-registered");
 
 if (Environment.GetEnvironmentVariable("FERRITE_APPHOST_SERVICES_ONLY") != "1")
 {
@@ -147,17 +160,18 @@ if (Environment.GetEnvironmentVariable("FERRITE_APPHOST_SERVICES_ONLY") != "1")
         "00000000-0000-0000-0000-000000000002");
 }
 
-builder.Build().Run();
+TraceStartup("model-build-starting");
+DistributedApplication application = builder.Build();
+TraceStartup("model-built");
+application.Run();
 
 void AddFerriteNode(string name, string repositoryRoot, int port, int relayPort,
     string nodeId)
 {
-    // Ferrite is a server component, so it runs as a container like every other
-    // server in the graph. The backing services publish fixed host ports rather
-    // than being addressed by container name, so the node reaches them back
-    // through the host gateway; FERRITE_PUBLIC_ADDRESS stays loopback because
-    // that is what clients outside the container dial.
     const string host = "host.docker.internal";
+    string mediaAddress =
+        Environment.GetEnvironmentVariable("FERRITE_MEDIA_ADVERTISED_ADDRESS")
+        ?? "127.0.0.1";
     builder.AddDockerfile(name, repositoryRoot,
             "deploy/Dockerfile.ferrite")
         .WithEnvironment("FERRITE_PUBLIC_ADDRESS", "127.0.0.1")
@@ -168,7 +182,6 @@ void AddFerriteNode(string name, string repositoryRoot, int port, int relayPort,
         .WithEnvironment("FERRITE_CASSANDRA_HOSTS", host)
         .WithEnvironment("FERRITE_CASSANDRA_PORT", "19042")
         .WithEnvironment("FERRITE_REDIS_CONFIGURATION", $"{host}:16379")
-        // The DOCKER listener, not the host one: see the Kafka registration.
         .WithEnvironment("FERRITE_KAFKA_CONFIGURATION", $"{host}:19094")
         .WithEnvironment("FERRITE_S3_SERVICE_URL", $"http://{host}:19000")
         .WithEnvironment("FERRITE_S3_ACCESS_KEY", "minioadmin")
@@ -177,25 +190,20 @@ void AddFerriteNode(string name, string repositoryRoot, int port, int relayPort,
         .WithEnvironment("FERRITE_ELASTICSEARCH_USERNAME", "")
         .WithEnvironment("FERRITE_ELASTICSEARCH_PASSWORD", "")
         .WithEnvironment("FERRITE_TURN_ENABLED", "1")
-        .WithEnvironment("FERRITE_TURN_ADVERTISED_IPV4", "127.0.0.1")
+        .WithEnvironment("FERRITE_TURN_ADVERTISED_IPV4", mediaAddress)
         .WithEnvironment("FERRITE_TURN_PORT", "3478")
         .WithEnvironment("FERRITE_TURN_SECRET", turnSecret)
         .WithEnvironment("FERRITE_TURN_REALM", "ferrite.local")
-        // The reflector's development default binds an ephemeral port, which a
-        // container can never publish: the runtime has to know the number
-        // before the process picks one. Bind every interface inside the
-        // container and advertise the loopback address host clients dial.
         .WithEnvironment("FERRITE_CALL_RELAY_BIND_ADDRESS", "0.0.0.0")
         .WithEnvironment("FERRITE_CALL_RELAY_BIND_PORT", relayPort.ToString())
-        .WithEnvironment("FERRITE_CALL_RELAY_ADVERTISED_ADDRESS", "127.0.0.1")
+        .WithEnvironment("FERRITE_CALL_RELAY_ADVERTISED_ADDRESS", mediaAddress)
         .WithEndpoint(targetPort: port, port: port, scheme: "tcp",
             name: "mtproto", isProxied: false)
         .WithEndpoint(targetPort: relayPort, port: relayPort, name: "call-relay",
             isProxied: false, protocol: ProtocolType.Udp)
-        // Linux hosts do not resolve host.docker.internal on their own.
         .WithContainerRuntimeArgs("--add-host",
             "host.docker.internal:host-gateway")
-        .WithVolume($"ferrite-apphost-data-{name}", "/data")
+        .WithVolume($"ferrite-apphost-{appHostRunId}-data-{name}", "/data")
         .WaitFor(cassandra)
         .WaitFor(redis)
         .WaitFor(kafka)
@@ -205,8 +213,29 @@ void AddFerriteNode(string name, string repositoryRoot, int port, int relayPort,
         .WaitFor(groupCallWorker);
 }
 
-// The worker rejects unauthenticated probes, so its health check carries the
-// same bearer token and protocol header the adapter uses.
+static string NormalizeRunId(string value)
+{
+    string normalized = new(value.ToLowerInvariant()
+        .Select(character => char.IsAsciiLetterOrDigit(character) || character == '-'
+            ? character
+            : '-')
+        .ToArray());
+    normalized = normalized.Trim('-');
+    if (normalized.Length > 40)
+    {
+        normalized = normalized[..40].TrimEnd('-');
+    }
+    return string.IsNullOrEmpty(normalized) ? "dev" : normalized;
+}
+
+static void TraceStartup(string milestone)
+{
+    if (Environment.GetEnvironmentVariable("FERRITE_APPHOST_TRACE") == "1")
+    {
+        Console.Error.WriteLine($"[ferrite-apphost] {milestone}");
+    }
+}
+
 static HealthCheckResult WorkerHealth(string url, string secret)
 {
     try
@@ -254,8 +283,6 @@ static HealthCheckResult CqlHealth(string host, int port)
         client.Connect(host, port);
         using NetworkStream stream = client.GetStream();
 
-        // Native protocol v4 OPTIONS frame. A Docker port mapping can accept TCP
-        // before Cassandra is ready, so require a real SUPPORTED response.
         ReadOnlySpan<byte> options = [0x04, 0, 0, 0, 0x05, 0, 0, 0, 0];
         stream.Write(options);
         Span<byte> responseHeader = stackalloc byte[9];

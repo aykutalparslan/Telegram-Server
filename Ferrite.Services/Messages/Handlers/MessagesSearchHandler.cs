@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -11,16 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Searches one conversation the caller can read. Every criterion is evaluated
-/// against the AUTHORITATIVE stored row, and the surviving rows keep their stored
-/// newest-first order, so the page is cut by the same anchor/add-offset
-/// pagination as plain history.
-///
-/// `max_id`/`min_id` are EXCLUSIVE bounds here, unlike the inclusive bounds plain
-/// history uses, so they are owned by the predicate and deliberately not repeated
-/// in the pagination query.
-/// </summary>
 public sealed class MessagesSearchHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -55,9 +44,6 @@ public sealed class MessagesSearchHandler
         }
 
         var request = (MessagesSearch)q;
-        // A Saved Messages topic is addressed by saved_peer_id; Ferrite models
-        // such a topic as the caller's own conversation with that peer, which
-        // is exactly what messages.getSavedHistory reads.
         MessageSearchTarget target = request.Flags[2]
             ? MessageSearchService.ResolveTarget(request.Get_SavedPeerIdView(),
                 userId)
@@ -83,9 +69,6 @@ public sealed class MessagesSearchHandler
             request.Limit, 0, 0);
         bool reactionTagged = request.Flags[3];
 
-        // A saved-reaction tag search names Saved Messages tags, which Ferrite does
-        // not model: no stored row carries one, so the truthful answer is an empty
-        // result rather than every message in the conversation.
         if (reactionTagged)
         {
             return await BuildAsync(userId, target, [], query);

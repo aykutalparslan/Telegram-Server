@@ -3,6 +3,7 @@
 
 using System.Text;
 using Ferrite.TL.baseLayer.dto;
+using Ferrite.Data.Models;
 
 namespace Ferrite.Data.Repositories;
 

@@ -9,20 +9,20 @@ namespace Ferrite.Services.Handlers.MessageMethods;
 
 public sealed class GetStickerSetHandler
 {
-    private readonly StickerStore _store;
+    private readonly StickerSetCatalog _catalog;
 
-    public GetStickerSetHandler(StickerStore store)
+    public GetStickerSetHandler(StickerSetCatalog catalog)
     {
-        _store = store;
+        _catalog = catalog;
     }
 
     [TLFunction(Constructors.baseLayer_GetStickerSet)]
     public async ValueTask<TLBytes> Handle(long authKeyId, TLBytes q)
     {
         (long? setId, long? accessHash, string? shortName) =
-            StickerStore.ReadInputSet(
+            StickerInput.ReadInputSet(
             ((GetStickerSet)q).Get_StickersetView());
-        TLBytes? result = await _store.GetFullSetAsync(setId, accessHash,
+        TLBytes? result = await _catalog.GetFullSetAsync(setId, accessHash,
             shortName);
         return result ?? RpcErrorGenerator.GenerateError(400,
             "STICKERSET_INVALID"u8);

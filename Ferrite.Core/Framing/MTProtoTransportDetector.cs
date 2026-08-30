@@ -5,7 +5,6 @@ using System.Buffers;
 using Autofac;
 using DotNext.Buffers;
 using Ferrite.Crypto;
-using Ferrite.Services;
 
 namespace Ferrite.Core.Framing;
 

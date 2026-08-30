@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -106,7 +105,7 @@ public sealed class GetChatInviteImportersHandler : MessagesHandlerBase
                 importersVector.AppendTLObject(row.ToReadOnlySpan());
             }
             var userVector = new Vector();
-            AppendUsers(ref userVector, page.Select(i => i.UserId));
+            AppendUsers(context!.CurrentUserId, ref userVector, page.Select(i => i.UserId));
 
             _log.Debug($"🔗 GetChatInviteImporters user:{context!.CurrentUserId} chat:{chatId} " +
                        $"requested:{requested} total:{filtered.Count} page:{page.Count}");

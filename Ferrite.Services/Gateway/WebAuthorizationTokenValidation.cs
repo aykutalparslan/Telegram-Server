@@ -3,9 +3,6 @@
 
 namespace Ferrite.Services.Gateway;
 
-/// <summary>
-/// The untrusted inputs supplied to <c>auth.importWebTokenAuthorization</c>.
-/// </summary>
 public sealed class WebAuthorizationTokenValidationRequest
 {
     public WebAuthorizationTokenValidationRequest(int apiId, string apiHash,
@@ -24,9 +21,6 @@ public sealed class WebAuthorizationTokenValidationRequest
         $"{nameof(WebAuthorizationTokenValidationRequest)} {{ ApiId = {ApiId}, Credentials = <redacted> }}";
 }
 
-/// <summary>
-/// The local identity proven by an external web authorization token.
-/// </summary>
 public readonly struct WebAuthorizationTokenValidationResult
 {
     private WebAuthorizationTokenValidationResult(bool isValid, long userId)
@@ -47,9 +41,6 @@ public readonly struct WebAuthorizationTokenValidationResult
     }
 }
 
-/// <summary>
-/// Validates web authorization tokens at the external trust boundary.
-/// </summary>
 public interface IWebAuthorizationTokenValidator
 {
     ValueTask<WebAuthorizationTokenValidationResult> ValidateAsync(
@@ -57,9 +48,6 @@ public interface IWebAuthorizationTokenValidator
         CancellationToken cancellationToken = default);
 }
 
-/// <summary>
-/// Safe production default used until a deployment configures a trusted issuer.
-/// </summary>
 public sealed class RejectingWebAuthorizationTokenValidator :
     IWebAuthorizationTokenValidator
 {

@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -35,7 +34,6 @@ public sealed class EditChatDefaultBannedRightsHandler : MessagesHandlerBase
             long channelId = PeerResolver.ResolveInputPeerChannelId(peer);
             byte[] rightsBytes = ((EditChatDefaultBannedRights)q).BannedRights.ToArray();
 
-            // Default rights accept every flag except view_messages (rights.md).
             if (ChatRights.BansViewMessages(rightsBytes))
             {
                 return ErrorUpdates("BANNED_RIGHTS_INVALID");

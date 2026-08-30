@@ -18,6 +18,12 @@ public class DeviceLockedRepository : IDeviceLockedRepository
     }
     public bool PutDeviceLocked(long authKeyId, TimeSpan period)
     {
+        if (period <= TimeSpan.Zero)
+        {
+            _store.Delete(authKeyId);
+            return true;
+        }
+
         var lockedUntil = DateTimeOffset.Now.Add(period).ToUnixTimeMilliseconds();
         using var row = DeviceLockState.Builder().LockedUntil(lockedUntil).Build();
         _store.Put(row.ToReadOnlySpan().ToArray(), period, authKeyId);

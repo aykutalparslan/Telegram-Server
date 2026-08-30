@@ -2,8 +2,8 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Calls;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.dto;
@@ -21,11 +21,11 @@ public sealed class GetFullUserHandler : UserHandlerBase
     private readonly ModerationStore _moderation;
     private readonly AccountAudioStore _audio;
 
-    public GetFullUserHandler(IUnitOfWork unitOfWork, IAppInfoRepository appInfoRepository, IAuthorizationRepository authorizationRepository, INotifySettingsRepository notifySettingsRepository, IPhotoRepository photoRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository,
+    public GetFullUserHandler(IUnitOfWork unitOfWork, IAppInfoRepository appInfoRepository, IAuthorizationRepository authorizationRepository, IContactsRepository contactsRepository, INotifySettingsRepository notifySettingsRepository, IPhotoRepository photoRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository,
         PrivacyEvaluator privacyEvaluator, ChatSettingsStore settings,
         ModerationStore moderation, AccountAudioStore audio,
         ProfileStore? profiles = null)
-        : base(unitOfWork, appInfoRepository, notifySettingsRepository, photoRepository, userRepository, userStatusRepository, profiles)
+        : base(unitOfWork, appInfoRepository, contactsRepository, notifySettingsRepository, photoRepository, userRepository, userStatusRepository, profiles)
     {
         _authorizationRepository = authorizationRepository;
 
@@ -46,7 +46,7 @@ public sealed class GetFullUserHandler : UserHandlerBase
             {
                 userId = viewerUserId;
             }
-            using var user = await GetUserInternal(userId, viewerUserId);
+            using var user = await GetUserInternal(viewerUserId, userId);
             DeviceType deviceType = GetDeviceType(authKeyId);
             using var notifySettings = GetPeerNotifySettings(authKeyId, user, deviceType);
 
@@ -77,9 +77,6 @@ public sealed class GetFullUserHandler : UserHandlerBase
                     ? null : await _profiles.GetProfileAsync(userId);
                 using TLDocument? savedMusic = await _audio
                     .GetFirstMusicAsync(userId);
-                // These settings become the client's action bar for this private
-                // chat, so they answer the same question `messages.getPeerSettings`
-                // does, dismissal included.
                 bool offerActionBar = await _moderation
                     .ShouldOfferPrivateActionBarAsync(viewerUserId, userId);
                 return CreteFullUser(user.Value, notifySettings, phoneCallsAvailable,

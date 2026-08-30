@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -12,26 +11,12 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// The channels the caller belongs to that have gone quiet, which
-/// `td_api::getInactiveSupergroupChats` (`Requests.cpp:3268`) offers as
-/// leave-candidates when a join hits the membership limit.
-///
-/// The `dates` vector reports the LAST ACTIVITY date Ferrite genuinely holds --
-/// the newest stored message in the channel, or its creation date when it never
-/// carried one. Nothing is synthesized: pinned TDLib deliberately ignores this
-/// vector anyway ("don't need to use result->dates_, because
-/// chat.last_message.date is more reliable", `ChatManager.cpp:1493`), so
-/// inventing a plausible number here would be invisible to the client and
-/// false in storage.
-/// </summary>
 public sealed class GetInactiveChannelsHandler : ChannelCatalogueHandlerBase
 {
     private readonly IAuthorizationRepository _authorizationRepository;
     private readonly IChatParticipantsRepository _chatParticipantsRepository;
     private readonly IChatRepository _chatRepository;
 
-    // Telegram's own inactivity horizon for this catalogue.
     private static readonly TimeSpan InactivityHorizon = TimeSpan.FromDays(30);
 
     public GetInactiveChannelsHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IChannelAdminLogRepository channelAdminLogRepository, IChannelMessagesRepository channelMessagesRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IMessageRepository messageRepository, IUserRepository userRepository,
@@ -80,13 +65,10 @@ public sealed class GetInactiveChannelsHandler : ChannelCatalogueHandlerBase
             }
         }
 
-        // Quietest first: that is the order a client offers leave-candidates in.
         selected.Sort((left, right) => left.Date != right.Date
             ? left.Date.CompareTo(right.Date)
             : left.ChannelId.CompareTo(right.ChannelId));
 
-        // Every row is resolved BEFORE either vector exists: `Vector` and
-        // `VectorOfInt` are ref structs and cannot survive an await.
         var rows = new List<(byte[] Row, int Date)>(selected.Count);
         foreach ((long channelId, int date) in selected)
         {

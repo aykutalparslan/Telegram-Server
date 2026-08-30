@@ -6,22 +6,8 @@ using Ferrite.TL;
 
 namespace Ferrite.Core.Execution;
 
-/// <summary>
-/// Shared single-step unwrap primitives for Telegram's invocation wrappers
-/// (invokeWithLayer / initConnection / invokeAfterMsg(s) / invokeWithoutUpdates /
-/// invokeWithMessagesRange / invokeWithGooglePlayIntegrity /
-/// invokeWithTakeout / invokeWithApnsSecret / invokeWithReCaptcha).
-/// One implementation is used by the buffered wrapper handlers, the engine file
-/// path (<see cref="ExecutionEngine.InvokeFile"/>) and file detection
-/// (<see cref="ExecutionEngine.IsFileRequest"/>), so the query extraction is not
-/// re-implemented per call site. gzip is handled separately by GzipPackedHelper.
-/// The initConnection SaveAppInfo side effect stays with the caller
-/// (InitConnectionFunc / InvokeFile); this type only extracts the inner query
-/// bytes. Each result owns pooled memory; the caller disposes it.
-/// </summary>
 internal static class RequestUnwrapper
 {
-    /// <summary>Rents pooled memory and copies an inner query span into an owned TLBytes.</summary>
     public static TLBytes CopyQuery(ReadOnlySpan<byte> query)
     {
         var queryMemory = UnmanagedMemoryPool<byte>.Shared.Rent(query.Length);
@@ -58,9 +44,6 @@ internal static class RequestUnwrapper
         return CopyQuery(request.Query);
     }
 
-    // These declarations share their constructor ids with the generic wrappers.
-    // The generator therefore emits the prefix views only; ReadSize measures the
-    // prefix and the generic query occupies the remaining bytes.
     public static TLBytes InvokeWithGooglePlayIntegrityQuery(TLBytes rpc)
     {
         var span = rpc.AsSpan();

@@ -9,15 +9,6 @@ using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Handlers.ContactMethods;
 
-/// <summary>
-/// The caller's top peers. Ferrite does not score interactions yet, so an
-/// enabled account answers with an empty but ENABLED `contacts.topPeers` rather
-/// than `topPeersDisabled`: the two are not interchangeable, because pinned
-/// TDLib treats the disabled answer as the user's opt-out and stops asking
-/// (`TopDialogManager.cpp:527`, which sets the `disable_top_chats` option).
-/// Reporting "disabled" for an account that never opted out would silently turn
-/// the feature off client-side.
-/// </summary>
 public sealed class GetTopPeersHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -49,7 +40,6 @@ public sealed class GetTopPeersHandler
         using (TLTopPeersState? state = await _topPeersRepository
                    .GetStateAsync(userId))
         {
-            // An absent row means enabled; only the opt-out is ever stored.
             disabled = state != null && state.Value.AsTopPeersState().Flags[0];
         }
 

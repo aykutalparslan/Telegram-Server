@@ -20,8 +20,6 @@ public class MessageReactionsRepository : IMessageReactionsRepository
                 new DataColumn { Name = "box_id", Type = DataType.Long },
                 new DataColumn { Name = "message_id", Type = DataType.Int },
                 new DataColumn { Name = "user_id", Type = DataType.Long }),
-            // Secondary index rows are unique per index key, so the per-user index
-            // carries message_id to keep one entry per reacted message.
             new KeyDefinition("by_user",
                 new DataColumn { Name = "box_type", Type = DataType.Int },
                 new DataColumn { Name = "box_id", Type = DataType.Long },

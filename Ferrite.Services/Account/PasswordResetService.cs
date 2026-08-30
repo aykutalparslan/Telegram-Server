@@ -8,7 +8,7 @@ using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.account;
 using Ferrite.TL.baseLayer.dto;
 
-namespace Ferrite.Services;
+namespace Ferrite.Services.Account;
 
 public interface IPasswordResetService
 {

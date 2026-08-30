@@ -13,14 +13,13 @@ public abstract class StickerHandlerBase
     private readonly IAuthorizationRepository _authorizationRepository;
 
     protected readonly IUnitOfWork UnitOfWork;
-    protected readonly StickerStore Store;
 
-    protected StickerHandlerBase(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
+    protected StickerHandlerBase(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository)
     {
         _authorizationRepository = authorizationRepository;
 
         UnitOfWork = unitOfWork;
-        Store = store;
     }
 
     protected async ValueTask<long?> GetUserIdAsync(long authKeyId)

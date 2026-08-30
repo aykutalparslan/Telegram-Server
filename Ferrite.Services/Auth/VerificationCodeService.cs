@@ -8,7 +8,7 @@ using Ferrite.Data.Repositories;
 using Ferrite.Services.Gateway;
 using Ferrite.TL.baseLayer.dto;
 
-namespace Ferrite.Services;
+namespace Ferrite.Services.Auth;
 
 public enum VerificationPurpose
 {

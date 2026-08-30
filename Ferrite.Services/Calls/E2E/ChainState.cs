@@ -5,14 +5,6 @@ using Ferrite.Crypto;
 
 namespace Ferrite.Services.Calls.E2E;
 
-// The `State` half of Blockchain.cpp: applying one block's changes and then
-// checking the block's own claim about the resulting state.
-//
-// Ordering matters and is not obvious: the signer's permissions are recomputed
-// from the CURRENT working group state before every change, so a permission
-// granted earlier in the same block takes effect for later changes in it. The
-// reference is explicit that applying changes in one block must equal applying
-// them in separate blocks.
 public sealed class ChainState
 {
     public ChainState(ChainKeyValueState keyValueState, ChainGroupStateValue groupState,
@@ -38,9 +30,6 @@ public sealed class ChainState
 
     public ChainValidationError Apply(ChainBlockValue block)
     {
-        // The first real block is applied on top of a synthetic height -1 block
-        // whose group state is empty with all external permissions, which is
-        // what lets its signer bootstrap the chain.
         if (block.Height == 0)
         {
             GroupState = new ChainGroupStateValue(
@@ -50,8 +39,6 @@ public sealed class ChainState
         byte[]? signerPublicKey = block.SignaturePublicKey;
         if (signerPublicKey == null && GroupState.Participants.Count > 0)
         {
-            // Optimisation the reference allows: the key may be omitted when it
-            // matches the first participant's.
             signerPublicKey = GroupState.Participants[0].PublicKey;
         }
         if (signerPublicKey == null)
@@ -96,8 +83,6 @@ public sealed class ChainState
                 }
                 catch (ChainCodecException)
                 {
-                    // A key that is not exactly 32 bytes; the reference errors
-                    // out of set_value rather than padding it.
                     return ChainValidationError.InvalidBlock;
                 }
                 return ChainValidationError.None;
@@ -111,8 +96,6 @@ public sealed class ChainState
                 var error = SetGroupState(setGroupState.GroupState, permissions);
                 if (error != ChainValidationError.None) return error;
 
-                // Changing membership always clears the shared key, and that
-                // clear is itself permission-checked against the NEW state.
                 var afterPermissions = GroupState.GetPermissions(
                     signerPublicKey, ChainPermissionFlags.AllPermissions);
                 if (!afterPermissions.MayChangeSharedKey) return ChainValidationError.NoPermissions;
@@ -167,8 +150,6 @@ public sealed class ChainState
         var error = ValidateGroupState(groupState);
         if (error != ChainValidationError.None) return error;
 
-        // Membership is compared on the (user_id, public_key) pair, so rotating
-        // a key counts as a removal plus an addition.
         var old = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var participant in GroupState.Participants)
         {
@@ -251,9 +232,6 @@ public sealed class ChainState
     private ChainValidationError SetSharedKey(ChainSharedKeyValue sharedKey,
         ChainPermissions permissions)
     {
-        // A key cannot be overwritten in place: the group state must be changed
-        // first, which clears it. Otherwise one member could silently rekey a
-        // call the others are still using.
         if (!SharedKey.IsEmpty) return ChainValidationError.InvalidBlock;
         if (!permissions.MayChangeSharedKey) return ChainValidationError.NoPermissions;
 
@@ -276,8 +254,6 @@ public sealed class ChainState
             return ChainValidationError.NoChanges;
         }
 
-        // The proof omits exactly what the block's own changes already imply,
-        // and must carry exactly what they do not.
         if (_hasGroupStateChange && stateProof.GroupState != null)
         {
             return ChainValidationError.InvalidStateProofGroup;

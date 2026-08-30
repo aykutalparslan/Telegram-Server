@@ -8,13 +8,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Calls;
 
-/// <summary>
-/// Runs the single terminal transition for a discarded call: it releases media
-/// resources, writes the call-log service message into both private message
-/// boxes exactly once, and delivers phoneCallDiscarded plus the log to the
-/// participants. Both explicit discardCall and receive/ring timeout expiry
-/// route through here so neither can double-fan-out or double-log.
-/// </summary>
 public sealed class CallTerminator
 {
     private readonly ICallRegistry _registry;
@@ -38,12 +31,6 @@ public sealed class CallTerminator
         _unitOfWork = unitOfWork;
     }
 
-    /// <summary>
-    /// Finalizes a call whose registry state is already Discarded. When invoked
-    /// by discardCall the invoker's own update copies are returned for the RPC
-    /// result and only the peer's copies are enqueued; the timeout path passes a
-    /// null invoker and both sides are enqueued.
-    /// </summary>
     public async Task<List<byte[]>> FinalizeAsync(CallSnapshot call,
         long? invokerUserId, long? invokerAuthKeyId)
     {
@@ -55,8 +42,6 @@ public sealed class CallTerminator
         int date = checked((int)_time.GetUnixTimeInSeconds());
         byte[] action = BuildCallLogAction(call, discard);
         byte[] discardedCall = BuildDiscarded(call, discard);
-        // Guard belt-and-suspenders even though the first terminal transition
-        // already runs this once: never write a second log entry.
         bool writeLog = _registry.TryMarkCallLogWritten(call.CallId).Status
             == CallRegistryStatus.Ok;
 
@@ -78,8 +63,6 @@ public sealed class CallTerminator
         long dialogPeer = isCaller ? call.CalleeUserId : call.CallerUserId;
         bool isInvoker = invokerUserId == userId;
 
-        // phoneCallDiscarded reaches the bound call device, or every callee
-        // device when no winner was ever bound.
         UpdateDeliveryScope discardScope;
         if (isCaller)
         {
@@ -96,8 +79,6 @@ public sealed class CallTerminator
         if (writeLog)
         {
             long? authKeyId = isInvoker ? invokerAuthKeyId : null;
-            // The service message is authored by the caller so both boxes show
-            // the correct outgoing/incoming perspective.
             logWrite = await _messageStore.PutPrivateServiceMessageAsync(userId,
                 authKeyId, dialogPeer, call.CallerUserId, outgoing: isCaller,
                 action, date);
@@ -130,8 +111,6 @@ public sealed class CallTerminator
 
     private async Task EnqueueNewMessageAsync(long userId, StoredMessageWrite write)
     {
-        // The call-log service message is an ordinary private message, so it
-        // reaches every one of the user's devices.
         TLUpdate update = UpdateNewMessage.Builder()
             .Message(write.Bytes)
             .Pts(write.Pts)

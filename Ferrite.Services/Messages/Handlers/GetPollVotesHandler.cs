@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -11,21 +10,10 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Pages the individual voters of a non-anonymous poll. Pinned TDLib refuses an
-/// anonymous poll locally (<c>PollManager.cpp:1126-1127</c>) and never sends the
-/// query, so the server-side refusal here is the backstop for any other client
-/// rather than a path the pinned client exercises.
-///
-/// The opaque <c>next_offset</c> is the last returned ballot's position in the
-/// same (date, voter) order the store returns, which is what makes a resumed page
-/// continue exactly where the previous one stopped even as new votes arrive.
-/// </summary>
 public sealed class GetPollVotesHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
 
-    /// Telegram's documented per-page ceiling for voter lists.
     private const int MaxLimit = 100;
 
     private readonly IUnitOfWork _unitOfWork;
@@ -119,14 +107,9 @@ public sealed class GetPollVotesHandler
         List<byte[]> chats = peer.Type == TLPeer.PeerType.PeerUser
             ? new List<byte[]>()
             : await _fanout.GetChatBytesForViewerAsync(userId, new[] { peer.Id });
-        return BuildResult(matching.Count, page, option, chats, nextOffset);
+        return BuildResult(userId, matching.Count, page, option, chats, nextOffset);
     }
 
-    /// <summary>
-    /// The index the next page starts at. An empty offset starts from the
-    /// beginning; an offset naming a ballot that has since been retracted is
-    /// rejected rather than silently restarting the list from the top.
-    /// </summary>
     private static int ResolveOffset(IReadOnlyList<PollStore.VoteSnapshot> votes,
         string offset)
     {
@@ -147,8 +130,7 @@ public sealed class GetPollVotesHandler
     private static string EncodeOffset(PollStore.VoteSnapshot vote) =>
         vote.Date.ToString() + "_" + vote.UserId.ToString();
 
-    // Synchronous so the ref-struct vectors never cross an await.
-    private TLVotesList BuildResult(int count,
+    private TLVotesList BuildResult(long viewerUserId, int count,
         IReadOnlyList<PollStore.VoteSnapshot> page, byte[]? requestedOption,
         IReadOnlyList<byte[]> chatBytes, string? nextOffset)
     {
@@ -166,7 +148,7 @@ public sealed class GetPollVotesHandler
             chats.AppendTLObject(bytes);
         }
         var users = new Vector();
-        _fanout.AppendUsers(ref users, page
+        _fanout.AppendUsers(viewerUserId, ref users, page
             .Where(vote => vote.PeerType == TLPeer.PeerType.PeerUser)
             .Select(vote => vote.PeerId)
             .Distinct());
@@ -183,11 +165,6 @@ public sealed class GetPollVotesHandler
         return builder.Build();
     }
 
-    /// <summary>
-    /// When the request named an option, the reduced constructor is correct: the
-    /// option is already known to the caller and repeating it in every row would
-    /// only restate the filter.
-    /// </summary>
     private static TLMessagePeerVote BuildVote(PollStore.VoteSnapshot vote,
         TLPeer peer, byte[]? requestedOption)
     {

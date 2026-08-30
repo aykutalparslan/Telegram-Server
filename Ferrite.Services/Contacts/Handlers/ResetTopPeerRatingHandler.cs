@@ -9,16 +9,6 @@ using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Handlers.ContactMethods;
 
-/// <summary>
-/// Clears the caller's interaction rating for one peer in one category. Pinned
-/// TDLib sends this from `td_api::removeTopChat`
-/// (`TopDialogManager.cpp:105`).
-///
-/// Ferrite does not score interactions yet, so there is never a stored rating to
-/// remove. The call still validates the peer and answers true, because removing
-/// an absent rating is genuinely idempotent -- reporting an error would make a
-/// client retry something that is already in the requested state.
-/// </summary>
 public sealed class ResetTopPeerRatingHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;

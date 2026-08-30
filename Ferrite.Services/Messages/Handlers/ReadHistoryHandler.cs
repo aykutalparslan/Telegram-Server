@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -53,9 +52,6 @@ public sealed class ReadHistoryHandler : MessagesHandlerBase
                 return AffectedMessages.Builder().Pts(currentPts).PtsCount(0).Build();
             }
 
-            // Dated receipts are written before the pointer moves, because the
-            // window they cover is exactly what this read advances past. They are
-            // what messages.getOutboxReadDate later reports to the sender.
             int previousMaxId = await userCtx.ReadMessagesMaxId((int)peerType, peerId);
             int receipts = await _receipts.RecordCommonReceiptsAsync(userId, peerType,
                 peerId, previousMaxId, maxId,
@@ -65,11 +61,8 @@ public sealed class ReadHistoryHandler : MessagesHandlerBase
                 await _unitOfWork.SaveAsync();
             }
 
-            // Mark the peer's inbound messages up to maxId as read; returns remaining unread.
             int stillUnread = await userCtx.ReadMessages((int)peerType, peerId, maxId);
 
-            // Saved Messages (self): nothing to notify and no pts step, so the reported pts is
-            // unchanged with pts_count 0.
             if (peerType == TLPeer.PeerType.PeerUser && peerId == userId)
             {
                 int currentPts = await userCtx.Pts();
@@ -88,9 +81,6 @@ public sealed class ReadHistoryHandler : MessagesHandlerBase
                 .Build();
             await _updates.EnqueueUpdate(userId, inboxUpdate);
 
-            // Outbox read notifications go to the single partner for private peers. Group
-            // members' copies use per-member ids, so cross-member outbox read state is
-            // deferred until per-member id mapping exists.
             if (peerType == TLPeer.PeerType.PeerUser)
             {
                 var peerCtx = _updatesContextFactory.GetUpdatesContext(null, peerId);

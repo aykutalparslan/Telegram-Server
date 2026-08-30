@@ -8,8 +8,6 @@ using DotNext.IO.Pipelines;
 using Ferrite.Core.Exceptions;
 using Ferrite.Core.RequestChain;
 using Ferrite.Crypto;
-using Ferrite.Data;
-using Ferrite.Services;
 using Ferrite.Core.Execution;
 using Ferrite.TL;
 using Ferrite.Utils;
@@ -276,8 +274,6 @@ public class ProtoHandler : IProtoHandler
         }
         finally
         {
-            // The socket reader must never wait forever when remote storage
-            // faults or returns a short part.
             await pipe.CompleteAsync();
         }
     }

@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -11,14 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Answers the caller's unread mentions in one dialog, newest first, using the
-/// same anchor/add-offset pagination as ordinary history. A common-box mention
-/// lives on the caller's own copy as the `mentioned` flag. A channel post exists
-/// once and cannot carry per-viewer state, so a channel mention is derived from
-/// the post's own mention entities and its read state comes from the per-viewer
-/// content-read rows that `channels.readMessageContents` writes.
-/// </summary>
 public sealed class GetUnreadMentionsHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;

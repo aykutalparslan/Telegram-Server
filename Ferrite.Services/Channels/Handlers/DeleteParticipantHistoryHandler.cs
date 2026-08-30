@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -53,7 +52,6 @@ public sealed class DeleteParticipantHistoryHandler : ChannelsHandlerBase
         long id = channelId!.Value;
         var channelBox = new ChannelMessageBox(_counterFactory, id);
 
-        // Find every post authored by the participant across the whole channel box.
         var toDelete = new List<int>();
         var stored = await _channelMessagesRepository.GetMessagesAsync(id, 0, 0);
         foreach (var saved in stored)

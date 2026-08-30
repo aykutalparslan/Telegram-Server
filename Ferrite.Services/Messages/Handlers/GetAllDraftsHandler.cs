@@ -81,10 +81,10 @@ public sealed class GetAllDraftsHandler
         var updates = new Vector();
         foreach (byte[] bytes in updateBytes) updates.AppendTLObject(bytes);
         var users = new Vector();
-        _fanout.AppendUsers(ref users, relatedUserIds);
+        _fanout.AppendUsers(userId, ref users, relatedUserIds);
         var chats = new Vector();
         foreach (byte[] bytes in chatBytes) chats.AppendTLObject(bytes);
-        return Updates.Builder().UpdatesProperty(updates).Users(users).Chats(chats)
+        return Ferrite.TL.baseLayer.Updates.Builder().UpdatesProperty(updates).Users(users).Chats(chats)
             .Date(_drafts.CurrentDate).Seq(0).Build();
     }
 

@@ -70,7 +70,6 @@ public sealed class GroupCallChainRepository : IGroupCallChainRepository
     {
         using TLDto.TLGroupCallChainState? state =
             await GetStateInternalAsync(callId, subChainId);
-        // A chain nobody has written to sits at the synthetic genesis height -1.
         return state == null ? -1 : state.Value.AsGroupCallChainState().Height;
     }
 
@@ -78,10 +77,6 @@ public sealed class GroupCallChainRepository : IGroupCallChainRepository
         int subChainId, CancellationToken cancellationToken = default) =>
         await GetStateInternalAsync(callId, subChainId);
 
-    // Append is the fork-prevention point. The whole reason the server exists in
-    // this protocol is that exactly one block wins at each height, so the height
-    // check and the write happen under the same per-(call, sub-chain) gate. A
-    // caller that validated against a stale head loses here rather than forking.
     public async ValueTask<GroupCallChainAppendResult> TryAppendBlockAsync(
         TLDto.TLGroupCallChainState newState, TLDto.TLGroupCallChainBlock block,
         int expectedHeight, CancellationToken cancellationToken = default)
@@ -119,10 +114,6 @@ public sealed class GroupCallChainRepository : IGroupCallChainRepository
         }
     }
 
-    // Blocks are indexed by (call_id, sub_chain_id, height) and height IS the
-    // offset TDLib polls with, so a window is a contiguous height range. An
-    // offset past the head is an empty page, never an error: TDLib polls
-    // speculatively after every update.
     public async ValueTask<IReadOnlyList<TLDto.TLGroupCallChainBlock>> GetBlocksAsync(
         long callId, int subChainId, int offset, int limit,
         CancellationToken cancellationToken = default)
@@ -134,9 +125,6 @@ public sealed class GroupCallChainRepository : IGroupCallChainRepository
         List<TLDto.TLGroupCallChainBlock> window = new();
         try
         {
-            // Heights are contiguous from 0 because every append writes exactly
-            // expectedHeight + 1, so the first miss is the end of the chain and
-            // an unbounded limit costs one lookup past the head.
             for (int i = 0; i < limit; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -168,9 +156,6 @@ public sealed class GroupCallChainRepository : IGroupCallChainRepository
         CancellationToken cancellationToken = default) =>
         await GetHeightInternalAsync(callId, subChainId) + 1;
 
-    // Discard drops the whole call prefix. Both sub-chain gates are held in a
-    // fixed order so an append that is mid-commit cannot leave half a chain
-    // behind the delete.
     public async ValueTask DeleteChainAsync(long callId,
         CancellationToken cancellationToken = default)
     {

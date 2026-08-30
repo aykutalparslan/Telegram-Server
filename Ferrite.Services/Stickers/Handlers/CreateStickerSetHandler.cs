@@ -11,8 +11,14 @@ namespace Ferrite.Services.Handlers.StickerMethods;
 
 public sealed class CreateStickerSetHandler : StickerHandlerBase
 {
-    public CreateStickerSetHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, StickerStore store)
-        : base(unitOfWork, authorizationRepository, store) { }
+    private readonly StickerSetEditor _editor;
+
+    public CreateStickerSetHandler(IUnitOfWork unitOfWork,
+        IAuthorizationRepository authorizationRepository, StickerSetEditor store)
+        : base(unitOfWork, authorizationRepository)
+    {
+        _editor = store;
+    }
 
     [TLFunction(Constructors.baseLayer_CreateStickerSet)]
     public async Task<TLBytes> Handle(long authKeyId, TLBytes q)
@@ -27,12 +33,12 @@ public sealed class CreateStickerSetHandler : StickerHandlerBase
         bool masks = request.Masks;
         bool emojis = request.Emojis;
         bool textColor = request.TextColor;
-        var items = new List<StickerStore.StickerItemInput>();
+        var items = new List<StickerItemInput>();
         Vector source = request.Stickers;
         int count = source.Count;
         for (int i = 0; i < count; i++)
         {
-            StickerStore.StickerItemInput? item = StickerStore.ReadItem(
+            StickerItemInput? item = StickerInput.ReadItem(
                 (InputStickerSetItemView)source.ReadTLObject());
             if (!item.HasValue) return Invalid("STICKER_INVALID");
             items.Add(item.Value);
@@ -40,7 +46,7 @@ public sealed class CreateStickerSetHandler : StickerHandlerBase
         (long Id, long AccessHash)? thumb = null;
         if (request.Flags[2])
         {
-            var value = StickerStore.ReadInputDocument(request.Get_ThumbView());
+            var value = StickerInput.ReadInputDocument(request.Get_ThumbView());
             if (!value.Id.HasValue || !value.AccessHash.HasValue)
                 return Invalid("STICKER_ID_INVALID");
             thumb = (value.Id.Value, value.AccessHash.Value);
@@ -52,7 +58,7 @@ public sealed class CreateStickerSetHandler : StickerHandlerBase
             return Invalid("USER_ID_INVALID");
         StickerSetKind kind = masks ? StickerSetKind.Mask
             : emojis ? StickerSetKind.Emoji : StickerSetKind.Regular;
-        return await Store.CreateSetAsync(ownerUserId.Value, title, shortName,
+        return await _editor.CreateSetAsync(ownerUserId.Value, title, shortName,
             kind, textColor, items, thumb);
     }
 }

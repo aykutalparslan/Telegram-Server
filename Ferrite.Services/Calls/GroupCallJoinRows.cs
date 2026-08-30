@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL.baseLayer;
 using Ferrite.Utils;
@@ -10,11 +9,6 @@ using TLDto = Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Calls;
 
-// The parts of a join that are identical for a hosted call and an E2E
-// conference: the stored participant row, what the joiner sees of its own
-// camera, and how a media or commit failure maps to the wire. Only the
-// authorization and the chain differ between the two, so only those live in the
-// handlers.
 public static class GroupCallJoinRows
 {
     public static TLDto.TLGroupCallParticipantState BuildParticipantRow(long callId,
@@ -53,12 +47,6 @@ public static class GroupCallJoinRows
         return builder.Build();
     }
 
-    /// <summary>
-    /// What the joiner itself sees of its own camera: the endpoint the worker
-    /// assigned, against the source groups the client just advertised. The
-    /// per-consumer mapping never contains a viewer's own producer, so this is
-    /// the only place the self row can come from.
-    /// </summary>
     public static GroupCallViewerSources BuildSelfSources(GroupCallMediaJoinResult joined,
         GroupCallJoinPayload payload, bool videoJoined)
     {
@@ -73,12 +61,6 @@ public static class GroupCallJoinRows
             Presentation: null);
     }
 
-    /// <summary>
-    /// Compensation for a join whose signaling half did not commit. It is
-    /// best-effort: the participant row is not stored, so a worker that cannot be
-    /// reached leaves an orphan transport the room teardown will collect rather
-    /// than an error the client would act on.
-    /// </summary>
     public static async Task ReleaseTransportAsync(IGroupCallMediaPlane media, ILogger log,
         long callId, string mediaId, string reason)
     {

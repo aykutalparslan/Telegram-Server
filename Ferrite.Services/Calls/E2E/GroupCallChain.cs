@@ -3,10 +3,6 @@
 
 namespace Ferrite.Services.Calls.E2E;
 
-// One conference call's sub-chain 0. The whole reason the server participates
-// in this protocol is fork prevention: exactly one block wins at each height,
-// so a block is validated against a clone and published only if the entire
-// block succeeds.
 public sealed class GroupCallChain
 {
     private ChainState _state;
@@ -18,7 +14,6 @@ public sealed class GroupCallChain
         _state = state;
     }
 
-    // The synthetic genesis block sits at height -1 with an all-zero hash.
     public static GroupCallChain CreateEmpty() =>
         new(-1, new byte[32], ChainState.CreateEmpty());
 
@@ -53,9 +48,6 @@ public sealed class GroupCallChain
         var error = candidate.Apply(block);
         if (error != ChainValidationError.None) return error;
 
-        // No failure path past this point: a rejected block must leave the
-        // chain byte-identical so the client's retry against the real head is
-        // safe.
         _state = candidate;
         HeadHash = block.Hash;
         Height = block.Height;

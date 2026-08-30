@@ -151,8 +151,6 @@ public sealed class CallRegistry : ICallRegistry, IDisposable
                 case CallSessionState.Received:
                 case CallSessionState.Accepted:
                 case CallSessionState.Confirmed:
-                    // Idempotent acknowledgement: the original receive date and
-                    // the running ring deadline stay untouched.
                     return new CallRegistryResult(CallRegistryStatus.Ok,
                         entry.Snapshot());
             }
@@ -230,9 +228,6 @@ public sealed class CallRegistry : ICallRegistry, IDisposable
                     return new CallRegistryResult(CallRegistryStatus.AlreadyDiscarded,
                         entry.Snapshot());
                 case CallSessionState.Confirmed:
-                    // Duplicate successful confirm returns the same immutable
-                    // final call; the caller must not create a second
-                    // allocation or fresh credentials.
                     return new CallRegistryResult(CallRegistryStatus.Duplicate,
                         entry.Snapshot());
                 case CallSessionState.Requested:
@@ -275,8 +270,6 @@ public sealed class CallRegistry : ICallRegistry, IDisposable
             }
             else if (requesterUserId == entry.CalleeUserId)
             {
-                // Before a winner exists any callee device may decline; after
-                // accept only the winning device may end the call.
                 if (entry.CalleeAuthKeyId is long winner &&
                     winner != requesterAuthKeyId)
                 {
@@ -315,8 +308,6 @@ public sealed class CallRegistry : ICallRegistry, IDisposable
                     entry.Snapshot());
             }
 
-            // A deadline may only expire the state it was armed for; a racing
-            // accept or received transition already invalidated it.
             bool valid = kind == CallDeadlineKind.Receive
                 ? entry.State == CallSessionState.Requested
                 : entry.State == CallSessionState.Received;

@@ -3,7 +3,7 @@
 
 using Ferrite.Core.Connection;
 using Ferrite.Core.Execution;
-using Ferrite.Services;
+using Ferrite.Services.Sessions;
 using Ferrite.TL;
 using Ferrite.TL.mtproto;
 using Ferrite.Utils;
@@ -43,7 +43,7 @@ public class AuthKeyProcessor : ILinkedHandler
                 if (result == null) return;
                 using var response = result.Value;
 
-                Services.MTProtoMessage message = new Services.MTProtoMessage();
+                Services.Transport.MTProtoMessage message = new Services.Transport.MTProtoMessage();
                 message.SessionId = ctx.SessionId;
                 message.IsResponse = true;
                 message.IsContentRelated = true;
@@ -77,7 +77,7 @@ public class AuthKeyProcessor : ILinkedHandler
                 if (result == null) return;
                 using var response = result.Value;
 
-                Services.MTProtoMessage message = new Services.MTProtoMessage();
+                Services.Transport.MTProtoMessage message = new Services.Transport.MTProtoMessage();
                 message.SessionId = ctx.SessionId;
                 message.IsResponse = true;
                 message.IsContentRelated = true;
@@ -113,7 +113,7 @@ public class AuthKeyProcessor : ILinkedHandler
                 if (result == null) return;
                 using var response = result.Value;
 
-                MTProtoMessage message = new Services.MTProtoMessage();
+                MTProtoMessage message = new Services.Transport.MTProtoMessage();
                 message.SessionId = ctx.SessionId;
                 message.IsResponse = true;
                 message.IsContentRelated = true;
@@ -150,8 +150,6 @@ public class AuthKeyProcessor : ILinkedHandler
     private static void RestoreMissingSessionData(TLExecutionContext context,
         AuthSessionState persisted)
     {
-        // A live handshake context remains authoritative. Persisted TL state is
-        // only a typed fallback for a resumed stage.
         persisted.RestoreInto(context.SessionData);
     }
 }

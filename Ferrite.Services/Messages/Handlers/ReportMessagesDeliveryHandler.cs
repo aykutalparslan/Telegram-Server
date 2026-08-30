@@ -10,13 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Records that the client observed delivery of specific messages, the route
-/// pinned TDLib takes through `ReportMessageDeliveryQuery`
-/// (`MessageQueryManager.cpp:149`) after a push. This is telemetry, not a read
-/// marker: it must never advance read state, touch unread counts, or emit an
-/// update, so it only appends one durable observation.
-/// </summary>
 public sealed class ReportMessagesDeliveryHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -71,8 +64,6 @@ public sealed class ReportMessagesDeliveryHandler
             return Error(peerError);
         }
 
-        // Every id must be one the caller can already see in this dialog, so a
-        // delivery observation can never be used to probe another conversation.
         foreach (int messageId in messageIds)
         {
             if (await _messages.ResolveIdentityAsync(userId, peer.Type, peer.Id,

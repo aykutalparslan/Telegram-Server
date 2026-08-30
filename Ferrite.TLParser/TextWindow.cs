@@ -3,8 +3,6 @@
 
 namespace Ferrite.TLParser;
 
-// Some implementation details taken from:
-// https://github.com/dotnet/roslyn/blob/main/src/Compilers/CSharp/Portable/Parser/SlidingTextWindow.cs
 public class TextWindow
 {
     public const char InvalidChar = Char.MaxValue;

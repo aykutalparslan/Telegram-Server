@@ -2,28 +2,17 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.dto;
 using Ferrite.TL.baseLayer.messages;
 
-// `messages.MessageViews` and the bare `MessageViews` element both generate a
-// `TLMessageViews` union, one per namespace, so both are named explicitly here.
 using TLMessagesMessageViews = Ferrite.TL.baseLayer.messages.TLMessageViews;
 using TLMessageViewsElement = Ferrite.TL.baseLayer.TLMessageViews;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Serves the durable view/forward counters for the requested messages. The
-/// pinned client rejects a result whose length differs from the request, so a
-/// message the caller cannot resolve still occupies its slot as a
-/// <c>messageViews</c> with no counters. Incrementing is idempotent per viewer:
-/// the per-viewer receipt row is the index and only a first receipt advances the
-/// served counter.
-/// </summary>
 public sealed class GetMessagesViewsHandler
 {
     private readonly IChatParticipantsRepository _chatParticipantsRepository;
@@ -87,9 +76,6 @@ public sealed class GetMessagesViewsHandler
 
         int date = checked((int)_timeProvider.GetUtcNow().ToUnixTimeSeconds());
         var counters = new List<(int Views, int Forwards)?>(requestedIds.Count);
-        // The result must have one element per requested id, so duplicates keep
-        // their slots. Their increments are collapsed here rather than relying on
-        // an uncommitted receipt write being visible to the next read.
         var applied = new Dictionary<MessageIdentity, (int Views, int Forwards)>();
         bool mutated = false;
         foreach (int messageId in requestedIds)
@@ -128,7 +114,7 @@ public sealed class GetMessagesViewsHandler
         List<byte[]> chatBytes = peerType == TLPeer.PeerType.PeerUser
             ? new List<byte[]>()
             : await _fanout.GetChatBytesForViewerAsync(userId, new[] { peerId });
-        return BuildResult(counters, peerType, peerId, chatBytes);
+        return BuildResult(userId, counters, peerType, peerId, chatBytes);
     }
 
     private async ValueTask<(int Views, int Forwards)> ReadCountersAsync(
@@ -215,8 +201,7 @@ public sealed class GetMessagesViewsHandler
         return null;
     }
 
-    // Synchronous so the ref-struct vectors never cross an await.
-    private TLMessagesMessageViews BuildResult(
+    private TLMessagesMessageViews BuildResult(long viewerUserId,
         IReadOnlyList<(int Views, int Forwards)?> counters,
         TLPeer.PeerType peerType, long peerId, IReadOnlyList<byte[]> chatBytes)
     {
@@ -242,7 +227,7 @@ public sealed class GetMessagesViewsHandler
         var users = new Vector();
         if (peerType == TLPeer.PeerType.PeerUser)
         {
-            _fanout.AppendUsers(ref users, new[] { peerId });
+            _fanout.AppendUsers(viewerUserId, ref users, new[] { peerId });
         }
 
         return MessagesMessageViews.Builder()

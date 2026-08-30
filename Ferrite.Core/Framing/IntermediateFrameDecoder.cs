@@ -3,7 +3,6 @@
 
 using System.Buffers;
 using Ferrite.Crypto;
-using Ferrite.Services;
 
 namespace Ferrite.Core.Framing;
 

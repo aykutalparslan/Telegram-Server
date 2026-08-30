@@ -43,8 +43,6 @@ public sealed class SaveCallDebugHandler : PhoneCallHandlerBase
             return (TLBool)RpcErrorGenerator.GenerateError(400, "CALL_PEER_INVALID"u8);
         }
 
-        // Debug payloads are validated for participation and bounds but not
-        // persisted.
         return BoolTrue.Builder().Build();
     }
 }

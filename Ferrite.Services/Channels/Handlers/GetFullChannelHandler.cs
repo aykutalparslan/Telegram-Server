@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Calls;
@@ -105,9 +104,6 @@ public sealed class GetFullChannelHandler : ChannelsHandlerBase
             reactionsLimit = info.ReactionsLimit;
         }
 
-        // Basic-group message ids belong to each user's common box. The durable DTO
-        // keeps the creator's boundary, while a member's exact boundary is recovered
-        // from their retained migrate-to service message when available.
         if (migratedFromChatId > 0)
         {
             int viewerBoundary = await FindMigrationBoundaryMessageId(currentUserId,
@@ -143,8 +139,6 @@ public sealed class GetFullChannelHandler : ChannelsHandlerBase
         var channelBox = new ChannelMessageBox(_counterFactory, channelId.Value);
         int pts = await channelBox.Pts();
 
-        // The permanent invite link surfaces only to callers who can manage invites
-        // (the creator, or admins holding the invite_users right).
         byte[]? exportedInviteBytes = null;
         bool callerIsActiveMember = false;
         bool callerIsCreator = false;
@@ -196,8 +190,6 @@ public sealed class GetFullChannelHandler : ChannelsHandlerBase
                 .ViewForumAsMessages == true;
         }
 
-        // Resolved before the builder exists: ChannelFull.Builder() is a ref struct
-        // that cannot span an await, and the join-as is this viewer's own.
         using GroupCallFullLink callLink = await _groupCallLink.ResolveFullLinkAsync(
             GroupCallPeerType.Channel, channelId.Value, currentUserId);
         ChatSettingsSnapshot channelSettings = await _settings.GetAsync(
@@ -225,11 +217,6 @@ public sealed class GetFullChannelHandler : ChannelsHandlerBase
             ? await _stickerRepository.GetSetAsync(emojiSetId)
             : null;
 
-        // administration state, resolved before the builder exists for
-        // the same reason as the values above: ChannelFull.Builder() is a ref
-        // struct that cannot span an await. The compact `channel` row stays
-        // authoritative for what it already carries, so only the fields with no
-        // home there are read here.
         bool hiddenPrehistory;
         bool antispam;
         bool participantsHidden;
@@ -253,8 +240,6 @@ public sealed class GetFullChannelHandler : ChannelsHandlerBase
             slowmodeSeconds = adminView.SlowmodeSeconds;
             boostsUnrestrict = adminView.BoostsUnrestrict;
             linkedChatId = adminView.LinkedChatId;
-            // Copied out rather than referenced: the row is disposed at the
-            // end of this block and the builder runs well after it.
             locationBytes = adminView.Flags[4]
                 ? adminView.Location.ToArray()
                 : null;
@@ -262,8 +247,6 @@ public sealed class GetFullChannelHandler : ChannelsHandlerBase
                 ? adminView.MainTab.ToArray()
                 : null;
         }
-        // The deadline is this VIEWER's own, and an elapsed one is not reported:
-        // pinned TDLib counts down to it and would show a stale timer forever.
         int slowmodeNextSendDate = 0;
         if (slowmodeSeconds > 0)
         {
@@ -379,14 +362,6 @@ public sealed class GetFullChannelHandler : ChannelsHandlerBase
         {
             fullChannelBuilder = fullChannelBuilder.MainTab(mainTabBytes);
         }
-        // THE STATISTICS PAIR MOVES TOGETHER. Pinned TDLib refuses to send any
-        // `stats.*` query when `stats_dc` is not an exact DC id in 1..1000
-        // (`get_channel_statistics_dc_id`, ChatManager.cpp:3722), and
-        // `on_get_channel_full` CLEARS `can_view_stats` and logs an error when
-        // the flag arrives without a usable DC (ChatManager.cpp:5769-5775). So a
-        // channel whose statistics Ferrite can serve reports both, and one whose
-        // it cannot reports neither. `can_view_stats` is additionally PER VIEWER,
-        // because only an administrator may read a channel's statistics.
         if (statisticsAvailable && statsDc > 0)
         {
             fullChannelBuilder = fullChannelBuilder.StatsDc(statsDc);
@@ -395,9 +370,6 @@ public sealed class GetFullChannelHandler : ChannelsHandlerBase
                 fullChannelBuilder = fullChannelBuilder.CanViewStats(true);
             }
         }
-        // A supergroup's location is settable by whoever can change its info;
-        // a broadcast has no locality to set. The flag is what pinned TDLib
-        // gates its own "set location" affordance on.
         if (isMegagroup && callerCanChangeInfo)
         {
             fullChannelBuilder = fullChannelBuilder.CanSetLocation(true);
@@ -406,7 +378,6 @@ public sealed class GetFullChannelHandler : ChannelsHandlerBase
         {
             fullChannelBuilder = fullChannelBuilder.Call(linkedCall.AsSpan());
         }
-        // A non-member discovering a public channel gets no per-viewer join-as.
         if (callerIsActiveMember && callLink.DefaultJoinAs is { } defaultJoinAs)
         {
             fullChannelBuilder = fullChannelBuilder
@@ -439,8 +410,6 @@ public sealed class GetFullChannelHandler : ChannelsHandlerBase
                 .DefaultSendAs(defaultSendAsPeer.AsSpan());
         }
 
-        // Non-members fetching a discovered public channel must not receive the
-        // stored creator flags on the compact row.
         byte[] channelRowBytes = ChannelRows.ForViewer(chat.Value.AsSpan().ToArray(),
             callerIsActiveMember, callerIsCreator);
 
@@ -452,7 +421,7 @@ public sealed class GetFullChannelHandler : ChannelsHandlerBase
             chatVector.AppendTLObject(migratedFromChatBytes);
         }
         var userVector = new Vector();
-        AppendUsers(ref userVector, activeParticipants
+        AppendUsers(currentUserId, ref userVector, activeParticipants
             .Select(p => p.AsChatParticipantInfo().UserId)
             .Concat(pendingRequests.Select(x => x.UserId)));
 

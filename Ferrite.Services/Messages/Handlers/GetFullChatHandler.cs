@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Calls;
@@ -96,8 +95,6 @@ public sealed class GetFullChatHandler : MessagesHandlerBase
                 reactionsLimit = fullInfo.ReactionsLimit;
             }
 
-            // The permanent invite link surfaces only to callers who can manage invites
-            // (the basic-group creator or admins).
             bool callerManagesInvites = false;
             foreach (var participantInfo in activeParticipants)
             {
@@ -119,8 +116,6 @@ public sealed class GetFullChatHandler : MessagesHandlerBase
                     _chatInvitesRepository, chatId)
                 : new List<PendingInviteImporter>();
 
-            // Resolved before the builder exists: ChatFull.Builder() is a ref struct
-            // that cannot span an await, and the join-as is this viewer's own.
             using GroupCallFullLink callLink = await _groupCallLink.ResolveFullLinkAsync(
                 GroupCallPeerType.Chat, chatId, currentUserId);
             ChatSettingsSnapshot chatSettings = await _settings.GetAsync(
@@ -186,7 +181,7 @@ public sealed class GetFullChatHandler : MessagesHandlerBase
             var chatVector = new Vector();
             chatVector.AppendTLObject(chat.Value.AsSpan());
             var userVector = new Vector();
-            AppendUsers(ref userVector, activeParticipants
+            AppendUsers(currentUserId, ref userVector, activeParticipants
                 .Select(p => p.AsChatParticipantInfo().UserId)
                 .Concat(pendingRequests.Select(x => x.UserId)));
 

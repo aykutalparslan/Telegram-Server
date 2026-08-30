@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -11,16 +10,6 @@ using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// The documents the caller themselves sent, newest first. Pinned TDLib reaches
-/// this from `searchOutgoingDocumentMessages` and always sends the document
-/// filter (`MessageQueryManager.cpp:477`), but the requested filter is honored as
-/// given rather than assumed.
-///
-/// The search covers the caller's OWN box only. A channel post is one shared row
-/// rather than a per-viewer copy, so it carries no `out` flag for anybody and is
-/// not part of "messages I sent" in this sense.
-/// </summary>
 public sealed class SearchSentMediaHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;

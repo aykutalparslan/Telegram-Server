@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.Services.Channels;
@@ -13,12 +12,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Aggressive anti-spam is a supergroup-only setting and is refused on a
-/// broadcast group, matching `can_toggle_channel_aggressive_anti_spam`
-/// (`ChatManager.cpp:3468-3482`), which also gates it on delete-messages rather
-/// than change-info rights.
-/// </summary>
 public sealed class ToggleAntiSpamHandler : ChannelPropertyHandlerBase
 {
     private readonly IChannelAdminRepository _channelAdminRepository;

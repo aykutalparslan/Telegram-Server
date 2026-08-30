@@ -9,19 +9,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Data.Repositories;
 
-/* Server Salt
- * 
- * A (random) 64-bit number changed every 30 minutes (separately for each session) at the request of the server. 
- * All subsequent messages must contain the new salt (although, messages with the old salt are still accepted for
- * a further 1800 seconds). Required to protect against replay attacks and certain tricks associated with adjusting
- * the client clock to a moment in the distant future.
- *
- * The client may at any time request from the server several (between 1 and 64) future server salts together with
- * their validity periods. Having stored them in persistent memory, the client may use them to send messages
- * in the future even if it changes sessions (a server salt is attached to the authorization key rather than
- * being session-specific).
- */
-
 public class ServerSaltRepository : IServerSaltRepository
 {
     private readonly IVolatileKVStore _store;

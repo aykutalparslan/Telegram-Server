@@ -7,12 +7,6 @@ using Ferrite.TL;
 
 namespace Ferrite.Core.Execution.Functions;
 
-/// <summary>
-/// Builds the uniform dispatch adapter for a service method declared as
-/// <c>(long authKeyId, TLBytes query) -&gt; Task&lt;TLResult&gt;</c> or
-/// <c>ValueTask&lt;TLResult&gt;</c>. Reflection is used once at composition time;
-/// request dispatch calls compiled delegates.
-/// </summary>
 public static class ServiceMethodFunction
 {
     private static readonly MethodInfo CreateFactoryCoreMethod = typeof(ServiceMethodFunction)

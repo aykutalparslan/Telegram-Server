@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -10,6 +9,7 @@ using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.dto;
 using Ferrite.TL.baseLayer.messages;
 using Ferrite.Utils;
+using Layer120UnpinAllMessages = Ferrite.TL.layer120.messages.MessagesUnpinAllMessages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
@@ -30,6 +30,22 @@ public sealed class UnpinAllMessagesHandler : MessagesHandlerBase
         _authorizationRepository = authorizationRepository;
         _messageRepository = messageRepository;
 
+    }
+
+    [TLFunction(Constructors.layer120_MessagesUnpinAllMessages)]
+    public async Task<TLAffectedHistory> HandleLayer120(long authKeyId, TLBytes q)
+    {
+        using var current = ToCurrentUnpinAllMessagesRequest(q);
+        return await Handle(authKeyId, current);
+    }
+
+    private static TLBytes ToCurrentUnpinAllMessagesRequest(TLBytes q)
+    {
+        var sent = new Layer120UnpinAllMessages(q.AsSpan());
+        using var current = UnpinAllMessages.Builder()
+            .Peer(sent.Peer)
+            .Build();
+        return current.TLBytes!.Value;
     }
 
     [TLFunction(Constructors.baseLayer_UnpinAllMessages)]

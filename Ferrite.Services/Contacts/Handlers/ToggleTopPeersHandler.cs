@@ -9,12 +9,6 @@ using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Handlers.ContactMethods;
 
-/// <summary>
-/// Enables or disables top-peer tracking for the caller. Pinned TDLib reaches
-/// this through `setOption("disable_top_chats")`
-/// (`OptionManager.cpp:585` -> `TopDialogManager.cpp:78`), so the client sends it
-/// whenever that option flips.
-/// </summary>
 public sealed class ToggleTopPeersHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -50,9 +44,6 @@ public sealed class ToggleTopPeersHandler
         bool enabled = request.Enabled;
 
         int now = checked((int)_timeProvider.GetUtcNow().ToUnixTimeSeconds());
-        // Only the opt-out is stored, because an absent row already means
-        // enabled. Re-enabling therefore writes a fresh row with the bare flag
-        // cleared rather than trying to clear it on the existing one.
         var builder = TopPeersState.Builder().UserId(userId).Date(now);
         if (!enabled)
         {

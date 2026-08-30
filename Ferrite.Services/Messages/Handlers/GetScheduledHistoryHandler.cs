@@ -3,17 +3,13 @@
 
 using System.Text;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Scheduling;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// The whole scheduled queue of one dialog. This is the read side of the durable
-/// queue introduced; before it existed the handler answered with an empty
-/// list, which told a client its scheduled messages had vanished.
-/// </summary>
 public sealed class GetScheduledHistoryHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -70,12 +66,6 @@ public sealed class GetScheduledHistoryHandler
             resolved.PeerType, resolved.PeerId, selected);
     }
 
-    // The hash pinned TDLib sends for a scheduled queue: `get_vector_hash` over the
-    // flat (scheduled id, edit date, date) triple of every entry
-    // (`MessagesManager.cpp:19262-19275`). The client folds them in scheduled
-    // MessageId order, and a scheduled MessageId packs the send date ABOVE the
-    // scheduled id (`MessageId.cpp:15-26`), so that order is by send date and only
-    // then by scheduled id -- not by scheduled id alone.
     public static long ComputeHash(
         IReadOnlyList<ScheduledMessageStore.ScheduledSnapshot> queue)
     {

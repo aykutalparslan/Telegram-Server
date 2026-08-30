@@ -5,7 +5,6 @@ using System.Numerics;
 using System.Text;
 using System.Text.RegularExpressions;
 using Ferrite.Crypto;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Gateway;
 using Ferrite.TL;
@@ -30,7 +29,7 @@ public abstract class AccountHandlerBase
     protected readonly IUnitOfWork _unitOfWork;
     protected readonly IVerificationGateway _verificationGateway;
     protected static Regex UsernameRegex = new Regex("(^[a-zA-Z0-9_]{5,32}$)", RegexOptions.Compiled);
-    protected const int PhoneCodeTimeout = 60;//seconds
+    protected const int PhoneCodeTimeout = 60;
     protected const int OnlineStatusExpiresInSeconds = 60;
     protected AccountHandlerBase(ISearchEngine search, IUpdatesService updates, IRandomGenerator random,
         IUnitOfWork unitOfWork, IChatRepository chatRepository, IPrivacyRulesRepository privacyRulesRepository, IUserRepository userRepository, IVerificationGateway verificationGateway)
@@ -335,11 +334,6 @@ public abstract class AccountHandlerBase
 
         if (converted.Count == 0)
         {
-            // TDLib omits a trailing inputPrivacyValueDisallowAll because an
-            // unmatched rule set already means "not allowed". Persist the explicit
-            // disallowAll row so an explicitly configured empty rule set stays
-            // distinguishable from a never-configured key (which keeps the
-            // per-key server default).
             using var disallowAll = PrivacyValueDisallowAll.Builder().Build();
             converted.AppendTLObject(disallowAll.ToReadOnlySpan());
         }
@@ -366,31 +360,33 @@ public abstract class AccountHandlerBase
 
     protected static TLPrivacyKey BuildPrivacyKey(InputPrivacyKey key) => key switch
     {
-        Data.InputPrivacyKey.StatusTimestamp => PrivacyKeyStatusTimestamp.Builder().Build(),
-        Data.InputPrivacyKey.ChatInvite => PrivacyKeyChatInvite.Builder().Build(),
-        Data.InputPrivacyKey.PhoneCall => PrivacyKeyPhoneCall.Builder().Build(),
-        Data.InputPrivacyKey.PhoneP2P => PrivacyKeyPhoneP2P.Builder().Build(),
-        Data.InputPrivacyKey.Forwards => PrivacyKeyForwards.Builder().Build(),
-        Data.InputPrivacyKey.ProfilePhoto => PrivacyKeyProfilePhoto.Builder().Build(),
-        Data.InputPrivacyKey.PhoneNumber => PrivacyKeyPhoneNumber.Builder().Build(),
-        Data.InputPrivacyKey.AddedByPhone => PrivacyKeyAddedByPhone.Builder().Build(),
-        Data.InputPrivacyKey.VoiceMessages => PrivacyKeyVoiceMessages.Builder().Build(),
-        Data.InputPrivacyKey.About => PrivacyKeyAbout.Builder().Build(),
-        Data.InputPrivacyKey.Birthday => PrivacyKeyBirthday.Builder().Build(),
-        Data.InputPrivacyKey.StarGiftsAutoSave => PrivacyKeyStarGiftsAutoSave.Builder().Build(),
-        Data.InputPrivacyKey.NoPaidMessages => PrivacyKeyNoPaidMessages.Builder().Build(),
+        InputPrivacyKey.StatusTimestamp => PrivacyKeyStatusTimestamp.Builder().Build(),
+        InputPrivacyKey.ChatInvite => PrivacyKeyChatInvite.Builder().Build(),
+        InputPrivacyKey.PhoneCall => PrivacyKeyPhoneCall.Builder().Build(),
+        InputPrivacyKey.PhoneP2P => PrivacyKeyPhoneP2P.Builder().Build(),
+        InputPrivacyKey.Forwards => PrivacyKeyForwards.Builder().Build(),
+        InputPrivacyKey.ProfilePhoto => PrivacyKeyProfilePhoto.Builder().Build(),
+        InputPrivacyKey.PhoneNumber => PrivacyKeyPhoneNumber.Builder().Build(),
+        InputPrivacyKey.AddedByPhone => PrivacyKeyAddedByPhone.Builder().Build(),
+        InputPrivacyKey.VoiceMessages => PrivacyKeyVoiceMessages.Builder().Build(),
+        InputPrivacyKey.About => PrivacyKeyAbout.Builder().Build(),
+        InputPrivacyKey.Birthday => PrivacyKeyBirthday.Builder().Build(),
+        InputPrivacyKey.StarGiftsAutoSave => PrivacyKeyStarGiftsAutoSave.Builder().Build(),
+        InputPrivacyKey.NoPaidMessages => PrivacyKeyNoPaidMessages.Builder().Build(),
         _ => throw new ArgumentOutOfRangeException(nameof(key))
     };
 
-    protected async Task<TLPrivacyRules> GetPrivacyRulesInternal(TLBytes auth, InputPrivacyKey key)
+    protected async Task<TLPrivacyRules> GetPrivacyRulesInternal(TLBytes auth,
+        InputPrivacyKey key, UserSerializer userSerializer)
     {
-        var savedRules = await _privacyRulesRepository.GetPrivacyRulesAsync(((AuthInfo)auth).UserId, key);
-        List<TLBytes> users = new();
+        long viewerUserId = ((AuthInfo)auth).UserId;
+        var savedRules = await _privacyRulesRepository.GetPrivacyRulesAsync(viewerUserId, key);
+        var userRows = new List<byte[]>();
         foreach (var id in GetUserIds(savedRules))
         {
-            if (_userRepository.GetUser(id) is { } user)
+            if (userSerializer.Bytes(viewerUserId, id) is { } user)
             {
-                users.Add(user);
+                userRows.Add(user);
             }
         }
 
@@ -409,19 +405,19 @@ public abstract class AccountHandlerBase
             saved2.Add(r);
         }
 
+        var users = new Vector();
+        foreach (byte[] user in userRows)
+        {
+            users.AppendTLObject(user);
+        }
+
         return PrivacyRules.Builder()
             .Rules(saved2.ToVector())
-            .Users(users.ToVector())
+            .Users(users)
             .Chats(chats.ToVector())
             .Build();
     }
 
-    // Appends the persisted privacy-value form into `result` WHILE the builder is
-    // still alive. Returning the builder's ReadOnlySpan would dangle: the `using
-    // var` returns the pooled buffer before the caller could copy from it, so the
-    // append must happen inside each branch. `result` is passed by ref because
-    // Vector is a ref struct (otherwise the caller loses the appended length/regrow).
-    // Returns false for an input rule that has no supported persisted form.
     protected bool TryAppendPrivacyValue(ref Vector result, Span<byte> inputPrivacyValue, long currentUserId)
     {
         var view = (InputPrivacyRuleView)inputPrivacyValue;
@@ -608,19 +604,19 @@ public abstract class AccountHandlerBase
 
     protected static InputPrivacyKey? GetPrivacyKey(int constructor) => constructor switch
     {
-        Constructors.baseLayer_InputPrivacyKeyStatusTimestamp => Data.InputPrivacyKey.StatusTimestamp,
-        Constructors.baseLayer_InputPrivacyKeyChatInvite => Data.InputPrivacyKey.ChatInvite,
-        Constructors.baseLayer_InputPrivacyKeyPhoneCall => Data.InputPrivacyKey.PhoneCall,
-        Constructors.baseLayer_InputPrivacyKeyPhoneP2P => Data.InputPrivacyKey.PhoneP2P,
-        Constructors.baseLayer_InputPrivacyKeyForwards => Data.InputPrivacyKey.Forwards,
-        Constructors.baseLayer_InputPrivacyKeyProfilePhoto => Data.InputPrivacyKey.ProfilePhoto,
-        Constructors.baseLayer_InputPrivacyKeyPhoneNumber => Data.InputPrivacyKey.PhoneNumber,
-        Constructors.baseLayer_InputPrivacyKeyAddedByPhone => Data.InputPrivacyKey.AddedByPhone,
-        Constructors.baseLayer_InputPrivacyKeyVoiceMessages => Data.InputPrivacyKey.VoiceMessages,
-        Constructors.baseLayer_InputPrivacyKeyAbout => Data.InputPrivacyKey.About,
-        Constructors.baseLayer_InputPrivacyKeyBirthday => Data.InputPrivacyKey.Birthday,
-        Constructors.baseLayer_InputPrivacyKeyStarGiftsAutoSave => Data.InputPrivacyKey.StarGiftsAutoSave,
-        Constructors.baseLayer_InputPrivacyKeyNoPaidMessages => Data.InputPrivacyKey.NoPaidMessages,
+        Constructors.baseLayer_InputPrivacyKeyStatusTimestamp => InputPrivacyKey.StatusTimestamp,
+        Constructors.baseLayer_InputPrivacyKeyChatInvite => InputPrivacyKey.ChatInvite,
+        Constructors.baseLayer_InputPrivacyKeyPhoneCall => InputPrivacyKey.PhoneCall,
+        Constructors.baseLayer_InputPrivacyKeyPhoneP2P => InputPrivacyKey.PhoneP2P,
+        Constructors.baseLayer_InputPrivacyKeyForwards => InputPrivacyKey.Forwards,
+        Constructors.baseLayer_InputPrivacyKeyProfilePhoto => InputPrivacyKey.ProfilePhoto,
+        Constructors.baseLayer_InputPrivacyKeyPhoneNumber => InputPrivacyKey.PhoneNumber,
+        Constructors.baseLayer_InputPrivacyKeyAddedByPhone => InputPrivacyKey.AddedByPhone,
+        Constructors.baseLayer_InputPrivacyKeyVoiceMessages => InputPrivacyKey.VoiceMessages,
+        Constructors.baseLayer_InputPrivacyKeyAbout => InputPrivacyKey.About,
+        Constructors.baseLayer_InputPrivacyKeyBirthday => InputPrivacyKey.Birthday,
+        Constructors.baseLayer_InputPrivacyKeyStarGiftsAutoSave => InputPrivacyKey.StarGiftsAutoSave,
+        Constructors.baseLayer_InputPrivacyKeyNoPaidMessages => InputPrivacyKey.NoPaidMessages,
         _ => null
     };
 

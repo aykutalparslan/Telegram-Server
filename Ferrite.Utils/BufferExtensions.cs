@@ -205,27 +205,4 @@ public static class BufferExtensions
             writer.Write(zero);
         }
     }
-    /*public static void WriteTLBytes(this ref SpanWriter<byte> writer, in byte[] bytes)
-    {
-        const byte zero = 0;
-        int rem;
-        if (bytes.Length < 254)
-        {
-            writer.Write((byte)bytes.Length);
-            rem = (4 - ((bytes.Length + 1) % 4)) % 4;
-        }
-        else
-        {
-            writer.Write((byte)254);
-            writer.Write((byte)(bytes.Length & 0xff));
-            writer.Write((byte)((bytes.Length >> 8) & 0xff));
-            writer.Write((byte)((bytes.Length >> 16) & 0xff));
-            rem = (4 - ((bytes.Length + 4) % 4)) % 4;
-        }
-        writer.Write(bytes);
-        for (int i = 0; i < rem; i++)
-        {
-            writer.Write(zero);
-        }
-    }*/
 }

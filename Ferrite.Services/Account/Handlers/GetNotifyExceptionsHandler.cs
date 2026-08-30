@@ -5,7 +5,6 @@ using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.account;
 using Ferrite.TL.baseLayer.dto;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Vector = Ferrite.TL.Vector;
 
@@ -16,18 +15,18 @@ public sealed class GetNotifyExceptionsHandler : AccountSettingsHandlerBase
     private readonly INotifySettingsRepository _notifySettingsRepository;
 
     private readonly IChatRepository _chatRepository;
-    private readonly IUserRepository _userRepository;
+    private readonly UserSerializer _userSerializer;
 
     private readonly IUnitOfWork _unitOfWork;
     private readonly TimeProvider _time;
 
     public GetNotifyExceptionsHandler(AccountSettingsStore store,
-        IUnitOfWork unitOfWork, INotifySettingsRepository notifySettingsRepository, IChatRepository chatRepository, IUserRepository userRepository, TimeProvider time) : base(store)
+        IUnitOfWork unitOfWork, INotifySettingsRepository notifySettingsRepository, IChatRepository chatRepository, UserSerializer userSerializer, TimeProvider time) : base(store)
     {
         _notifySettingsRepository = notifySettingsRepository;
 
         _chatRepository = chatRepository;
-        _userRepository = userRepository;
+        _userSerializer = userSerializer;
 
         _unitOfWork = unitOfWork;
         _time = time;
@@ -65,7 +64,7 @@ public sealed class GetNotifyExceptionsHandler : AccountSettingsHandlerBase
             foreach (TLNotifySettingsState state in rows) state.Dispose();
         }
 
-        var hydratedUsers = new List<TLUser>();
+        var hydratedUsers = new List<byte[]>();
         var hydratedChats = new List<TLChat>();
         try
         {
@@ -78,7 +77,7 @@ public sealed class GetNotifyExceptionsHandler : AccountSettingsHandlerBase
                 {
                     long id = item.PeerType == (int)InputPeerType.Self
                         ? userId.Value : item.PeerId;
-                    if (_userRepository.GetUser(id) is { } user)
+                    if (_userSerializer.Bytes(userId.Value, id) is { } user)
                         hydratedUsers.Add(user);
                 }
                 else if (item.PeerType is (int)InputPeerType.Chat or
@@ -99,13 +98,13 @@ public sealed class GetNotifyExceptionsHandler : AccountSettingsHandlerBase
                 updates.AppendTLObject(update.AsSpan());
             }
             var users = new Vector();
-            foreach (TLUser user in hydratedUsers)
-                users.AppendTLObject(user.AsSpan());
+            foreach (byte[] user in hydratedUsers)
+                users.AppendTLObject(user);
             var chats = new Vector();
             foreach (TLChat chat in hydratedChats)
                 chats.AppendTLObject(chat.AsSpan());
 
-            return Updates.Builder().UpdatesProperty(updates).Users(users)
+            return Ferrite.TL.baseLayer.Updates.Builder().UpdatesProperty(updates).Users(users)
                 .Chats(chats)
                 .Date((int)_time.GetUtcNow().ToUnixTimeSeconds()).Seq(0)
                 .Build().TLBytes!.Value;
@@ -113,7 +112,6 @@ public sealed class GetNotifyExceptionsHandler : AccountSettingsHandlerBase
         finally
         {
             foreach (NotifyException item in exceptions) item.Dispose();
-            foreach (TLUser user in hydratedUsers) user.Dispose();
             foreach (TLChat chat in hydratedChats) chat.Dispose();
         }
     }

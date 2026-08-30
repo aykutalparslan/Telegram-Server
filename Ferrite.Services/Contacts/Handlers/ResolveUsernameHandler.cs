@@ -3,7 +3,6 @@
 
 using System.Text;
 using DotNext.Collections.Generic;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Channels;
 using Ferrite.TL;
@@ -21,9 +20,9 @@ public sealed class ResolveUsernameHandler : ContactsHandlerBase
     private readonly IChatRepository _chatRepository;
     private readonly IUserRepository _userRepository;
 
-    public ResolveUsernameHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
+    public ResolveUsernameHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IContactsRepository contactsRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
         IUpdatesService updates, IUpdatesContextFactory updatesContextFactory)
-        : base(unitOfWork, userRepository, userStatusRepository, search, updates, updatesContextFactory)
+        : base(unitOfWork, contactsRepository, userRepository, userStatusRepository, search, updates, updatesContextFactory)
     {
         _authorizationRepository = authorizationRepository;
         _chatParticipantsRepository = chatParticipantsRepository;
@@ -45,7 +44,6 @@ public sealed class ResolveUsernameHandler : ContactsHandlerBase
             var peerUser = _userRepository.GetUserByUsername(username);
             if (peerUser == null)
             {
-                // User and channel usernames share one namespace; fall back to channels.
                 long? chatId = _chatRepository.GetChatIdByUsername(username);
                 if (chatId != null)
                 {
@@ -53,11 +51,6 @@ public sealed class ResolveUsernameHandler : ContactsHandlerBase
                     {
                         using var chat = await _chatRepository.GetChatAsync(chatId.Value);
                         if (chat != null && chat.Value.Type == TLChat.ChatType.Channel &&
-                            // A DEACTIVATED username stays reserved to its channel but
-                            // stops being a public address, so the index alone is not
-                            // enough to resolve one: `channels.toggleUsername` and
-                            // `channels.deactivateAllUsernames` deliberately leave the
-                            // reservation behind.
                             IsActiveUsername(chat.Value.AsChannel(), username))
                         {
                             channelBytes = chat.Value.AsSpan().ToArray();
@@ -65,7 +58,6 @@ public sealed class ResolveUsernameHandler : ContactsHandlerBase
                     }
                     if (channelBytes != null)
                     {
-                        // A resolving non-member must not receive the stored creator flags.
                         channelBytes = await ChannelRows.ForViewerAsync(
                             _chatParticipantsRepository,
                             auth.Value.AsAuthInfo().UserId, chatId.Value, channelBytes);

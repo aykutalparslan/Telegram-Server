@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -14,12 +13,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.startScheduledGroupCall. Room creation/recovery precedes the atomic
-/// scheduled-to-active mutation. A lost mutation compensates the room unless a
-/// concurrent starter already committed the active call; the started service
-/// action and viewer-correct call update are emitted only by the winner.
-/// </summary>
 public sealed class StartScheduledGroupCallHandler : GroupCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -131,7 +124,6 @@ public sealed class StartScheduledGroupCallHandler : GroupCallHandlerBase
             if (current != null && current.Value.AsGroupCallState().State ==
                 (int)GroupCallPersistenceState.Active)
             {
-                // Another starter won the idempotent room creation and now owns it.
                 return Error(403, GroupCallErrors.GroupCallAlreadyStarted);
             }
 
@@ -150,9 +142,6 @@ public sealed class StartScheduledGroupCallHandler : GroupCallHandlerBase
         byte[] callUpdate = BuildCallUpdateBytes(call, viewer, access.Peer.Id,
             videoCount);
 
-        // Every member must learn that schedule_date disappeared and the call is
-        // now joinable. Each row is still built per viewer; subscribers and
-        // non-subscribers therefore converge without leaking the old local bit.
         await PushCallUpdateToOtherMembersAsync(call, access.Peer.Id,
             access.CurrentUserId, videoCount);
 
@@ -177,9 +166,6 @@ public sealed class StartScheduledGroupCallHandler : GroupCallHandlerBase
         }
         catch (Exception e)
         {
-            // An uncertain durable read is safer than tearing down a room an
-            // already-committed active call may own. reconciliation will
-            // recover or clean up this degraded edge.
             Log.Warning(e, $"📞 startScheduledGroupCall could not determine " +
                            $"room ownership for call:{callId}");
             return;

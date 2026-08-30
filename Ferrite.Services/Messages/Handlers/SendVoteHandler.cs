@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -12,16 +11,6 @@ using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.MessageMethods;
 
-/// <summary>
-/// Casts, replaces or retracts the caller's ballot in a poll. One ballot row per
-/// voter is what makes a re-vote a replacement instead of a second vote, and the
-/// tallies every reader sees are derived from those rows rather than from a
-/// stored aggregate that could drift away from them.
-///
-/// The rebuilt results are viewer-specific: a common-box poll writes each owner's
-/// own view into that owner's copy, while a channel post keeps one neutral shared
-/// row and tells each member what they chose through their own update.
-/// </summary>
 public sealed class SendVoteHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
@@ -113,8 +102,6 @@ public sealed class SendVoteHandler
         DialogPeerKey peer, int messageId, PollStore.PollSnapshot poll,
         IReadOnlyList<PollStore.VoteSnapshot> votes, int now)
     {
-        // A vote is not an edit, so each copy keeps its edit_date and only its
-        // media changes; the copy's owner is the viewer its results describe.
         IReadOnlyList<StoredMessageLocation> updated = await _locator
             .MutateCommonCopiesAsync(userId, messageId, location =>
                 RebuildMedia(location.MessageBytes,
@@ -137,7 +124,6 @@ public sealed class SendVoteHandler
                 callerUpdateBytes = own.AsSpan().ToArray();
                 continue;
             }
-            // EnqueueUpdate owns the value it is handed, so this is a transfer.
             await _updates.EnqueueUpdate(copy.OwnerId,
                 PollStore.BuildUpdate(poll, votes, copy.OwnerId, now));
         }
@@ -156,7 +142,7 @@ public sealed class SendVoteHandler
             : new List<byte[]>();
         int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
             .IncrementSeq();
-        return _fanout.BuildUpdates(new[] { callerUpdateBytes }, userIds, chats,
+        return _fanout.BuildUpdates(userId, new[] { callerUpdateBytes }, userIds, chats,
             now, seq);
     }
 
@@ -164,9 +150,6 @@ public sealed class SendVoteHandler
         long channelId, int messageId, PollStore.PollSnapshot poll,
         IReadOnlyList<PollStore.VoteSnapshot> votes, int now)
     {
-        // The shared post cannot carry one member's `chosen` flags, so the stored
-        // row holds the neutral view and each member learns their own answer from
-        // the per-viewer update below.
         StoredMessageLocation? updated = await _locator.MutateChannelAsync(channelId,
             messageId, location => RebuildMedia(location.MessageBytes,
                 PollStore.BuildMedia(poll, votes, 0, now)));
@@ -203,7 +186,7 @@ public sealed class SendVoteHandler
         }
         int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
             .IncrementSeq();
-        return _fanout.BuildUpdates(new[] { callerUpdateBytes }, new[] { userId },
+        return _fanout.BuildUpdates(userId, new[] { callerUpdateBytes }, new[] { userId },
             new[] { channelBytes }, now, seq);
     }
 

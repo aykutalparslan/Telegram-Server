@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Text;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.TL;
@@ -14,30 +13,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.editGroupCallParticipant. One request edits exactly one aspect of one
-/// participant, in three distinct scopes that must never be flattened into each
-/// other:
-///
-/// - SELF: own mute/unmute, raise hand, and the video flags (video_stopped /
-///   video_paused / presentation_paused, which are self-only by contract).
-/// - ADMIN (manage-call right): global mute/unmute, admin-set volume, lowering
-///   another participant's hand. These mutate the canonical row, consume exactly
-///   one call version, and fan a versioned row to every member.
-/// - LOCAL (any participant, no manage right): muting another participant or
-///   setting their volume FOR THIS VIEWER ONLY. These write the viewer-local
-///   row, consume NO version, and answer the invoker with a non-versioned row at
-///   the call's current version — pinned TDLib applies a non-versioned row whose
-///   version is not ahead (pending_mute_updates,
-///   GroupCallManager.cpp:2504-2543), and no other member hears about it.
-///
-/// The wire mute states follow pinned TDLib's decoding exactly
-/// (GroupCallParticipant.cpp:25-26): unmuted is (muted:false, can_self_unmute:
-/// false), muted-by-themselves is (true, true), muted-by-admin is (true, false).
-/// Global admin mute/unmute moves the worker's edge mute BEFORE the state commit
-/// and compensates when the commit loses, so the canonical state is never ahead
-/// of what the worker enforces.
-/// </summary>
 public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -68,8 +43,6 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
         bool? videoStopped = null;
         bool? videoPaused = null;
         bool? presentationPaused = null;
-        // The request view and its nested peer views are ref structs, so every
-        // field is read here before the first await.
         var request = (EditGroupCallParticipant)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
             out long accessHash);
@@ -120,24 +93,18 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
         TLDto.TLGroupCallState call = resolution.Call!.Value;
         if (call.AsGroupCallState().State != (int)GroupCallPersistenceState.Active)
         {
-            // Pinned TDLib names this exact precondition GROUPCALL_JOIN_MISSING
-            // for every participant toggle (GroupCallManager.cpp:4797 etc.).
             return Error(GroupCallErrors.GroupCallJoinMissing);
         }
 
         long targetUserId = targetSelf ? access.CurrentUserId : namedUserId;
         bool isSelf = targetUserId == access.CurrentUserId;
 
-        // The three video flags are SELF-ONLY: video state belongs to the sending
-        // participant, so a request naming another peer with any of them set is
-        // rejected outright, never silently applied to someone else's stream.
         if (!isSelf &&
             (videoStopped != null || videoPaused != null || presentationPaused != null))
         {
             return Error(GroupCallErrors.GroupCallForbidden);
         }
 
-        // The invoker must itself hold an active join before it may edit anyone.
         string? invokerMediaId = await GetMediaIdAsync(callId, access.CurrentUserId);
         if (invokerMediaId == null)
         {
@@ -157,10 +124,6 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
         var context = new EditContext(authKeyId, callId, access, call, isSelf,
             targetUserId, invokerMediaId, target);
 
-        // At most one branch is served per request, chosen with the pinned
-        // client's own encoder priority (EditGroupCallParticipantQuery::send):
-        // raise_hand, then volume, then muted, then the video flags. TDLib never
-        // sends more than one, so a real request is never truncated by this.
         if (raiseHand is { } hand)
         {
             return await HandleRaiseHandAsync(context, hand);
@@ -186,11 +149,8 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
             return await HandlePresentationPausedAsync(context, screenPaused);
         }
 
-        // A request with no branch flag changes nothing.
         return await BuildNoChangeResultAsync(context);
     }
-
-    // ------------------------------------------------------------------ branches
 
     private async ValueTask<TLUpdatesResult> HandleRaiseHandAsync(EditContext context,
         bool raise)
@@ -208,8 +168,6 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
             return await BuildNoChangeResultAsync(context);
         }
 
-        // Later raises get strictly larger ratings so clients sort the queue by
-        // recency; the exact scale is not part of the wire contract.
         GroupCallParticipantEditSpec spec = raise
             ? new GroupCallParticipantEditSpec
             {
@@ -251,7 +209,6 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
             }
             if (!muted && !context.Target.CanSelfUnmute)
             {
-                // Muted by an admin: only an admin unmute can lift it.
                 return Error(GroupCallErrors.GroupCallForbidden);
             }
             return await CommitCanonicalEditAsync(context,
@@ -264,8 +221,6 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
 
         if (!context.Access.CanManageCall)
         {
-            // A regular participant muting someone else is a viewer-local mute,
-            // never a canonical change.
             return await CommitLocalEditAsync(context, mutedByYou: muted,
                 localVolume: null);
         }
@@ -273,13 +228,6 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
         return await HandleAdminMutedAsync(context, muted);
     }
 
-    /// <summary>
-    /// The admin transitions mirror pinned TDLib's capability matrix
-    /// (GroupCallParticipant::update_can_be_muted): a non-admin target is muted to
-    /// (true,false) and unmuted to (true,true) — "allowed to speak", the target
-    /// still lifts its own mute; an admin target can only be muted to (true,true)
-    /// and never unmuted by someone else.
-    /// </summary>
     private async ValueTask<TLUpdatesResult> HandleAdminMutedAsync(EditContext context,
         bool muted)
     {
@@ -297,8 +245,6 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
             {
                 return await BuildNoChangeResultAsync(context);
             }
-            // No edge mute for an admin target: it may unmute itself at any time,
-            // so the worker must keep forwarding the moment it does.
             return await CommitCanonicalEditAsync(context,
                 new GroupCallParticipantEditSpec { Muted = true, CanSelfUnmute = true },
                 "admin mute (admin target)");
@@ -310,8 +256,6 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
             return await BuildNoChangeResultAsync(context);
         }
 
-        // Edge enforcement precedes the commit: if the worker cannot enforce the
-        // mute, the canonical state must not advertise it.
         try
         {
             await _media.SetIngressMuteAsync(context.CallId, context.Target.MediaId,
@@ -342,10 +286,6 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
             {
                 return await BuildNoChangeResultAsync(context);
             }
-            // The stored endpoint is deliberately KEPT: it names the still-live
-            // camera transport the worker allocated at join, and it is the durable
-            // marker that lets video_stopped:false turn the camera back on without
-            // a rejoin.
             return await CommitCanonicalEditAsync(context,
                 new GroupCallParticipantEditSpec
                 {
@@ -380,8 +320,6 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
             return await BuildNoChangeResultAsync(context);
         }
 
-        // The worker stops/resumes forwarding before the state commit and is
-        // rolled back when the commit loses, matching the global-mute rule.
         try
         {
             await _media.SetVideoPausedAsync(context.CallId, context.Target.MediaId,
@@ -412,21 +350,11 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
             return await BuildNoChangeResultAsync(context);
         }
 
-        // State-only: the media plane exposes no pause operation for the screen
-        // half (SetVideoPausedAsync addresses the camera transport), and the
-        // sharer's client stops sending on its own; viewers need the row.
         return await CommitCanonicalEditAsync(context,
             new GroupCallParticipantEditSpec { PresentationPaused = paused },
             "presentation pause");
     }
 
-    // ------------------------------------------------------------ commit helpers
-
-    /// <summary>
-    /// One canonical edit: exactly one version increment, a versioned row fanned
-    /// to every member, and — when the edit changed whether the participant sends
-    /// video — a refreshed viewer-correct call row on both channels.
-    /// </summary>
     private async ValueTask<TLUpdatesResult> CommitCanonicalEditAsync(EditContext context,
         GroupCallParticipantEditSpec spec, string operation,
         bool videoStateChanged = false, Func<Task>? compensate = null)
@@ -441,8 +369,6 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
         {
             edited.Participant?.Dispose();
             edited.Call?.Dispose();
-            // The repository refused, so nothing durable changed; roll the worker
-            // back to the state the stored row still advertises.
             if (compensate != null)
             {
                 await compensate();
@@ -488,12 +414,6 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
         return await BuildEditResultAsync(context, updates);
     }
 
-    /// <summary>
-    /// A viewer-local edit: the viewer-local row is replaced, no call version is
-    /// consumed, and only the invoker receives the re-rendered row — non-versioned
-    /// at the call's CURRENT version, which pinned TDLib applies as a mute update
-    /// rather than a versioned step.
-    /// </summary>
     private async ValueTask<TLUpdatesResult> CommitLocalEditAsync(EditContext context,
         bool? mutedByYou, int? localVolume)
     {
@@ -544,18 +464,9 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
         return await BuildEditResultAsync(context, updates);
     }
 
-    /// <summary>
-    /// An edit that changes nothing still succeeds: pinned TDLib does not treat
-    /// GROUPCALL_NOT_MODIFIED as success for this method, so an error here would
-    /// fail app-level toggles that merely retried.
-    /// </summary>
     private ValueTask<TLUpdatesResult> BuildNoChangeResultAsync(EditContext context) =>
         BuildEditResultAsync(context, Array.Empty<byte[]>());
 
-    /// <summary>
-    /// Every edit answer travels sequenced on the invoker's own key and hydrates
-    /// both the invoker and the edited participant.
-    /// </summary>
     private async ValueTask<TLUpdatesResult> BuildEditResultAsync(EditContext context,
         IReadOnlyCollection<byte[]> updates) =>
         await BuildInvokerResultAsync(context.AuthKeyId, context.Access.CurrentUserId,
@@ -606,11 +517,6 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
         }
     }
 
-    /// <summary>
-    /// Rolls the worker's edge mute back after a lost commit. Best-effort: the
-    /// canonical state did not change, and a worker that is now unreachable will
-    /// be reconciled by the next successful edit.
-    /// </summary>
     private async Task RestoreEdgeMuteAsync(EditContext context, bool muted)
     {
         try
@@ -641,16 +547,10 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
         }
     }
 
-    // ---------------------------------------------------------------- plumbing
-
     private static TLUpdatesResult Error(string message) =>
         (TLUpdatesResult)RpcErrorGenerator.GenerateError(400,
             Encoding.UTF8.GetBytes(message));
 
-    /// <summary>
-    /// The edited participant is a user: inputPeerSelf or inputPeerUser. Join-as
-    /// peers are supported; every other shape cannot name a served participant.
-    /// </summary>
     private static bool TryReadTargetPeer(InputPeerView peer, out bool self,
         out long userId)
     {
@@ -672,10 +572,6 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
         return false;
     }
 
-    /// <summary>
-    /// Everything the branches need from the target's stored row, copied out
-    /// because the row view is a ref struct that cannot cross an await.
-    /// </summary>
     private readonly record struct TargetState(bool Muted, bool CanSelfUnmute,
         bool HandRaised, bool HasAdminVolume, int Volume, bool VideoJoined,
         bool VideoStopped, bool VideoPaused, bool HasVideoEndpoint,

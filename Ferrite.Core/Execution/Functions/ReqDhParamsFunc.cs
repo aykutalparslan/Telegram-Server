@@ -239,7 +239,6 @@ public class ReqDhParamsFunc : ITLFunction
     private void RSAPad(byte[] encryptedData, IRSAKey rsaKey, out Memory<byte> data, out byte[] sha256)
     {
         data = rsaKey.DecryptBlock(encryptedData).AsMemory();
-        // data: |-temp_key_xor(32)-|-|-aes_encrypted(224)-| 256 bytes
         Span<byte> tempKey = data.Slice(0, 32).Span;
         Span<byte> aesEncrypted = data.Slice(32).Span;
 
@@ -248,17 +247,11 @@ public class ReqDhParamsFunc : ITLFunction
         {
             tempKey[i] = (byte)(tempKey[i] ^ sha256AesEncrypted[i]);
         }
-        // data: |-temp_key(32)+aes_encrypted(224)-| 256 bytes
         Aes aes = Aes.Create();
         aes.Key = tempKey.ToArray();
         aes.DecryptIge(aesEncrypted, stackalloc byte[32]);
-        // data: |-temp_key(32)+data_with_hash(224)-| 256 bytes
-        // data_with_hash: |-data_pad_reversed(192)+
-        //                   SHA256(temp_key+data_pad)(32)-| 256 bytes
         Span<byte> dataPadReversed = aesEncrypted.Slice(0, 192);
         dataPadReversed.Reverse();
-        // data: |-temp_key(32)+data_pad(192)+
-        //                   SHA256(temp_key+data_pad)(32)-| 256 bytes
         sha256 = SHA256.HashData(data.Slice(0, 224).Span);
     }
 }

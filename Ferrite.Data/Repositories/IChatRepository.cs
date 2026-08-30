@@ -15,9 +15,6 @@ public interface IChatRepository
     public bool PutFullInfo(TLChatFullInfo fullInfo);
     public ValueTask<TLChatFullInfo?> GetFullInfoAsync(long chatId);
     public bool DeleteFullInfo(long chatId);
-    // Chat/channel public usernames share one global namespace with user
-    // usernames; occupancy checks must consult both this store and the user
-    // repository's by_username index.
     public bool PutUsername(string username, long chatId);
     public long? GetChatIdByUsername(string username);
     public bool DeleteUsername(string username);

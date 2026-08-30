@@ -30,11 +30,6 @@ public interface IGroupCallRecordingCoordinator
         CancellationToken cancellationToken = default);
 }
 
-/// <summary>
-/// Serializes the long-running recorder/import transition per call. The durable
-/// start row is the recovery intent; stop keeps that intent set until the worker
-/// artifact has landed in the document store and its self-message is queued.
-/// </summary>
 public sealed class GroupCallRecordingCoordinator : IGroupCallRecordingCoordinator
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
@@ -77,12 +72,6 @@ public sealed class GroupCallRecordingCoordinator : IGroupCallRecordingCoordinat
         }
     }
 
-    /// <summary>
-    /// Drops an abandoned session, used when a call is discarded while recording.
-    /// A toggle already holding this call's gate owns its own finalize and
-    /// acknowledgement, so cancelling underneath it would destroy a recording that
-    /// is about to be delivered; that case is skipped rather than waited on.
-    /// </summary>
     public async ValueTask<bool> TryCancelAsync(long callId, int generation,
         CancellationToken cancellationToken = default)
     {
@@ -230,9 +219,6 @@ public sealed class GroupCallRecordingCoordinator : IGroupCallRecordingCoordinat
         }
         catch (Exception e) when (IsOperationalFailure(e))
         {
-            // Delivery is already durable. The worker artifact is bounded and
-            // restart-safe, so a missed acknowledgement is operational cleanup,
-            // not a reason to revoke a message the user has received.
             _log.Warning(e, $"group-call recording acknowledgement failed " +
                             $"call:{callId} generation:{generation}");
         }

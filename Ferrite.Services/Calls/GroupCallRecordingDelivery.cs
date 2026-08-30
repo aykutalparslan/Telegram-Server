@@ -3,7 +3,6 @@
 
 using System.Text;
 using Ferrite.Crypto;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -24,12 +23,6 @@ public interface IGroupCallRecordingDelivery
     Task PublishAsync(long userId, StoredMessageWrite write);
 }
 
-/// <summary>
-/// Lands one finalized recorder stream in Ferrite's normal upload/document
-/// stores and writes the resulting document into the initiating user's self
-/// dialog. Only one upload part is materialized at a time; the complete media is
-/// never copied into a managed buffer.
-/// </summary>
 public sealed class GroupCallRecordingDelivery : IGroupCallRecordingDelivery
 {
     private const int BigFileThreshold = 10 * 1024 * 1024;

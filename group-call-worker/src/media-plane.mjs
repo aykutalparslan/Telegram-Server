@@ -1389,6 +1389,27 @@ export class GroupCallMediaPlane {
     return true;
   }
 
+  async getRtpTapDiagnostics(callId, subscriberId) {
+    const tap = this.#rooms.get(callId)?.taps.get(subscriberId);
+    if (!tap) {
+      return null;
+    }
+    return await Promise.all(tap.entries.map(async (entry) => ({
+      kind: entry.consumer.kind,
+      consumerClosed: entry.consumer.closed,
+      consumerPaused: entry.consumer.paused,
+      producerPaused: entry.consumer.producerPaused,
+      preferredLayers: entry.consumer.preferredLayers ?? null,
+      currentLayers: entry.consumer.currentLayers ?? null,
+      score: entry.consumer.score ?? null,
+      rtpParameters: entry.consumer.rtpParameters,
+      consumerStats: await entry.consumer.getStats(),
+      transportClosed: entry.transport.closed,
+      transportTuple: entry.transport.tuple,
+      transportStats: await entry.transport.getStats()
+    })));
+  }
+
   async endRoom(callId) {
     const room = this.#rooms.get(callId);
     if (!room) {
@@ -1407,6 +1428,14 @@ export class GroupCallMediaPlane {
     return true;
   }
 
+  async endAllRooms() {
+    const callIds = [...this.#rooms.keys()];
+    for (const callId of callIds) {
+      await this.endRoom(callId);
+    }
+    return callIds.length;
+  }
+
   async killWorkerForTest() {
     if (!this.#worker || this.#worker.closed) {
       return;
@@ -1415,9 +1444,7 @@ export class GroupCallMediaPlane {
   }
 
   async close() {
-    for (const callId of [...this.#rooms.keys()]) {
-      await this.endRoom(callId);
-    }
+    await this.endAllRooms();
     this.#router?.close();
     this.#worker?.close();
   }

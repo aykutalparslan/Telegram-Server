@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -67,10 +66,6 @@ public sealed class GetChannelDifferenceHandler : ChannelsHandlerBase
         int publicationsAtEntry = await channelBox.PendingPtsPublications();
         bool publicationsSettled = await channelBox.WaitForPtsPublications();
         int reservedPts = await channelBox.Pts();
-        // A difference request that overlaps live publication observes the cut
-        // from query entry. TDLib buffers that live update until this RPC
-        // finishes; acknowledging its PTS here would turn it into an ignored
-        // duplicate and lose viewer-specific state such as an unread mention.
         int serverPts = publicationsSettled
             ? Math.Max(1, reservedPts - publicationsAtEntry)
             : reservedPts;
@@ -84,10 +79,6 @@ public sealed class GetChannelDifferenceHandler : ChannelsHandlerBase
                 .Build();
         }
 
-        // Messages and non-message channel events share one PTS stream. Merge
-        // their durable rows; a Redis counter may be visible a few milliseconds
-        // before the Cassandra batch that owns its latest event, so only a row
-        // can advance the returned PTS.
         var entries = new List<DifferenceEntry>();
         IReadOnlyCollection<TLSavedMessage> saved = await _channelMessagesRepository.GetMessagesByPtsAsync(channelId.Value,
                 clientPts + 1, serverPts) ?? Array.Empty<TLSavedMessage>();
@@ -130,9 +121,6 @@ public sealed class GetChannelDifferenceHandler : ChannelsHandlerBase
             consumed += entry.PtsCount;
         }
         bool truncated = window.Count != entries.Count;
-        // Counters and message rows live in different distributed stores. Never
-        // acknowledge the immediately visible counter through a row that has not
-        // reached Cassandra yet; final=false makes the client retry the gap.
         bool final = !truncated && resultPts >= serverPts;
         using var channel = await _chatRepository.GetChatAsync(channelId.Value);
         var participantInfos = await _chatParticipantsRepository
@@ -209,7 +197,7 @@ public sealed class GetChannelDifferenceHandler : ChannelsHandlerBase
         }
 
         var userVector = new Vector();
-        AppendUsers(ref userVector, activeParticipantIds);
+        AppendUsers(callerUserId, ref userVector, activeParticipantIds);
 
         _log.Debug($"📣 GetChannelDifference channel:{channelId.Value} clientPts:{clientPts} " +
                    $"serverPts:{serverPts} messages:{projectedMessages.Count} " +

@@ -3,7 +3,6 @@
 
 using System.Text;
 using DotNext.Collections.Generic;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -20,7 +19,7 @@ public sealed class DeleteContactsHandler : ContactsHandlerBase
 
     public DeleteContactsHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IContactsRepository contactsRepository, IUserRepository userRepository, IUserStatusRepository userStatusRepository, ISearchEngine search,
         IUpdatesService updates, IUpdatesContextFactory updatesContextFactory)
-        : base(unitOfWork, userRepository, userStatusRepository, search, updates, updatesContextFactory)
+        : base(unitOfWork, contactsRepository, userRepository, userStatusRepository, search, updates, updatesContextFactory)
     {
         _authorizationRepository = authorizationRepository;
         _contactsRepository = contactsRepository;
@@ -42,7 +41,7 @@ public sealed class DeleteContactsHandler : ContactsHandlerBase
             List<TLUpdate> updateList = new();
             foreach (var contactUserId in id)
             {
-                var contactUser = await GetUserInternal(contactUserId);
+                var contactUser = await GetUserInternal(userId, contactUserId);
                 if (contactUser != null) userList.Add(contactUser.Value);
                 _contactsRepository.DeleteContact(userId, contactUserId);
                 using TLPeer peer = new PeerUser(contactUserId);

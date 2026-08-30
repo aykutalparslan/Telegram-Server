@@ -8,16 +8,6 @@ using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Handlers.Channels;
 
-/// <summary>
-/// Reports what a public-post search will cost. Pinned TDLib issues this ahead of
-/// `td_api::searchPublicPosts` through `CheckSearchPostsFloodQuery`
-/// (`MessageQueryManager.cpp:521`) and shows the answer as the user's remaining
-/// free allowance.
-///
-/// Ferrite runs no paid search, so the answer does not depend on the query or on
-/// how many searches the caller has already run: see
-/// <see cref="PublicPostSearchPolicy"/>.
-/// </summary>
 public sealed class CheckSearchPostsFloodHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;

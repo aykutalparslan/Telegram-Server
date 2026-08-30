@@ -3,6 +3,7 @@
 
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.dto;
+using Ferrite.Data.Models;
 
 namespace Ferrite.Data.Repositories;
 
@@ -68,10 +69,6 @@ public sealed class AccountSettingsRepository : IAccountSettingsRepository
             new KeyDefinition("pk",
                 new DataColumn { Name = "user_id", Type = DataType.Long },
                 new DataColumn { Name = "close_friend_id", Type = DataType.Long })));
-        // "token" is a reserved word in CQL, so a column of that name cannot be
-        // created on the Cassandra backend. The durable column is named
-        // contact_token; the secondary index keeps its by_token name because that
-        // becomes a table-name suffix, not an identifier.
         contactTokens.SetSchema(new TableDefinition("ferrite", "contact_tokens",
             new KeyDefinition("pk",
                 new DataColumn { Name = "user_id", Type = DataType.Long },

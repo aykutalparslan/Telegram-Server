@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.Services.Calls.E2E;
@@ -12,12 +11,6 @@ using TLUpdatesResult = Ferrite.TL.baseLayer.TLUpdates;
 
 namespace Ferrite.Services.Phone.Handlers;
 
-/// <summary>
-/// phone.sendConferenceCallBroadcast. Sub-chain 1 carries the commit-reveal
-/// nonce exchange behind the verification emojis. The server validates
-/// authorship and orders the broadcasts; the exchange's own semantics are
-/// enforced by every client that receives them.
-/// </summary>
 public sealed class SendConferenceCallBroadcastHandler : ConferenceCallHandlerBase
 {
     public SendConferenceCallBroadcastHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository, UpdateFanout fanout,
@@ -48,8 +41,6 @@ public sealed class SendConferenceCallBroadcastHandler : ConferenceCallHandlerBa
         {
             return Error(resolution.Error);
         }
-        // A broadcast is a statement about the call's key material, so only an
-        // account that is actually in the call may make one.
         if (!resolution.IsParticipant)
         {
             return Error(GroupCallErrors.GroupCallJoinMissing);
@@ -74,8 +65,6 @@ public sealed class SendConferenceCallBroadcastHandler : ConferenceCallHandlerBa
         Log.Debug($"📞 sendConferenceCallBroadcast call:{callId} " +
                   $"user:{resolution.CurrentUserId} offset:{appended.Height} " +
                   $"fanout:{members.Count}");
-        // The sender gets the same window back so its own next offset advances
-        // without waiting for a poll.
         return await BuildConferenceResultAsync(authKeyId, resolution.CurrentUserId,
             new[] { blocksUpdate });
     }

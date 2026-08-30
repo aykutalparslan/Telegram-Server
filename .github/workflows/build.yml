@@ -41,12 +41,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Validate Compose definitions
-        run: |
-          docker compose -f deploy/docker-compose.yml config --quiet
-          docker compose -f deploy/coturn/docker-compose.yml config --quiet
+        run: docker compose -f deploy/coturn/docker-compose.yml config --quiet
         env:
-          FERRITE_PUBLIC_ADDRESS: 203.0.113.10
-          FERRITE_GROUP_CALL_MEDIA_ADVERTISED: 203.0.113.10
-          FERRITE_GROUP_CALL_AUTH_SECRET: 0123456789abcdef
           FERRITE_TURN_SECRET: 0123456789abcdef
           TURN_REST_SECRET: 0123456789abcdef

@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
@@ -47,9 +46,6 @@ public sealed class DeleteHistoryHandler : ChannelsHandlerBase
         long id = channelId!.Value;
         var channelBox = new ChannelMessageBox(_counterFactory, id);
 
-        // Delete the shared channel history up to and including max_id. A 0 bound
-        // deletes nothing (message ids start at 1). Per-user "clear for me only" needs a
-        // per-subscriber history pointer the single channel box does not model yet.
         var toDelete = new List<int>();
         if (maxId > 0)
         {
@@ -89,7 +85,7 @@ public sealed class DeleteHistoryHandler : ChannelsHandlerBase
         var chatVector = new Vector();
         chatVector.AppendTLObject(channelBytes);
         var userVector = new Vector();
-        AppendUser(ref userVector, currentUserId);
+        AppendUser(currentUserId, ref userVector, currentUserId);
 
         _log.Debug($"📣 channels.DeleteHistory user:{currentUserId} channel:{id} maxId:{maxId} " +
                    $"deleted:{toDelete.Count} pts:{pts}");

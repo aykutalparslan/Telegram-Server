@@ -18,7 +18,6 @@ namespace Ferrite.Crypto;
 
 public class Aes256Ctr
 {
-    //TODO: Can we reuse this somehow?
     private readonly Aes aes;
     private byte[] _counter;
     private byte[] _counterEncrypted;
@@ -96,7 +95,6 @@ public class Aes256Ctr
     }
     public void TransformPeek(ReadOnlySequence<byte> from, Span<byte> to)
     {
-        //transform with the copies of the counter and counterEncrypted and currentPos
         var counter = _counter.ToArray();
         var counterEncrypted = _counterEncrypted.ToArray();
         var currentPos = _currentPos;
@@ -128,5 +126,4 @@ public class Aes256Ctr
         }
     }
 }
-
 

@@ -3,7 +3,6 @@
 
 using System.Text;
 using Ferrite.Crypto;
-using Ferrite.Data;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.Utils;
@@ -24,14 +23,16 @@ public sealed class GetUserPhotosHandler : PhotosHandlerBase
     private readonly IAuthorizationRepository _authorizationRepository;
     private readonly IPhotoRepository _photoRepository;
     private readonly IUserRepository _userRepository;
+    private readonly UserSerializer _userSerializer;
 
-    public GetUserPhotosHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IContactsRepository contactsRepository, IPhotoRepository photoRepository, IUserRepository userRepository, IUpdatesService updates,
+    public GetUserPhotosHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IContactsRepository contactsRepository, IPhotoRepository photoRepository, IUserRepository userRepository, UserSerializer userSerializer, IUpdatesService updates,
         ILogger log)
         : base(unitOfWork, authorizationRepository, contactsRepository, photoRepository, userRepository, updates, log)
     {
         _authorizationRepository = authorizationRepository;
         _photoRepository = photoRepository;
         _userRepository = userRepository;
+        _userSerializer = userSerializer;
 
     }
 
@@ -68,7 +69,8 @@ public sealed class GetUserPhotosHandler : PhotosHandlerBase
                 {
                     var exact = rows.Where(x => new Photo(x.AsSpan()).Id == requestedMaxId)
                         .Take(1).ToList();
-                    return BuildPhotos(exact, user.Value, exact.Count, sliced: false);
+                    return BuildPhotos(auth.Value.AsAuthInfo().UserId, exact, user.Value, exact.Count, sliced: false,
+                        _userSerializer);
                 }
 
                 IEnumerable<TLBytes> filtered = rows;
@@ -82,7 +84,8 @@ public sealed class GetUserPhotosHandler : PhotosHandlerBase
                 var page = all.Skip(offset).Take(limit).ToList();
                 bool sliced = offset != 0 || page.Count != all.Count;
                 _log.Debug($"📷 GetUserPhotos user:{targetUserId} total:{all.Count} page:{page.Count}");
-                return BuildPhotos(page, user.Value, all.Count, sliced);
+                return BuildPhotos(auth.Value.AsAuthInfo().UserId, page, user.Value, all.Count, sliced,
+                    _userSerializer);
             }
             finally
             {
