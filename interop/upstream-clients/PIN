@@ -45,8 +45,6 @@ IOS_SOURCE_ROOT=.
 IOS_SUPPORTED_HOSTS=Darwin
 IOS_TOOLCHAIN=Xcode_26.3,iOS_Simulator
 IOS_PATCH_SHA256=1a41793ee8dde7d983949062600fe4270ba25be7ea6fb089af437474eca25b57
-IOS_IPA_SHA256=05ef9f0ee48c24c3803a8787636ef0ad27cfe19f12d77540431c44e9fb8fa666
-IOS_PRIVATE_IPA_SHA256=0f7ba3c5e09dc43055739d5d499bea8f7f3fad90f00264b6155e23733d0fb4d6
 
 # Full-application layer-214 build inputs retained alongside the promoted
 # operative pin so the exact build remains independently reproducible.

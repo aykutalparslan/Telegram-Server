@@ -47,7 +47,6 @@ done
 : "${IOS_CANDIDATE_XCODE:?missing IOS_CANDIDATE_XCODE}"
 : "${IOS_CANDIDATE_PATCH_SHA256:?missing IOS_CANDIDATE_PATCH_SHA256}"
 : "${IOS_CANDIDATE_APPLE_SUPPORT_PATCH_SHA256:?missing IOS_CANDIDATE_APPLE_SUPPORT_PATCH_SHA256}"
-: "${IOS_IPA_SHA256:?missing IOS_IPA_SHA256}"
 
 [ "$LAYER" = "214" ] || die "candidate layer is $LAYER, expected 214"
 printf '%s\n' "$IOS_CANDIDATE_COMMIT" | rg -q '^[0-9a-f]{40}$' || \
@@ -56,8 +55,6 @@ printf '%s\n' "$IOS_CANDIDATE_BAZEL_SHA256" | rg -q '^[0-9a-f]{64}$' || \
   die "IOS_CANDIDATE_BAZEL_SHA256 is not a lowercase SHA-256 digest"
 printf '%s\n' "$IOS_CANDIDATE_PATCH_SHA256" | rg -q '^[0-9a-f]{64}$' || \
   die "IOS_CANDIDATE_PATCH_SHA256 is not a lowercase SHA-256 digest"
-printf '%s\n' "$IOS_IPA_SHA256" | rg -q '^[0-9a-f]{64}$' || \
-  die "IOS_IPA_SHA256 is not a lowercase SHA-256 digest"
 
 [ -f "$PATCH" ] || die "candidate patch is missing"
 [ -f "$APPLE_SUPPORT_PATCH" ] || die "apple_support host-compatibility patch is missing"
@@ -66,17 +63,12 @@ actual_patch=$(shasum -a 256 "$PATCH" | awk '{print $1}')
 [ "$actual_patch" = "$IOS_CANDIDATE_PATCH_SHA256" ] || \
   die "candidate patch digest is $actual_patch, expected $IOS_CANDIDATE_PATCH_SHA256"
 private_patch_digest=
-expected_ipa=$IOS_IPA_SHA256
 if [ -n "$PRIVATE_PATCH" ]; then
   : "${IOS_PRIVATE_PATCH_SHA256:?missing IOS_PRIVATE_PATCH_SHA256}"
-  : "${IOS_PRIVATE_IPA_SHA256:?missing IOS_PRIVATE_IPA_SHA256}"
   [ -f "$PRIVATE_PATCH" ] || die "private iOS patch is missing: $PRIVATE_PATCH"
   private_patch_digest=$(shasum -a 256 "$PRIVATE_PATCH" | awk '{print $1}')
   [ "$private_patch_digest" = "$IOS_PRIVATE_PATCH_SHA256" ] || \
     die "private iOS patch digest is $private_patch_digest, expected $IOS_PRIVATE_PATCH_SHA256"
-  printf '%s\n' "$IOS_PRIVATE_IPA_SHA256" | rg -q '^[0-9a-f]{64}$' || \
-    die "IOS_PRIVATE_IPA_SHA256 is not a lowercase SHA-256 digest"
-  expected_ipa=$IOS_PRIVATE_IPA_SHA256
 fi
 actual_apple_support=$(shasum -a 256 "$APPLE_SUPPORT_PATCH" | awk '{print $1}')
 [ "$actual_apple_support" = "$IOS_CANDIDATE_APPLE_SUPPORT_PATCH_SHA256" ] || \
@@ -266,8 +258,8 @@ PY
 git -C "$SOURCE" checkout -- MODULE.bazel.lock
 
 [ -f "$BUILD_ARTIFACTS/Telegram.ipa" ] || die "build produced no Telegram.ipa"
-actual_ipa=$(shasum -a 256 "$BUILD_ARTIFACTS/Telegram.ipa" | awk '{print $1}')
-[ "$actual_ipa" = "$expected_ipa" ] || \
-  die "IPA digest is $actual_ipa, expected $expected_ipa"
+# The Swift frameworks embed their absolute workspace path, so an IPA digest
+# identifies the checkout that built it, not the candidate. The commit, both
+# patches and Bazel stay pinned; the IPA itself cannot be.
 cp "$BUILD_ARTIFACTS/Telegram.ipa" "$ARTIFACTS/$ARTIFACT_NAME"
 echo "$ARTIFACTS/$ARTIFACT_NAME"

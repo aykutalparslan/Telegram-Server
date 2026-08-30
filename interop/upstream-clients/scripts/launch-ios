@@ -167,16 +167,10 @@ def promoted_inputs() -> dict[str, Any]:
             "operative IOS_COMMIT does not match the proven candidate")
     if not IPA.is_file():
         raise LaunchError(f"built Simulator IPA is absent: {IPA}")
-    expected_ipa = values.get("IOS_IPA_SHA256")
-    actual_ipa = sha256(IPA)
-    if not expected_ipa or actual_ipa != expected_ipa:
-        raise LaunchError(
-            "public Simulator IPA digest does not match PIN: "
-            f"{actual_ipa} != {expected_ipa}")
     return {
         **candidate,
         "ipa": str(IPA),
-        "ipa_sha256": actual_ipa,
+        "ipa_sha256": sha256(IPA),
     }
 
 
@@ -506,6 +500,11 @@ def command_start(count: int, token: str, ferrite_port: int,
             simctl("bootstatus", instance.device_udid, "-b", timeout=480)
             simctl("uninstall", instance.device_udid, BUNDLE_ID, check=False)
             simctl("install", instance.device_udid, str(application), timeout=600)
+
+        # A simctl-booted device has no UI of its own; Simulator.app attaches to
+        # the devices already booted above rather than booting one of its own.
+        if os.environ.get("FERRITE_IOS_HEADLESS", "0") == "0":
+            run(["open", "-a", "Simulator"], check=False)
 
         container = node_container()
         for instance in instances:

@@ -640,7 +640,7 @@ def command_start(count: int, token: str, ferrite_port: int,
         "instances": [asdict(item) for item in instances],
     }
     try:
-        headless = os.environ.get("FERRITE_ANDROID_HEADLESS", "1") != "0"
+        headless = os.environ.get("FERRITE_ANDROID_HEADLESS", "0") != "0"
         for instance in instances:
             log = STATE / f"{instance.instance_id}-emulator.log"
             log.parent.mkdir(parents=True, exist_ok=True)
