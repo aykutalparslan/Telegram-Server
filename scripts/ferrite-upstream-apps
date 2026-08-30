@@ -70,6 +70,90 @@ def run(command: list[str], *, check: bool = True, cwd: Path = ROOT,
     return result
 
 
+def step(message: str) -> None:
+    stamp = dt.datetime.now().strftime("%H:%M:%S")
+    print(f"[{stamp}] {message}", file=sys.stderr, flush=True)
+
+
+def run_streamed(command: list[str], *, cwd: Path = ROOT,
+                 env: dict[str, str] | None = None) -> None:
+    # A run spends nearly all of its time in the stages below, so their output
+    # is echoed as it arrives rather than held until they finish.
+    process = subprocess.Popen(
+        command, cwd=cwd, env=env, text=True, stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1)
+    tail: list[str] = []
+    for line in process.stdout or ():
+        line = line.rstrip("\n")
+        tail.append(line)
+        del tail[:-200]
+        print(f"    {line}", file=sys.stderr, flush=True)
+    if process.wait():
+        detail = "\n".join(tail).strip()[-4000:]
+        raise LifecycleError(f"{' '.join(command)} failed: {detail}")
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def client_session_path(platform: str) -> Path:
+    override = os.environ.get(f"FERRITE_{platform.upper()}_STATE_DIR")
+    directory = Path(override) if override else STATE / platform
+    return directory / "session.json"
+
+
+def client_artifact_path(platform: str) -> Path:
+    names = {"android": ("FERRITE_ANDROID_APK", "android/Telegram.apk"),
+             "ios": ("FERRITE_IOS_IPA", "ios/Telegram.ipa")}
+    variable, relative = names[platform]
+    override = os.environ.get(variable)
+    return Path(override) if override else STATE / "artifacts" / relative
+
+
+def orphan_client_sessions() -> dict[str, dict[str, Any]]:
+    # A launcher session outlives the run manifest whenever a run is killed
+    # rather than brought down, and nothing else reports it.
+    orphans: dict[str, dict[str, Any]] = {}
+    for platform in ("android", "ios"):
+        path = client_session_path(platform)
+        if not path.is_file():
+            continue
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            value = {}
+        orphans[platform] = {
+            "session": str(path),
+            "run_token": value.get("run_token"),
+            "status": value.get("status"),
+        }
+    return orphans
+
+
+def clear_orphan_client_sessions(
+    orphans: dict[str, dict[str, Any]],
+) -> tuple[list[str], dict[str, str]]:
+    cleared: list[str] = []
+    failures: dict[str, str] = {}
+    for platform in sorted(orphans):
+        helper = ROOT / f"interop/upstream-clients/scripts/launch-{platform}"
+        if not helper.is_file():
+            failures[platform] = f"launcher is absent: {helper}"
+            continue
+        step(f"clearing orphaned {platform} session")
+        result = run([str(helper), "stop"], check=False)
+        if client_session_path(platform).exists():
+            failures[platform] = (result.stderr or result.stdout).strip()[-4000:]
+        else:
+            cleared.append(platform)
+    return cleared, failures
+
+
 def require_command(name: str) -> None:
     result = run(["/usr/bin/env", name, "--version"], check=False)
     if result.returncode:
@@ -454,11 +538,18 @@ GRAPH_TIMEOUT = int(os.environ.get("FERRITE_GRAPH_TIMEOUT", "1200"))
 
 def wait_for_graph(process: subprocess.Popen[str], timeout: int = GRAPH_TIMEOUT) -> None:
     deadline = time.monotonic() + timeout
+    announced = 0.0
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise LifecycleError(f"AppHost exited with {process.returncode}; inspect its log")
-        if all(graph_readiness().values()):
+        readiness = graph_readiness()
+        if all(readiness.values()):
+            step("graph is ready")
             return
+        if time.monotonic() - announced >= 15:
+            announced = time.monotonic()
+            pending = sorted(name for name, ok in readiness.items() if not ok)
+            step(f"waiting for graph: {', '.join(pending)}")
         time.sleep(2)
     raise LifecycleError(
         f"AppHost did not expose both Ferrite nodes within {timeout} seconds")
@@ -514,6 +605,35 @@ def owned_resources(before_containers: set[str], before_volumes: set[str]) -> tu
     return containers, volumes
 
 
+def graph_containers() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for container_id in sorted(docker_ids("container")):
+        inspected = inspect_container(container_id)
+        if not inspected:
+            continue
+        logical = resource_name(inspected)
+        if not logical:
+            continue
+        labels = inspected.get("Config", {}).get("Labels", {}) or {}
+        creator = labels.get(
+            "com.microsoft.developer.usvc-dev.creatorProcessId", "")
+        rows.append({
+            "id": inspected["Id"],
+            "name": inspected["Name"].lstrip("/"),
+            "resource": logical,
+            "creator": int(creator) if creator.isdigit() else 0,
+        })
+    return rows
+
+
+def orphan_graph_containers() -> list[dict[str, Any]]:
+    # A run killed before wait_for_graph returns never records its containers,
+    # so the manifest cannot reap them. A graph container whose creating
+    # AppHost is gone belongs to no run and is safe to remove.
+    return [row for row in graph_containers()
+            if not row["creator"] or not process_alive(row["creator"])]
+
+
 def signal_group(pid: int, number: int) -> None:
     try:
         os.killpg(pid, number)
@@ -545,15 +665,42 @@ def terminate_manifest(manifest: dict[str, Any], *, remove_file: bool) -> None:
         inspected = inspect_container(container["id"])
         if inspected and resource_name(inspected) == container.get("resource"):
             run(["docker", "rm", "--force", container["id"]], check=False)
+    # The AppHost's own supervisor exits a moment after it does; wait for that
+    # before deciding which graph containers are orphaned.
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        rows = graph_containers()
+        if not any(row["creator"] and process_alive(row["creator"])
+                   for row in rows):
+            break
+        time.sleep(0.5)
+    for container in orphan_graph_containers():
+        run(["docker", "rm", "--force", container["id"]], check=False)
     for volume in manifest.get("server", {}).get("volumes", []):
         run(["docker", "volume", "rm", volume], check=False)
+    # A cancel snapshots the volumes before the AppHost is gone, so one it
+    # creates on the way down outlives the list above; the run id names it.
+    run_id = manifest.get("run_id", "")
+    if run_id:
+        for volume in sorted(docker_ids("volume")):
+            if f"-{run_id}-" in volume:
+                run(["docker", "volume", "rm", volume], check=False)
     if remove_file:
         MANIFEST.unlink(missing_ok=True)
 
 
-def command_up(android: int, ios: int) -> None:
+def command_up(android: int, ios: int, rebuild_clients: bool = False) -> None:
     if MANIFEST.exists():
         raise LifecycleError("an active run manifest already exists; use status or down")
+    orphans = {platform: value
+               for platform, value in orphan_client_sessions().items()
+               if {"android": android, "ios": ios}[platform] > 0}
+    if orphans:
+        raise LifecycleError(
+            "a client session from an earlier run is still claimed; run down "
+            "to clear it:\n- "
+            + "\n- ".join(f"{platform}: {value['session']}"
+                           for platform, value in sorted(orphans.items())))
     if android < 0 or ios < 0:
         raise LifecycleError("client counts must be nonnegative")
     if android > 8 or ios > 8:
@@ -561,19 +708,31 @@ def command_up(android: int, ios: int) -> None:
     require_command("docker")
     require_command("dotnet")
     pins = read_pin()
+    step(f"preflight for {android} Android + {ios} iOS")
     preflight_capacity(android, ios)
     preflight_platform("android", android, pins)
     preflight_platform("ios", ios, pins)
     for platform, count in (("android", android), ("ios", ios)):
-        if count > 0:
-            build = ROOT / f"interop/upstream-clients/scripts/build-{platform}"
-            run([str(build)])
+        if count == 0:
+            continue
+        artifact = client_artifact_path(platform)
+        pinned = pins.get(f"{platform.upper()}_APK_SHA256"
+                          if platform == "android" else "IOS_IPA_SHA256")
+        staged = artifact.is_file() and (not pinned or sha256(artifact) == pinned)
+        if staged and not rebuild_clients:
+            step(f"reusing staged {platform} artifact {artifact.name}"
+                 " (--rebuild-clients to rebuild)")
+            continue
+        step(f"building {platform} client")
+        build = ROOT / f"interop/upstream-clients/scripts/build-{platform}"
+        run_streamed([str(build)])
     for port in (3478, 9090, 16379, 19000, 19001, 19042, 19092, 19094,
                  19200, 52222, 52223):
         if port_ready(port):
             raise LifecycleError(f"required loopback port is already in use: {port}")
 
-    run(["dotnet", "build", "Ferrite.sln", "-m:1", "--nologo"])
+    step("building Ferrite.sln")
+    run_streamed(["dotnet", "build", "Ferrite.sln", "-m:1", "--nologo"])
     before_containers = docker_ids("container")
     before_volumes = docker_ids("volume")
     run_id = "fh-" + uuid.uuid4().hex[:12]
@@ -618,6 +777,7 @@ def command_up(android: int, ios: int) -> None:
                    "containers": [], "volumes": []},
     }
     write_manifest(manifest)
+    step(f"AppHost started as {run_id}; log at {log_path}")
     try:
         wait_for_graph(process)
         containers, volumes = owned_resources(before_containers, before_volumes)
@@ -638,6 +798,7 @@ def command_up(android: int, ios: int) -> None:
                 "status": "starting",
             }
             write_manifest(manifest)
+            step(f"launching {count} {platform} client(s)")
             launches[platform] = subprocess.Popen(
                 client_launch_command(platform, count, bridge_token,
                                       run_phones),
@@ -646,17 +807,38 @@ def command_up(android: int, ios: int) -> None:
             )
         launch_results: dict[str, dict[str, Any]] = {}
         launch_failures: list[str] = []
-        for platform, launched in launches.items():
-            stdout, stderr = launched.communicate()
-            if launched.returncode:
-                detail = (stderr or stdout).strip()[-4000:]
-                launch_failures.append(f"{platform} launch failed: {detail}")
-                continue
-            try:
-                launch_results[platform] = json.loads(stdout)
-            except json.JSONDecodeError as error:
-                launch_failures.append(
-                    f"{platform} launcher returned malformed JSON: {error}")
+        pending = dict(launches)
+        while pending:
+            settled = [platform for platform, launched in pending.items()
+                       if launched.poll() is not None]
+            for platform in settled:
+                launched = pending.pop(platform)
+                stdout, stderr = launched.communicate()
+                if launched.returncode:
+                    detail = (stderr or stdout).strip()[-4000:]
+                    # A launcher can fail in a second while its peer takes
+                    # minutes; reporting only at the end reads as if the failed
+                    # platform were still starting.
+                    step(f"{platform} launch failed: {detail}")
+                    launch_failures.append(f"{platform} launch failed: {detail}")
+                    continue
+                try:
+                    launch_results[platform] = json.loads(stdout)
+                except json.JSONDecodeError as error:
+                    step(f"{platform} launcher returned malformed JSON: {error}")
+                    launch_failures.append(
+                        f"{platform} launcher returned malformed JSON: {error}")
+            if launch_failures and pending:
+                # The run is already lost, so nothing is gained by letting the
+                # remaining launchers finish work that is about to be torn down.
+                for platform, launched in pending.items():
+                    step(f"abandoning {platform} launch")
+                    launched.terminate()
+                for launched in pending.values():
+                    launched.communicate()
+                pending.clear()
+            elif pending:
+                time.sleep(0.5)
         if launch_failures:
             raise LifecycleError("\n".join(launch_failures))
         for platform, count in (("android", android), ("ios", ios)):
@@ -673,14 +855,30 @@ def command_up(android: int, ios: int) -> None:
                 })
             manifest["client_sessions"][platform]["status"] = "running"
             write_manifest(manifest)
+            step(f"{count} {platform} client(s) are ready")
         manifest["status"] = "running"
         write_manifest(manifest)
-    except (Exception, KeyboardInterrupt):
-        containers, volumes = owned_resources(before_containers, before_volumes)
-        manifest["server"]["containers"] = containers
-        manifest["server"]["volumes"] = volumes
-        write_manifest(manifest)
-        terminate_manifest(manifest, remove_file=False)
+        step(f"run {run_id} is up")
+    except (Exception, KeyboardInterrupt) as error:
+        cancelled = isinstance(error, KeyboardInterrupt)
+        # Teardown has to finish even if the operator keeps pressing Ctrl-C;
+        # the AppHost runs in its own session and is signalled explicitly.
+        previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        try:
+            step("cancelling run" if cancelled else "run failed; tearing down")
+            containers, volumes = owned_resources(before_containers, before_volumes)
+            manifest["server"]["containers"] = containers
+            manifest["server"]["volumes"] = volumes
+            manifest["status"] = "cancelled" if cancelled else "failed"
+            write_manifest(manifest)
+            # A cancel is deliberate and leaves nothing to inspect, so it clears
+            # the manifest that would otherwise block the next run.
+            terminate_manifest(manifest, remove_file=cancelled)
+        finally:
+            signal.signal(signal.SIGINT, previous)
+        if cancelled:
+            step(f"run {run_id} cancelled")
+            raise SystemExit(130)
         raise
     finally:
         log_stream.close()
@@ -689,7 +887,11 @@ def command_up(android: int, ios: int) -> None:
 
 def command_status() -> None:
     if not MANIFEST.is_file():
-        print(json.dumps({"status": "inactive", "manifest": str(MANIFEST)},
+        print(json.dumps({"status": "inactive", "manifest": str(MANIFEST),
+                          "orphan_client_sessions": orphan_client_sessions(),
+                          "stranded_containers": [
+                              item["resource"]
+                              for item in orphan_graph_containers()]},
                          indent=2))
         return
     manifest = read_manifest()
@@ -725,7 +927,25 @@ def command_status() -> None:
 
 def command_down() -> None:
     if not MANIFEST.is_file():
-        print("no manifest-owned run is active")
+        stranded = orphan_graph_containers()
+        for container in stranded:
+            run(["docker", "rm", "--force", container["id"]], check=False)
+        if stranded:
+            print("reaped stranded graph containers: "
+                  + ", ".join(sorted(item["resource"] for item in stranded)))
+        orphans = orphan_client_sessions()
+        if not orphans:
+            if not stranded:
+                print("no manifest-owned run is active")
+            return
+        cleared, failures = clear_orphan_client_sessions(orphans)
+        if cleared:
+            print("cleared orphaned client sessions: " + ", ".join(cleared))
+        if failures:
+            raise LifecycleError(
+                "orphaned client sessions remain:\n- "
+                + "\n- ".join(f"{platform}: {detail}"
+                               for platform, detail in sorted(failures.items())))
         return
     manifest = read_manifest()
     terminate_manifest(manifest, remove_file=True)
@@ -738,11 +958,12 @@ def main() -> None:
     up = subcommands.add_parser("up")
     up.add_argument("--android", type=int, required=True)
     up.add_argument("--ios", type=int, required=True)
+    up.add_argument("--rebuild-clients", action="store_true")
     subcommands.add_parser("status")
     subcommands.add_parser("down")
     args = parser.parse_args()
     if args.command == "up":
-        command_up(args.android, args.ios)
+        command_up(args.android, args.ios, args.rebuild_clients)
     elif args.command == "status":
         command_status()
     else:

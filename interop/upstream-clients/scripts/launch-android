@@ -22,6 +22,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[3]
 INPUTS = ROOT / "interop/upstream-clients"
 PIN = INPUTS / "PIN"
+PROVISION_JDK = Path(__file__).resolve().parent / "provision-jdk"
 PATCH = INPUTS / "patches/android/0001-ferrite-conformance.patch"
 APK = Path(os.environ.get(
     "FERRITE_ANDROID_APK",
@@ -222,10 +223,29 @@ def avd_names(tools: dict[str, Path]) -> set[str]:
     ).stdout.splitlines())
 
 
+JAVA_HOME: str | None = None
+
+
+def java_home() -> str:
+    # avdmanager is a Java program, so a host JAVA_HOME left pointing at an
+    # uninstalled JDK fails the launch before it starts. The build already
+    # provisions the pinned JDK; the launcher runs the SDK tools under it too.
+    global JAVA_HOME
+    if JAVA_HOME is None:
+        if not os.access(PROVISION_JDK, os.X_OK):
+            raise LaunchError(f"provision-jdk is unavailable: {PROVISION_JDK}")
+        home = run([str(PROVISION_JDK)], timeout=900).stdout.strip()
+        if not home or not os.access(Path(home) / "bin/java", os.X_OK):
+            raise LaunchError(f"provisioned JDK has no bin/java: {home!r}")
+        JAVA_HOME = home
+    return JAVA_HOME
+
+
 def sdk_environment(sdk: Path) -> dict[str, str]:
     environment = dict(os.environ)
     environment["ANDROID_HOME"] = str(sdk)
     environment["ANDROID_SDK_ROOT"] = str(sdk)
+    environment["JAVA_HOME"] = java_home()
     return environment
 
 

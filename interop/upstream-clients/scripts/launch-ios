@@ -500,6 +500,11 @@ def command_start(count: int, token: str, ferrite_port: int,
             simctl("bootstatus", instance.device_udid, "-b", timeout=480)
             simctl("uninstall", instance.device_udid, BUNDLE_ID, check=False)
             simctl("install", instance.device_udid, str(application), timeout=600)
+            # Reinstalling resets the bundle's TCC record, so without this a call
+            # stops on a permission alert and starts its capturer with no device.
+            for service in ("microphone", "camera"):
+                simctl("privacy", instance.device_udid, "grant", service,
+                       BUNDLE_ID, check=False)
 
         # A simctl-booted device has no UI of its own; Simulator.app attaches to
         # the devices already booted above rather than booting one of its own.
