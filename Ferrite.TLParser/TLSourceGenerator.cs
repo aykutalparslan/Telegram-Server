@@ -206,7 +206,7 @@ public readonly struct " + typeName + @" : ITLStreamingObject
                 ? combinator.Namespace.ToPascalCase() + combinator.Identifier
                 : combinator.Identifier;
         }
-        if (combinator.Identifier?.ToLower() == "file")
+        if (combinator.Identifier?.ToLowerInvariant() == "file")
         {
             combinator.Identifier = combinator.Namespace?.ToPascalCase()+combinator.Identifier;
         }
@@ -1706,12 +1706,12 @@ public ref struct " + typeName + @"View
     private static void GenerateBuilderAppendBareType(StringBuilder sb, SimpleArgumentSyntax arg)
     {
         sb.Append(@"
-        private "+arg.TypeTerm?.Identifier?.ToLower()+" _" + arg.Identifier + @";
+        private "+arg.TypeTerm?.Identifier?.ToLowerInvariant()+" _" + arg.Identifier + @";
         /// <summary>
         /// This parameter is "+(arg.ConditionalDefinition == null ? "":"NOT ") +@"required.
         /// </summary>
         /// <param name=""value"">"+ arg.TypeTerm?.GetFullyQualifiedIdentifier() +@"</param>
-        public TLObjectBuilder " + arg.Identifier?.ToPascalCase() + "("+arg.TypeTerm?.Identifier?.ToLower()+@" value)
+        public TLObjectBuilder " + arg.Identifier?.ToPascalCase() + "("+arg.TypeTerm?.Identifier?.ToLowerInvariant()+@" value)
         {
             _" + arg.Identifier + @" = value;"
                   + (arg.ConditionalDefinition != null

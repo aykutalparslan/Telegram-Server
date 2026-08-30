@@ -16,20 +16,20 @@ public static class StringExtensions
         {
             return str.FirstLetterToUpperCase();
         }
-        str = str.ToLower().Replace("_", " ");
+        str = str.ToLowerInvariant().Replace("_", " ");
         TextInfo info = CultureInfo.InvariantCulture.TextInfo;
         return info.ToTitleCase(str).Replace(" ", string.Empty);
     }
     public static string ToCamelCase(this string str)
     {
         var chars = str.ToPascalCase().ToCharArray();
-        chars[0] = Char.ToLower(chars[0]);
+        chars[0] = Char.ToLowerInvariant(chars[0]);
         return new string(chars);
     }
     public static string FirstLetterToUpperCase(this string str)
     {
         var chars = str.ToCharArray();
-        chars[0] = Char.ToUpper(chars[0]);
+        chars[0] = Char.ToUpperInvariant(chars[0]);
         return new string(chars);
     }
 }
