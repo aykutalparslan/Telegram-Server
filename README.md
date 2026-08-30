@@ -4,8 +4,10 @@
   <a href="https://github.com/aykutalparslan/Ferrite/actions/workflows/build.yml"><img src="https://github.com/aykutalparslan/Ferrite/actions/workflows/build.yml/badge.svg?branch=main" alt="Build status"></a>
   <a href="https://github.com/aykutalparslan/Ferrite/actions/workflows/codeql-analysis.yml"><img src="https://github.com/aykutalparslan/Ferrite/actions/workflows/codeql-analysis.yml/badge.svg?branch=main" alt="CodeQL status"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg" alt="License: AGPL-3.0-or-later"></a>
+  <a href="https://deepwiki.com/aykutalparslan/Telegram-Server"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
+Run real Telegram Android/iOS clients against your own open-source MTProto server.
 Ferrite is a C#/.NET implementation of Telegram's server
 API. It gives protocol researchers and client developers an independent MTProto
 server they can run locally, inspect, and change.
@@ -43,8 +45,8 @@ caches them inside the checkout, so you do not install or locate either one.
 Then clone Ferrite:
 
 ```sh
-git clone https://github.com/aykutalparslan/Ferrite.git
-cd Ferrite
+git clone https://github.com/aykutalparslan/Telegram-Server.git
+cd Telegram-Server
 ```
 
 For two Android clients on macOS or Linux, install the pinned Android API 35
@@ -188,3 +190,7 @@ FITNESS FOR A PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the full text.
 
 `Ferrite.Transport` contains files derived from ASP.NET Core, used under the MIT
 license; see [Ferrite.Transport/LICENSE.aspnetcore](Ferrite.Transport/LICENSE.aspnetcore).
+
+## Star
+
+If Ferrite is useful for your MTProto research, client development, or self-hosting experiments, consider starring the repository. It helps other developers discover it.
