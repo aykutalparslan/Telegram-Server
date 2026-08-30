@@ -63,6 +63,7 @@ On a Mac, you can mix Android and iOS clients instead. That also needs Xcode
 ```sh
 ./scripts/ferrite-upstream-apps up --android 1 --ios 1
 ```
+<img src="docs/media/demo.jpg" alt="Ferrite running together with official Android and iOS apps.">
 
 Any supported mix works the same way — `--android 1 --ios 2` and
 `--android 2 --ios 2` are the other two combinations tested. Every app
