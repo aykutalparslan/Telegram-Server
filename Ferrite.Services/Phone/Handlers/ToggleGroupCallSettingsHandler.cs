@@ -16,11 +16,11 @@ public sealed class ToggleGroupCallSettingsHandler : GroupCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
 
-    public ToggleGroupCallSettingsHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, UpdateFanout fanout,
+    public ToggleGroupCallSettingsHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository, UpdateFanout fanout,
         GroupCallChatLink chatLink, IUpdatesContextFactory updatesContexts,
         IMTProtoTime time, GroupCallVideoOptions videoOptions,
         GroupCallMediaSourceMap sourceMap, ILogger log)
-        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, fanout, chatLink, updatesContexts, time, videoOptions,
+        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, messageRepository, fanout, chatLink, updatesContexts, time, videoOptions,
             sourceMap, log)
     {
         _groupCallsRepository = groupCallsRepository;
@@ -33,11 +33,17 @@ public sealed class ToggleGroupCallSettingsHandler : GroupCallHandlerBase
         bool? joinMuted = null;
         var request = (ToggleGroupCallSettings)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
         bool resetInviteHash = request.ResetInviteHash;
         if (request.Flags[0])
         {
             joinMuted = request.JoinMuted;
+        }
+
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
         }
 
         if (!callRead)
@@ -104,7 +110,7 @@ public sealed class ToggleGroupCallSettingsHandler : GroupCallHandlerBase
             {
                 BuildCallUpdateBytes(updatedCall, viewer, access.Peer.Id, videoCount)
             };
-            await PushCallUpdateToOtherMembersAsync(updatedCall, access.Peer.Id,
+            await PushCallUpdateToOtherMembersAsync(updatedCall, access,
                 access.CurrentUserId, videoCount);
 
             Log.Debug($"📞 toggleGroupCallSettings call:{callId} " +

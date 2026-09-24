@@ -6,14 +6,10 @@ namespace Ferrite.TL;
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
 public sealed class TLFunctionAttribute : Attribute
 {
-    public const int DefaultLayer = 214;
-
-    public int Layer { get; }
     public int Constructor { get; }
 
-    public TLFunctionAttribute(int constructor, int layer = DefaultLayer)
+    public TLFunctionAttribute(int constructor)
     {
         Constructor = constructor;
-        Layer = layer;
     }
 }

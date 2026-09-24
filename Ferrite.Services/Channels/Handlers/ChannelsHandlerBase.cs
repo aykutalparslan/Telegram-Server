@@ -97,14 +97,12 @@ public abstract class ChannelsHandlerBase
     {
         await _unitOfWork.SaveAsync();
         int date = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
-        var seqCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, actorUserId);
-        int seq = await seqCtx.IncrementSeq();
         return Ferrite.TL.baseLayer.Updates.Builder()
             .UpdatesProperty(new Vector())
             .Users(new Vector())
             .Chats(new Vector())
             .Date(date)
-            .Seq(seq)
+            .Seq(0)
             .Build();
     }
 
@@ -271,8 +269,8 @@ public abstract class ChannelsHandlerBase
 
         await _fanout.PushUpdateChannelToOtherMembersAsync(channelId, actorUserId);
 
-        var seqCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, actorUserId);
-        int seq = await seqCtx.IncrementSeq();
+        byte[] viewerChannelBytes = await ChannelRows.ForViewerAsync(
+            _chatParticipantsRepository, actorUserId, channelId, channelBytes);
 
         var resultUpdates = new Vector();
         using (TLUpdate updateNewChannelMessage = UpdateNewChannelMessage.Builder()
@@ -291,14 +289,14 @@ public abstract class ChannelsHandlerBase
         var userVector = new Vector();
         AppendUser(actorUserId, ref userVector, actorUserId);
         var chatVector = new Vector();
-        chatVector.AppendTLObject(channelBytes);
+        chatVector.AppendTLObject(viewerChannelBytes);
 
         return Ferrite.TL.baseLayer.Updates.Builder()
             .UpdatesProperty(resultUpdates)
             .Users(userVector)
             .Chats(chatVector)
             .Date(date)
-            .Seq(seq)
+            .Seq(0)
             .Build();
     }
 
@@ -582,22 +580,7 @@ public abstract class ChannelsHandlerBase
         return rights.ToReadOnlySpan().ToArray();
     }
 
-    protected static byte[] BuildFullAdminRights()
-    {
-        using var rights = ChatAdminRights.Builder()
-            .ChangeInfo(true)
-            .PostMessages(true)
-            .EditMessages(true)
-            .DeleteMessages(true)
-            .BanUsers(true)
-            .InviteUsers(true)
-            .PinMessages(true)
-            .AddAdmins(true)
-            .ManageCall(true)
-            .ManageTopics(true)
-            .Build();
-        return rights.ToReadOnlySpan().ToArray();
-    }
+    protected static byte[] BuildFullAdminRights() => ChatRights.BuildFullAdminRights();
 
     protected enum ParticipantFilterKind
     {

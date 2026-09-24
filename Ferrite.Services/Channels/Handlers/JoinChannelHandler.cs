@@ -30,7 +30,11 @@ public sealed class JoinChannelHandler : ChannelsHandlerBase
     }
 
     [TLFunction(Constructors.baseLayer_JoinChannel)]
-    public async Task<Ferrite.TL.baseLayer.TLUpdates> Handle(long authKeyId, TLBytes q)
+    public async Task<Ferrite.TL.baseLayer.messages.TLChatInviteJoinResult> Handle(
+        long authKeyId, TLBytes q) =>
+        ChatInvites.JoinResult(await Join(authKeyId, q));
+
+    private async Task<Ferrite.TL.baseLayer.TLUpdates> Join(long authKeyId, TLBytes q)
     {
         long? channelId = ResolveInputChannelId(((JoinChannel)q).Get_ChannelView());
         var (currentUserId, channelBytes, megagroup, error) =

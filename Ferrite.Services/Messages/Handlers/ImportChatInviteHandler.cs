@@ -38,7 +38,10 @@ public sealed class ImportChatInviteHandler : MessagesHandlerBase
     }
 
     [TLFunction(Constructors.baseLayer_ImportChatInvite)]
-    public async Task<TLUpdates> Handle(long authKeyId, TLBytes q)
+    public async Task<TLChatInviteJoinResult> Handle(long authKeyId, TLBytes q) =>
+        ChatInvites.JoinResult(await Import(authKeyId, q));
+
+    private async Task<TLUpdates> Import(long authKeyId, TLBytes q)
     {
             var auth = await _authorizationRepository.GetAuthorizationAsync(authKeyId);
             if (auth == null)

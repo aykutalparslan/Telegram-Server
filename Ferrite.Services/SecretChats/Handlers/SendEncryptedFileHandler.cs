@@ -50,30 +50,39 @@ public sealed class SendEncryptedFileHandler : SecretChatSendHandlerBase
         }
 
         int date = CurrentDate;
-        ServiceResult<TLDto.TLSecretChatEncryptedFile?> resolved = await _files
-            .ResolveAsync(chatId, input, date);
-        if (!resolved.Success || resolved.Result is null)
-        {
-            return Error(resolved.ErrorMessage.Code,
-                Encoding.UTF8.GetBytes(resolved.ErrorMessage.Message));
-        }
-
-        using TLDto.TLSecretChatEncryptedFile stored = resolved.Result.Value;
-        using TLEncryptedFile file = SecretChatEncryptedFileResolver
-            .BuildWireFile(stored);
-        byte[] fileBytes = file.AsSpan().ToArray();
+        int messageDate = date;
+        byte[] fileBytes;
         byte[] resultBytes;
-        using (TLSentEncryptedMessage sent = SentEncryptedFile.Builder()
-                   .Date(date)
-                   .File(fileBytes)
-                   .Build())
+        if (preparation.OriginalResult is { } original)
         {
+            resultBytes = original;
+            (messageDate, byte[]? originalFile) = ReadOriginal(original);
+            fileBytes = originalFile ?? EmptyFileBytes();
+        }
+        else
+        {
+            ServiceResult<TLDto.TLSecretChatEncryptedFile?> resolved = await _files
+                .ResolveAsync(chatId, input, date);
+            if (!resolved.Success || resolved.Result is null)
+            {
+                return Error(resolved.ErrorMessage.Code,
+                    Encoding.UTF8.GetBytes(resolved.ErrorMessage.Message));
+            }
+
+            using TLDto.TLSecretChatEncryptedFile stored = resolved.Result.Value;
+            using TLEncryptedFile file = SecretChatEncryptedFileResolver
+                .BuildWireFile(stored);
+            fileBytes = file.AsSpan().ToArray();
+            using TLSentEncryptedMessage sent = SentEncryptedFile.Builder()
+                .Date(date)
+                .File(fileBytes)
+                .Build();
             resultBytes = sent.AsSpan().ToArray();
         }
         TLEncryptedMessage message = EncryptedMessage.Builder()
             .RandomId(randomId)
             .ChatId(chatId)
-            .Date(date)
+            .Date(messageDate)
             .Bytes(data)
             .File(fileBytes)
             .Build();

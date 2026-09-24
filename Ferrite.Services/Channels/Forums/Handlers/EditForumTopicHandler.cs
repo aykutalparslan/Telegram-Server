@@ -5,7 +5,7 @@ using System.Text;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
-using Ferrite.TL.baseLayer.channels;
+using Ferrite.TL.baseLayer.messages;
 using Ferrite.TL.baseLayer.dto;
 using Ferrite.Utils;
 
@@ -47,7 +47,7 @@ public sealed class EditForumTopicHandler
     public async Task<Ferrite.TL.baseLayer.TLUpdates> Handle(long authKeyId, TLBytes q)
     {
         var request = (EditForumTopic)q;
-        long? channelId = ChannelForumAccess.ResolveInputChannelId(request.Get_ChannelView());
+        long? channelId = PeerResolver.ResolveInputPeerChannelId(request.Get_PeerView());
         int topicId = request.TopicId;
         bool hasTitle = request.Flags[0];
         byte[] title = request.Title.ToArray();

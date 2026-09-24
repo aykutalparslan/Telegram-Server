@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Ferrite.Crypto;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Auth;
 using Ferrite.Services.Gateway;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -56,6 +57,13 @@ public sealed class ResetAuthorizationHandler : AccountHandlerBase
                 return (TLBool)RpcErrorGenerator.GenerateError(400, "HASH_INVALID"u8);
             }
 
+            var importedAuthKeyIds = await _authorizationRepository.GetAuthKeyIdsImportedFromAsync(
+                Encoding.UTF8.GetString(info.Value.AsAuthInfo().Phone), sessAuthKeyId.Value);
+            foreach (long importedAuthKeyId in importedAuthKeyIds)
+            {
+                await _secretChatCleanup.CleanupAsync(importedAuthKeyId);
+                _authorizationRepository.DeleteAuthorization(importedAuthKeyId);
+            }
             await _secretChatCleanup.CleanupAsync(sessAuthKeyId.Value);
             _authorizationRepository.DeleteAuthorization(sessAuthKeyId.Value);
             var result = await _unitOfWork.SaveAsync();

@@ -9,7 +9,7 @@ namespace Ferrite.Services.Handlers.HelpMethods;
 
 public sealed class GetAppConfigHandler
 {
-    private const int ConfigHash = 2;
+    private const int ConfigHash = 3;
 
     [TLFunction(Constructors.baseLayer_GetAppConfig)]
     public ValueTask<TLBytes> Handle(long authKeyId, TLBytes q)
@@ -25,6 +25,7 @@ public sealed class GetAppConfigHandler
         AppendNumber(ref values, "telegram_antispam_group_size_min"u8, 1);
         AppendNumber(ref values, "hidden_members_group_size_min"u8, 1);
         AppendNumber(ref values, "channel_autotranslation_level_min"u8, 0);
+        AppendNumber(ref values, "ios_calls_group_reference_impl"u8, 0);
         using var config = JsonObject.Builder().Value(values).Build();
         var result = AppConfig.Builder().Hash(ConfigHash)
             .Config(config.ToReadOnlySpan()).Build();

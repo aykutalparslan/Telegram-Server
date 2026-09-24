@@ -48,7 +48,7 @@ public sealed class GetMessagesHandler : MessagesHandlerBase
             using var id = InputMessageID.Builder().Id(sentIds[i]).Build();
             ids.AppendTLObject(id.ToReadOnlySpan());
         }
-        using var current = MessagesGetMessages.Builder()
+        var current = MessagesGetMessages.Builder()
             .Id(ids)
             .Build();
         return current.TLBytes!.Value;
@@ -103,6 +103,7 @@ public sealed class GetMessagesHandler : MessagesHandlerBase
 
             return Ferrite.TL.baseLayer.messages.Messages.Builder()
                 .MessagesProperty(messageVector)
+                .Topics(new Vector())
                 .Chats(chatVector)
                 .Users(userVector)
                 .Build();

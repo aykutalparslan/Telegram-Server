@@ -14,13 +14,13 @@ public ref struct VectorOfInt
     public VectorOfInt()
     {
         _buff = new int[32];
-        SetConstructor(unchecked((int)0x1cb5c415));
+        SetConstructor(Vector.ConstructorId);
         SetCount(0);
         _offset = 2;
     }
     public VectorOfInt(Span<byte> buffer)
     {
-        if (MemoryMarshal.Read<int>(buffer[..4]) != unchecked((int)0x1cb5c415))
+        if (MemoryMarshal.Read<int>(buffer[..4]) != Vector.ConstructorId)
         {
             throw new InvalidOperationException();
         }
@@ -42,7 +42,7 @@ public ref struct VectorOfInt
 
     public static Span<byte> Read(Span<byte> data, int offset)
     {
-        if (MemoryMarshal.Read<int>(data.Slice(offset,4)) != unchecked((int)0x1cb5c415))
+        if (MemoryMarshal.Read<int>(data.Slice(offset,4)) != Vector.ConstructorId)
         {
             throw new InvalidOperationException();
         }
@@ -57,7 +57,7 @@ public ref struct VectorOfInt
 
     public static int ReadSize(Span<byte> data, int offset)
     {
-        if (MemoryMarshal.Read<int>(data.Slice(offset,4)) != unchecked((int)0x1cb5c415))
+        if (MemoryMarshal.Read<int>(data.Slice(offset,4)) != Vector.ConstructorId)
         {
             throw new InvalidOperationException();
         }

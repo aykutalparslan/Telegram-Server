@@ -38,10 +38,16 @@ public sealed class DeleteConferenceCallParticipantsHandler : ConferenceCallHand
     {
         var request = (DeleteConferenceCallParticipants)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
         bool onlyLeft = request.OnlyLeft;
         List<long> ids = ReadIds(request.Ids);
         byte[] block = request.Block.ToArray();
+
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
+        }
 
         if (!callRead)
         {

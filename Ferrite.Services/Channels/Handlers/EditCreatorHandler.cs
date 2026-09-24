@@ -6,8 +6,8 @@ using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
-using Ferrite.TL.baseLayer.channels;
 using Ferrite.TL.baseLayer.dto;
+using Ferrite.TL.baseLayer.messages;
 using Ferrite.Utils;
 
 namespace Ferrite.Services.Handlers.Channels;
@@ -33,11 +33,11 @@ public sealed class EditCreatorHandler : ChannelsHandlerBase
         _passwords = passwords;
     }
 
-    [TLFunction(Constructors.baseLayer_EditCreator)]
+    [TLFunction(Constructors.baseLayer_EditChatCreator)]
     public async Task<Ferrite.TL.baseLayer.TLUpdates> Handle(long authKeyId, TLBytes q)
     {
-        var request = (EditCreator)q;
-        long? channelId = ResolveInputChannelId(request.Get_ChannelView());
+        var request = (EditChatCreator)q;
+        long? channelId = PeerResolver.ResolveInputPeerChannelId(request.Get_PeerView());
         long? requestedUserId = ResolveInputUserId(request.Get_UserIdView(), 0);
         PasswordVerificationStatus verification;
         using (TLInputCheckPasswordSRP password = request.Get_Password())

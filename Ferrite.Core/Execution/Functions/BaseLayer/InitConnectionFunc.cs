@@ -24,8 +24,25 @@ public class InitConnectionFunc : ITLFunction
 
     public async ValueTask<TLBytes?> Process(TLBytes q, TLExecutionContext ctx)
     {
+        if (ctx.ConnectionLayer.Value is ConnectionLayerResolution.Resolved resolved)
+        {
+            return await Process(q, ctx, resolved.Layer);
+        }
+        return ConnectionLayerNegotiator.WrappedError(
+            LayerNegotiationFailure.NotInitialized, ctx.MessageId);
+    }
+
+    internal async ValueTask<TLBytes?> Process(TLBytes q, TLExecutionContext ctx,
+        int provisionalLayer)
+    {
         using var info = CreateAppInfo(q, ctx, _random);
-        await _auth.SaveAppInfo(info);
+        if (!await _auth.SaveClientInfo(info, provisionalLayer))
+        {
+            using var error = RpcErrorGenerator.GenerateError(
+                500, "INTERNAL_SERVER_ERROR"u8);
+            return RpcResultGenerator.Generate(error, ctx.MessageId);
+        }
+        ctx.ConnectionLayer.Resolve(provisionalLayer);
         using var query = RequestUnwrapper.InitConnectionQuery(q);
         if (ExecutionEngine != null) return await ExecutionEngine.Invoke(query, ctx);
         return null;
@@ -40,6 +57,8 @@ public class InitConnectionFunc : ITLFunction
             .ApiId(request.ApiId)
             .AppVersion(request.AppVersion)
             .AuthKeyId(ctx.CurrentAuthKeyId)
+            .EncryptedRequestsDisabled(false)
+            .CallRequestsDisabled(false)
             .DeviceModel(request.DeviceModel)
             .Ip(Encoding.UTF8.GetBytes(ctx.IP))
             .LangCode(request.LangCode)

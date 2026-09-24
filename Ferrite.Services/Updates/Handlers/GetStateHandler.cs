@@ -40,7 +40,7 @@ public sealed class GetStateHandler : UpdatesHandlerBase
             var updatesCtx = _updatesContextFactory.GetUpdatesContext(authKeyId,
                 userId);
             int date = (int)_time.GetUnixTimeInSeconds();
-            int pts = await CommonUpdatesState.GetCommittedPts(_updatesStateRepository, _messageRepository, updatesCtx, userId);
+            int pts = await CommonUpdatesState.GetDeliveredPts(_updatesStateRepository, _messageRepository, updatesCtx, userId);
             int qts = await updatesCtx.Qts();
             int seq = await updatesCtx.Seq();
             int unreadCount = await updatesCtx.UnreadMessages();

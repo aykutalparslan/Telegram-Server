@@ -80,8 +80,6 @@ public sealed class DeleteChannelHandler : ChannelsHandlerBase
         await _unitOfWork.SaveAsync();
 
         int date = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
-        var seqCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, currentUserId);
-        int seq = await seqCtx.IncrementSeq();
 
         byte[] forbiddenBytes;
         {
@@ -117,7 +115,7 @@ public sealed class DeleteChannelHandler : ChannelsHandlerBase
             .Users(userVector)
             .Chats(chatVector)
             .Date(date)
-            .Seq(seq)
+            .Seq(0)
             .Build();
     }
 }

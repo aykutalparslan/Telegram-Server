@@ -38,7 +38,7 @@ public sealed class UpdatesStateService : IUpdatesStateService
         var context = _updatesContextFactory.GetUpdatesContext(authKeyId,
             auth.Value.AsAuthInfo().UserId);
         int date = (int)_time.GetUnixTimeInSeconds();
-        int pts = await CommonUpdatesState.GetCommittedPts(_updatesStateRepository, _messageRepository, context,
+        int pts = await CommonUpdatesState.GetDeliveredPts(_updatesStateRepository, _messageRepository, context,
             auth.Value.AsAuthInfo().UserId);
         int seq = await context.Seq();
         int qts = await context.Qts();

@@ -36,7 +36,7 @@ public sealed class SaveDefaultSendAsHandler
         _timeProvider = timeProvider;
     }
 
-    [TLFunction(Constructors.baseLayer_SaveDefaultSendAs)]
+    [TLFunction(Constructors.baseLayer_MessagesSaveDefaultSendAs)]
     public async ValueTask<TLBool> Handle(long authKeyId, TLBytes q)
     {
         long userId;
@@ -50,7 +50,7 @@ public sealed class SaveDefaultSendAsHandler
             userId = auth.Value.AsAuthInfo().UserId;
         }
 
-        var request = (SaveDefaultSendAs)q;
+        var request = (MessagesSaveDefaultSendAs)q;
         DialogPeerKey? destination = PeerResolver.ResolveOptionalDialogPeer(
             request.Get_PeerView(), userId);
         DialogPeerKey? sendAs = PeerResolver.ResolveOptionalDialogPeer(

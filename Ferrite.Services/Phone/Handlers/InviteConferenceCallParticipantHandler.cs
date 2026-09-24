@@ -37,10 +37,16 @@ public sealed class InviteConferenceCallParticipantHandler : ConferenceCallHandl
     {
         var request = (InviteConferenceCallParticipant)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
         bool video = request.Video;
         bool userRead = TryReadUser(request.Get_UserIdView(), out long inviteeId,
             out long? inviteeAccessHash);
+
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
+        }
 
         if (!callRead)
         {
@@ -57,7 +63,7 @@ public sealed class InviteConferenceCallParticipantHandler : ConferenceCallHandl
         {
             return Error(resolution.Error);
         }
-        if (!resolution.IsParticipant)
+        if (!resolution.IsParticipant && !resolution.IsCreator)
         {
             return Error(GroupCallErrors.GroupCallJoinMissing);
         }

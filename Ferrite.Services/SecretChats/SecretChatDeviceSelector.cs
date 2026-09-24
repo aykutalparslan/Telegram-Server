@@ -42,13 +42,21 @@ public sealed class SecretChatDeviceSelector : ISecretChatDeviceSelector
         var seen = new HashSet<long>();
         foreach (TLAuthInfo authorization in authorizations)
         {
-            var auth = authorization.AsAuthInfo();
-            if (auth.UserId != userId || !auth.LoggedIn || !seen.Add(auth.AuthKeyId))
+            long authKeyId;
+            {
+                var auth = authorization.AsAuthInfo();
+                if (auth.UserId != userId || !auth.LoggedIn || !seen.Add(auth.AuthKeyId))
+                {
+                    continue;
+                }
+                authKeyId = auth.AuthKeyId;
+            }
+            if (await _authorizationRepository.GetImportSourceAsync(authKeyId) is not null)
             {
                 continue;
             }
 
-            TLAppInfo? appInfo = _appInfoRepository.GetAppInfo(auth.AuthKeyId);
+            TLAppInfo? appInfo = _appInfoRepository.GetAppInfo(authKeyId);
             bool disabled = false;
             if (appInfo.HasValue)
             {
@@ -57,7 +65,7 @@ public sealed class SecretChatDeviceSelector : ISecretChatDeviceSelector
             }
             if (!disabled)
             {
-                selected.Add(auth.AuthKeyId);
+                selected.Add(authKeyId);
             }
         }
 

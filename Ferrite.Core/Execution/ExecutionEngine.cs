@@ -49,18 +49,18 @@ public class ExecutionEngine : IExecutionEngine
         _time = timeProvider ?? TimeProvider.System;
     }
 
-    public async ValueTask<TLBytes?> Invoke(TLBytes rpc, TLExecutionContext ctx, int layer = IExecutionEngine.DefaultLayer)
+    public async ValueTask<TLBytes?> Invoke(TLBytes rpc, TLExecutionContext ctx)
     {
         if (_writeBatches == null || _writeScopeDepth.Value != 0)
         {
-            return await InvokeCore(rpc, ctx, layer);
+            return await InvokeCore(rpc, ctx);
         }
 
         _writeScopeDepth.Value++;
         try
         {
             using IWriteBatchScope scope = _writeBatches.BeginScope();
-            return await InvokeCore(rpc, ctx, layer);
+            return await InvokeCore(rpc, ctx);
         }
         finally
         {
@@ -68,49 +68,59 @@ public class ExecutionEngine : IExecutionEngine
         }
     }
 
-    private async ValueTask<TLBytes?> InvokeCore(TLBytes rpc, TLExecutionContext ctx, int layer)
+    private async ValueTask<TLBytes?> InvokeCore(TLBytes rpc, TLExecutionContext ctx)
     {
         if (rpc.Constructor == Constructors.mtproto_GzipPacked)
         {
             using var unpacked = GzipPackedHelper.Unpack(rpc);
-            return await InvokeCore(unpacked, ctx, layer);
+            return await InvokeCore(unpacked, ctx);
         }
 
-        var authError = await GetAuthErrorResult(rpc.Constructor, ctx);
-        if (authError != null) return authError;
-
+        int layer = ctx.ConnectionLayer.Value is ConnectionLayerResolution.Resolved resolved
+            ? resolved.Layer
+            : SupportedLayers.Base;
         try
         {
-            var found = _functions.TryGetValue(new FunctionKey(layer, rpc.Constructor), out var func);
+            using TLBytes? normalized = LayerRequestNormalizer.Normalize(rpc, layer);
+            TLBytes request = normalized ?? rpc;
+            using TLBytes? older = _functions.TryGetValue(
+                new FunctionKey(request.Constructor), out _)
+                ? null
+                : LayerRequestNormalizer.NormalizeOlderMethod(request, layer);
+            request = older ?? request;
+
+            var authError = await GetAuthErrorResult(request.Constructor, ctx);
+            if (authError != null) return authError;
+
+            var found = _functions.TryGetValue(new FunctionKey(request.Constructor), out var func);
             if (!found)
             {
-                _log.Error($"#{rpc.Constructor.ToString("x")} is not found for layer {layer}");
+                _log.Error($"#{request.Constructor.ToString("x")} is not found");
                 var err = RpcErrorGenerator.GenerateError(500, "INTERNAL_SERVER_ERROR"u8);
                 return RpcResultGenerator.Generate(err, ctx.MessageId);
             }
-            return await func!.Process(rpc, ctx);
+            return await func!.Process(request, ctx);
         }
         catch (Exception e)
         {
-            _log.Error(e, $"#{rpc.Constructor.ToString("x")} for layer {layer} cannot be processed: {e.Message}");
+            _log.Error(e, $"#{rpc.Constructor.ToString("x")} cannot be processed: {e.Message}");
             var err = RpcErrorGenerator.GenerateError(500, "INTERNAL_SERVER_ERROR"u8);
             return RpcResultGenerator.Generate(err, ctx.MessageId);
         }
     }
 
-    public async ValueTask<TLBytes?> Invoke(ITLStreamingObject rpc, TLExecutionContext ctx,
-        int layer = IExecutionEngine.DefaultLayer)
+    public async ValueTask<TLBytes?> Invoke(ITLStreamingObject rpc, TLExecutionContext ctx)
     {
         if (_writeBatches == null || _writeScopeDepth.Value != 0)
         {
-            return await InvokeStreamingCore(rpc, ctx, layer);
+            return await InvokeStreamingCore(rpc, ctx);
         }
 
         _writeScopeDepth.Value++;
         try
         {
             using IWriteBatchScope scope = _writeBatches.BeginScope();
-            return await InvokeStreamingCore(rpc, ctx, layer);
+            return await InvokeStreamingCore(rpc, ctx);
         }
         finally
         {
@@ -119,17 +129,17 @@ public class ExecutionEngine : IExecutionEngine
     }
 
     private async ValueTask<TLBytes?> InvokeStreamingCore(ITLStreamingObject rpc,
-        TLExecutionContext ctx, int layer)
+        TLExecutionContext ctx)
     {
         var authError = await GetAuthErrorResult(rpc.Constructor, ctx);
         if (authError != null) return authError;
 
         try
         {
-            var found = _streamingFunctions.TryGetValue(new FunctionKey(layer, rpc.Constructor), out var func);
+            var found = _streamingFunctions.TryGetValue(new FunctionKey(rpc.Constructor), out var func);
             if (!found)
             {
-                _log.Error($"#{rpc.Constructor.ToString("x")} is not found for layer {layer}");
+                _log.Error($"#{rpc.Constructor.ToString("x")} is not found");
                 var err = RpcErrorGenerator.GenerateError(500, "INTERNAL_SERVER_ERROR"u8);
                 return RpcResultGenerator.Generate(err, ctx.MessageId);
             }
@@ -137,25 +147,24 @@ public class ExecutionEngine : IExecutionEngine
         }
         catch (Exception e)
         {
-            _log.Error(e, $"#{rpc.Constructor.ToString("x")} for layer {layer} cannot be processed: {e.Message}");
+            _log.Error(e, $"#{rpc.Constructor.ToString("x")} cannot be processed: {e.Message}");
             var err = RpcErrorGenerator.GenerateError(500, "INTERNAL_SERVER_ERROR"u8);
             return RpcResultGenerator.Generate(err, ctx.MessageId);
         }
     }
 
-    public async ValueTask<FileResult> InvokeFile(TLBytes rpc, TLExecutionContext ctx,
-        int layer = IExecutionEngine.DefaultLayer)
+    public async ValueTask<FileResult> InvokeFile(TLBytes rpc, TLExecutionContext ctx)
     {
         if (_writeBatches == null || _writeScopeDepth.Value != 0)
         {
-            return await InvokeFileCore(rpc, ctx, layer);
+            return await InvokeFileCore(rpc, ctx);
         }
 
         _writeScopeDepth.Value++;
         try
         {
             using IWriteBatchScope scope = _writeBatches.BeginScope();
-            return await InvokeFileCore(rpc, ctx, layer);
+            return await InvokeFileCore(rpc, ctx);
         }
         finally
         {
@@ -163,13 +172,12 @@ public class ExecutionEngine : IExecutionEngine
         }
     }
 
-    private async ValueTask<FileResult> InvokeFileCore(TLBytes rpc, TLExecutionContext ctx,
-        int layer)
+    private async ValueTask<FileResult> InvokeFileCore(TLBytes rpc, TLExecutionContext ctx)
     {
         if (rpc.Constructor == Constructors.mtproto_GzipPacked)
         {
             using var unpacked = GzipPackedHelper.Unpack(rpc);
-            return await InvokeFileCore(unpacked, ctx, layer);
+            return await InvokeFileCore(unpacked, ctx);
         }
 
         var authError = await GetAuthError(rpc.Constructor, ctx);
@@ -179,35 +187,60 @@ public class ExecutionEngine : IExecutionEngine
         {
             if (rpc.Constructor == Constructors.baseLayer_InvokeWithLayer)
             {
-                using var query = RequestUnwrapper.InvokeWithLayerQuery(rpc, out int requestedLayer);
-                return await InvokeFileCore(query, ctx, requestedLayer);
+                LayerNegotiationResult negotiation = ConnectionLayerNegotiator.Resolve(rpc);
+                if (!negotiation.IsSuccess)
+                {
+                    return new FileResult(null,
+                        ConnectionLayerNegotiator.Error(negotiation.Failure));
+                }
+
+                using var initConnection = RequestUnwrapper.InvokeWithLayerQuery(rpc, out _);
+                using var info = InitConnectionFunc.CreateAppInfo(
+                    initConnection, ctx, _random);
+                if (!await _auth.SaveClientInfo(info, negotiation.ProvisionalLayer))
+                {
+                    return new FileResult(null, RpcErrorGenerator.GenerateError(
+                        500, "INTERNAL_SERVER_ERROR"u8));
+                }
+                ctx.ConnectionLayer.Resolve(negotiation.ProvisionalLayer);
+                using var query = RequestUnwrapper.InitConnectionQuery(initConnection);
+                return await InvokeFileCore(query, ctx);
             }
             if (rpc.Constructor == Constructors.baseLayer_InitConnection)
             {
+                if (ctx.ConnectionLayer.Value is not ConnectionLayerResolution.Resolved resolved)
+                {
+                    return new FileResult(null, ConnectionLayerNegotiator.Error(
+                        LayerNegotiationFailure.NotInitialized));
+                }
                 using var info = InitConnectionFunc.CreateAppInfo(rpc, ctx, _random);
-                await _auth.SaveAppInfo(info);
+                if (!await _auth.SaveClientInfo(info, resolved.Layer))
+                {
+                    return new FileResult(null, RpcErrorGenerator.GenerateError(
+                        500, "INTERNAL_SERVER_ERROR"u8));
+                }
                 using var query = RequestUnwrapper.InitConnectionQuery(rpc);
-                return await InvokeFileCore(query, ctx, layer);
+                return await InvokeFileCore(query, ctx);
             }
             if (rpc.Constructor == Constructors.baseLayer_InvokeAfterMsg)
             {
                 using var query = RequestUnwrapper.InvokeAfterMsgQuery(rpc);
-                return await InvokeFileCore(query, ctx, layer);
+                return await InvokeFileCore(query, ctx);
             }
             if (rpc.Constructor == Constructors.baseLayer_InvokeAfterMsgs)
             {
                 using var query = RequestUnwrapper.InvokeAfterMsgsQuery(rpc);
-                return await InvokeFileCore(query, ctx, layer);
+                return await InvokeFileCore(query, ctx);
             }
             if (rpc.Constructor == Constructors.baseLayer_InvokeWithoutUpdates)
             {
                 using var query = RequestUnwrapper.InvokeWithoutUpdatesQuery(rpc);
-                return await InvokeFileCore(query, ctx, layer);
+                return await InvokeFileCore(query, ctx);
             }
             if (rpc.Constructor == Constructors.baseLayer_InvokeWithMessagesRange)
             {
                 using var query = RequestUnwrapper.InvokeWithMessagesRangeQuery(rpc);
-                return await InvokeFileCore(query, ctx, layer);
+                return await InvokeFileCore(query, ctx);
             }
             if (rpc.Constructor == Constructors.baseLayer_InvokeWithTakeout)
             {
@@ -218,33 +251,33 @@ public class ExecutionEngine : IExecutionEngine
                     return new FileResult(null, RpcErrorGenerator.GenerateError(
                         400, "TAKEOUT_INVALID"u8));
                 }
-                return await InvokeFileCore(query, ctx, layer);
+                return await InvokeFileCore(query, ctx);
             }
             if (rpc.Constructor == Constructors.baseLayer_InvokeWithGooglePlayIntegrityPrefix)
             {
                 using var query = RequestUnwrapper.InvokeWithGooglePlayIntegrityQuery(rpc);
-                return await InvokeFileCore(query, ctx, layer);
+                return await InvokeFileCore(query, ctx);
             }
             if (rpc.Constructor == Constructors.baseLayer_InvokeWithApnsSecretPrefix)
             {
                 using var query = RequestUnwrapper.InvokeWithApnsSecretQuery(rpc);
-                return await InvokeFileCore(query, ctx, layer);
+                return await InvokeFileCore(query, ctx);
             }
             if (rpc.Constructor == Constructors.baseLayer_InvokeWithReCaptchaPrefix)
             {
                 using var query = RequestUnwrapper.InvokeWithReCaptchaQuery(rpc);
-                return await InvokeFileCore(query, ctx, layer);
+                return await InvokeFileCore(query, ctx);
             }
-            if (!_fileFunctions.TryGetValue(new FunctionKey(layer, rpc.Constructor), out var func))
+            if (!_fileFunctions.TryGetValue(new FunctionKey(rpc.Constructor), out var func))
             {
-                _log.Error($"#{rpc.Constructor.ToString("x")} is not found for layer {layer}");
+                _log.Error($"#{rpc.Constructor.ToString("x")} is not found");
                 return new FileResult(null, RpcErrorGenerator.GenerateError(500, "INTERNAL_SERVER_ERROR"u8));
             }
             return await func!.Process(rpc, ctx);
         }
         catch (Exception e)
         {
-            _log.Error(e, $"#{rpc.Constructor.ToString("x")} for layer {layer} cannot be processed: {e.Message}");
+            _log.Error(e, $"#{rpc.Constructor.ToString("x")} cannot be processed: {e.Message}");
             return new FileResult(null, RpcErrorGenerator.GenerateError(500, "INTERNAL_SERVER_ERROR"u8));
         }
     }
@@ -263,75 +296,19 @@ public class ExecutionEngine : IExecutionEngine
 
     private static bool IsFileRequestCore(TLBytes rpc)
     {
-        if (rpc.Constructor == Constructors.baseLayer_GetFile) return true;
-        if (rpc.Constructor == Constructors.mtproto_GzipPacked)
-        {
-            using var unpacked = GzipPackedHelper.Unpack(rpc);
-            return IsFileRequestCore(unpacked);
-        }
-        if (rpc.Constructor == Constructors.baseLayer_InvokeWithLayer)
-        {
-            using var query = RequestUnwrapper.InvokeWithLayerQuery(rpc, out _);
-            return IsFileRequestCore(query);
-        }
-        if (rpc.Constructor == Constructors.baseLayer_InitConnection)
-        {
-            using var query = RequestUnwrapper.InitConnectionQuery(rpc);
-            return IsFileRequestCore(query);
-        }
-        if (rpc.Constructor == Constructors.baseLayer_InvokeAfterMsg)
-        {
-            using var query = RequestUnwrapper.InvokeAfterMsgQuery(rpc);
-            return IsFileRequestCore(query);
-        }
-        if (rpc.Constructor == Constructors.baseLayer_InvokeAfterMsgs)
-        {
-            using var query = RequestUnwrapper.InvokeAfterMsgsQuery(rpc);
-            return IsFileRequestCore(query);
-        }
-        if (rpc.Constructor == Constructors.baseLayer_InvokeWithoutUpdates)
-        {
-            using var query = RequestUnwrapper.InvokeWithoutUpdatesQuery(rpc);
-            return IsFileRequestCore(query);
-        }
-        if (rpc.Constructor == Constructors.baseLayer_InvokeWithMessagesRange)
-        {
-            using var query = RequestUnwrapper.InvokeWithMessagesRangeQuery(rpc);
-            return IsFileRequestCore(query);
-        }
-        if (rpc.Constructor == Constructors.baseLayer_InvokeWithTakeout)
-        {
-            using var query = RequestUnwrapper.InvokeWithTakeoutQuery(rpc, out _);
-            return IsFileRequestCore(query);
-        }
-        if (rpc.Constructor == Constructors.baseLayer_InvokeWithGooglePlayIntegrityPrefix)
-        {
-            using var query = RequestUnwrapper.InvokeWithGooglePlayIntegrityQuery(rpc);
-            return IsFileRequestCore(query);
-        }
-        if (rpc.Constructor == Constructors.baseLayer_InvokeWithApnsSecretPrefix)
-        {
-            using var query = RequestUnwrapper.InvokeWithApnsSecretQuery(rpc);
-            return IsFileRequestCore(query);
-        }
-        if (rpc.Constructor == Constructors.baseLayer_InvokeWithReCaptchaPrefix)
-        {
-            using var query = RequestUnwrapper.InvokeWithReCaptchaQuery(rpc);
-            return IsFileRequestCore(query);
-        }
-        return false;
+        return RequestUnwrapper.MethodConstructor(rpc) == Constructors.baseLayer_GetFile;
     }
 
-    public bool IsImplemented(int constructor, int layer = IExecutionEngine.DefaultLayer)
+    public bool IsImplemented(int constructor)
     {
         try
         {
-            var func = _functions[new FunctionKey(layer, constructor)];
+            var func = _functions[new FunctionKey(constructor)];
             return true;
         }
         catch (Exception e)
         {
-            _log.Error(e, $"#{constructor.ToString("x")} is not registered for layer {layer}");
+            _log.Error(e, $"#{constructor.ToString("x")} is not registered");
         }
 
         return false;

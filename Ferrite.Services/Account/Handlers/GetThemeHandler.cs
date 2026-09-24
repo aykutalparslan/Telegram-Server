@@ -22,7 +22,7 @@ public sealed class GetThemeHandler : ThemeHandlerBase
     private static TLBytes ToCurrentGetThemeRequest(TLBytes q)
     {
         var sent = new TL.layer105.account.AccountGetTheme(q.AsSpan());
-        using var current = GetTheme.Builder()
+        var current = GetTheme.Builder()
             .Format(sent.Format)
             .Theme(sent.Theme)
             .Build();

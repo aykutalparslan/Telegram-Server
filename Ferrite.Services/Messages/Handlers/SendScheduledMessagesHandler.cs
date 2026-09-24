@@ -134,11 +134,9 @@ public sealed class SendScheduledMessagesHandler
         }
         List<byte[]> chats = await _fanout.GetChatBytesForViewerAsync(resolved.UserId,
             chatIds);
-        int seq = await _updatesContextFactory
-            .GetUpdatesContext(authKeyId, resolved.UserId).IncrementSeq();
         _log.Debug($"⏰ SendScheduledMessages user:{resolved.UserId} " +
                    $"peer:{resolved.PeerType}:{resolved.PeerId} sent:{flushed.Count}");
-        return _fanout.BuildUpdates(resolved.UserId, updateBytes, userIds, chats, now, seq);
+        return _fanout.BuildUpdates(resolved.UserId, updateBytes, userIds, chats, now, seq: 0);
     }
 
     private static TLUpdates Error(int code, string message) =>

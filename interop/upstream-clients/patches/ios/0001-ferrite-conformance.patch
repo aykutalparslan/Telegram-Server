@@ -1,17 +1,8 @@
 diff --git a/build-system/Make/Make.py b/build-system/Make/Make.py
-index 1bdd0f7412e40ec01e662af5a2fbfc3fe99ce932..c602b5afb8f94b0e592316caee218cb699fcb6de 100644
+index bb65a4367f0bff7dbe09e6d260640ab4fc0c693f..13a43aa48a0310819e0ff6544b3561033e392325 100644
 --- a/build-system/Make/Make.py
 +++ b/build-system/Make/Make.py
-@@ -93,8 +93,6 @@ class BazelCommandLine:
-             # https://docs.bazel.build/versions/master/command-line-reference.html
-             # Set the number of parallel jobs per module to saturate the available CPU resources.
-             #'--swiftcopt=-j{}'.format(os.cpu_count() - 1),
--            '--@build_bazel_rules_swift//swift:copt="-j{}"'.format(os.cpu_count() - 1),
--            '--@build_bazel_rules_swift//swift:copt="-whole-module-optimization"',
-         ]
-
-         self.common_release_args = [
-@@ -280,6 +278,9 @@ class BazelCommandLine:
+@@ -283,6 +283,9 @@ class BazelCommandLine:
          if self.lock:
              combined_arguments += ['--lockfile_mode=error']
 
@@ -21,7 +12,7 @@ index 1bdd0f7412e40ec01e662af5a2fbfc3fe99ce932..c602b5afb8f94b0e592316caee218cb6
          if self.custom_target is not None:
              combined_arguments += [self.custom_target]
          else:
-@@ -650,6 +651,9 @@ def build(bazel, arguments):
+@@ -666,6 +669,9 @@ def build(bazel, arguments):
      if arguments.lock:
          bazel_command_line.set_lock(True)
 
@@ -196,7 +187,7 @@ index 0000000000000000000000000000000000000000..6eae3cb7868ad5472d23dbdd503c4e9b
 +}
 +
 diff --git a/submodules/TelegramCore/Sources/Network/Network.swift b/submodules/TelegramCore/Sources/Network/Network.swift
-index f9dd1d6c1e6262ff8b70a01f38f1683704fbbe61..98baf581c551ee49b6f172df9dbc5cc02afd1ca3 100644
+index 5410e714b2501d8233d4c55e091b81f263f4c384..258ad3c8204a0717d412484c8a2eb38a383296b0 100644
 --- a/submodules/TelegramCore/Sources/Network/Network.swift
 +++ b/submodules/TelegramCore/Sources/Network/Network.swift
 @@ -526,26 +526,32 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
@@ -261,10 +252,10 @@ index f9dd1d6c1e6262ff8b70a01f38f1683704fbbe61..98baf581c551ee49b6f172df9dbc5cc0
      private let shouldKeepConnectionDisposable = MetaDisposable()
      
 diff --git a/submodules/TelegramUI/Sources/AppDelegate.swift b/submodules/TelegramUI/Sources/AppDelegate.swift
-index 4c836d070ca7d289e0a54bc7f504b4f9ee57c41a..2b27999b17effc138ab6b1cee0e19e1716df0052 100644
+index b1ea96b8da71d9c49d1d3afdd3e424e2edf89844..80a6f2ff635bd33a68e71cf5c712506a0870dcad 100644
 --- a/submodules/TelegramUI/Sources/AppDelegate.swift
 +++ b/submodules/TelegramUI/Sources/AppDelegate.swift
-@@ -227,6 +227,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
+@@ -231,6 +231,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
      let hasActiveAudioSession = Promise<Bool>(false)
      
      private let sharedContextPromise = Promise<SharedApplicationContext>()
@@ -272,10 +263,10 @@ index 4c836d070ca7d289e0a54bc7f504b4f9ee57c41a..2b27999b17effc138ab6b1cee0e19e17
 
      private var accountManager: AccountManager<TelegramAccountManagerTypes>?
      private var accountManagerState: AccountManagerState?
-@@ -987,6 +988,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
+@@ -1108,6 +1109,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                      }
                  }
-             }, appDelegate: self)
+             }, appDelegate: self, testingEnvironment: isUITest)
 +
 +            if let config = FerriteConformanceConfig.current {
 +                let controller = FerriteConformanceController(config: config, context: sharedContext)
@@ -287,10 +278,10 @@ index 4c836d070ca7d289e0a54bc7f504b4f9ee57c41a..2b27999b17effc138ab6b1cee0e19e17
              
 diff --git a/submodules/TelegramUI/Sources/FerriteConformanceController.swift b/submodules/TelegramUI/Sources/FerriteConformanceController.swift
 new file mode 100644
-index 0000000000000000000000000000000000000000..a89eb594d5bb1dbefa9b71c99fba771c89489e0b
+index 0000000000000000000000000000000000000000..0aa68f3e7c8f626dc6dd16908fca7295366b76a2
 --- /dev/null
 +++ b/submodules/TelegramUI/Sources/FerriteConformanceController.swift
-@@ -0,0 +1,512 @@
+@@ -0,0 +1,515 @@
 +import Foundation
 +import Network
 +import AccountContext
@@ -478,6 +469,9 @@ index 0000000000000000000000000000000000000000..a89eb594d5bb1dbefa9b71c99fba771c
 +            } else if let currentAuth, currentAuth.testingEnvironment {
 +                self.provisioningStage = "current-test-auth"
 +                self.requestAuthorizationCode(account: currentAuth)
++            } else if primary == nil && currentAuth == nil {
++                self.provisioningStage = "awaiting-app-auth"
++                self.awaitUnauthorizedAccount()
 +            } else {
 +                self.provisioningStage = "begin-new-auth"
 +                    + "(primary=\(primary != nil),primaryTest=\(primary?.account.testingEnvironment ?? false)"
@@ -666,7 +660,7 @@ index 0000000000000000000000000000000000000000..a89eb594d5bb1dbefa9b71c99fba771c
 +        }
 +        let engine = TelegramEngine(account: account)
 +        let signals = self.config.peers.map { phone in
-+            engine.contacts.importContact(firstName: phone, lastName: "", phoneNumber: phone)
++            engine.contacts.importContact(firstName: phone, lastName: "", phoneNumber: phone, noteText: "", noteEntities: [])
 +        }
 +        self.disposables.add((combineLatest(queue: .mainQueue(), signals)
 +        |> deliverOnMainQueue).start(next: { [weak self] _ in
@@ -804,15 +798,15 @@ index 0000000000000000000000000000000000000000..a89eb594d5bb1dbefa9b71c99fba771c
 +    }
 +}
 diff --git a/submodules/TelegramUI/Sources/SharedAccountContext.swift b/submodules/TelegramUI/Sources/SharedAccountContext.swift
-index 59b425118f5b6119406a7b0c8debfe8c841653c3..0167ede1f69e6fcfcd12649c7f58c98c94692ebd 100644
+index ecfc01ea9e3d146664bf7fc14c430f5e03f91e23..915495acc79f619eaca43b02e305d2e600f69f59 100644
 --- a/submodules/TelegramUI/Sources/SharedAccountContext.swift
 +++ b/submodules/TelegramUI/Sources/SharedAccountContext.swift
-@@ -757,7 +757,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
+@@ -801,7 +801,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                  }
                  
                  if self.activeAccountsValue!.primary == nil && self.activeAccountsValue!.currentAuth == nil {
--                    self.beginNewAuth(testingEnvironment: false)
-+                    self.beginNewAuth(testingEnvironment: FerriteConformanceConfig.current != nil)
+-                    self.beginNewAuth(testingEnvironment: self.testingEnvironment)
++                    self.beginNewAuth(testingEnvironment: self.testingEnvironment || FerriteConformanceConfig.current != nil)
                  }
              }))
          })

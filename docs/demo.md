@@ -34,12 +34,12 @@ duration.
 ## Run it
 
 Install the requirements in the root README and the platform-specific pinned
-toolchains in `interop/upstream-clients/PIN`. On the supported macOS host:
+toolchains in `interop/upstream-clients/PIN`. The launcher builds the
+applications pinned there, which are newer than the recorded inputs above. On
+the supported macOS host:
 
 ```sh
-FERRITE_ANDROID_JAVA_HOME=/path/to/jdk-17 \
-FERRITE_IOS_BAZEL=/path/to/bazel-8.3.1 \
-  ./scripts/ferrite-upstream-apps up --android 1 --ios 1
+./scripts/ferrite-upstream-apps up --android 1 --ios 1
 ```
 
 Startup succeeds only after both Ferrite nodes, all dependencies, and exactly

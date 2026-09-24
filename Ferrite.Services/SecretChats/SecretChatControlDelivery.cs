@@ -101,24 +101,30 @@ public sealed class SecretChatControlDelivery
                 return false;
             }
 
+            await RetireAsync(recipientAuthKeyId, chatId, SupersededBy(kind),
+                cancellationToken);
+
             if (wasAlreadyDurable)
             {
                 return true;
             }
 
-            try
+            await AfterResponse.Run(async () =>
             {
-                await _updates.EnqueueUpdate(recipientUserId,
-                    new TLUpdate(updateBytes, 0, updateBytes.Length),
-                    UpdateDeliveryScope.ForAuthKey(recipientAuthKeyId));
-            }
-            catch (Exception exception)
-            {
-                _log.Warning(exception,
-                    $"Secret-chat control live delivery failed for chat {chatId}, " +
-                    $"auth key {recipientAuthKeyId}; durable recovery remains " +
-                    "available.");
-            }
+                try
+                {
+                    await _updates.EnqueueUpdate(recipientUserId,
+                        new TLUpdate(updateBytes, 0, updateBytes.Length),
+                        UpdateDeliveryScope.ForAuthKey(recipientAuthKeyId));
+                }
+                catch (Exception exception)
+                {
+                    _log.Warning(exception,
+                        $"Secret-chat control live delivery failed for chat {chatId}, " +
+                        $"auth key {recipientAuthKeyId}; durable recovery remains " +
+                        "available.");
+                }
+            });
             return true;
         }
         finally
@@ -127,9 +133,29 @@ public sealed class SecretChatControlDelivery
         }
     }
 
+    public async ValueTask RetireAsync(long recipientAuthKeyId, int chatId,
+        IReadOnlyList<SecretChatControlKind> kinds,
+        CancellationToken cancellationToken = default)
+    {
+        foreach (SecretChatControlKind kind in kinds)
+        {
+            await _secretChatsRepository.DeleteControlUpdateAsync(recipientAuthKeyId,
+                CreateUpdateId(chatId, kind), cancellationToken);
+        }
+    }
+
+    public static IReadOnlyList<SecretChatControlKind> SupersededBy(
+        SecretChatControlKind kind) => kind switch
+    {
+        SecretChatControlKind.Accepted => [SecretChatControlKind.Requested],
+        SecretChatControlKind.LosingDeviceDiscarded or SecretChatControlKind.Discarded =>
+            [SecretChatControlKind.Requested, SecretChatControlKind.Accepted],
+        _ => []
+    };
+
     internal static long CreateUpdateId(int chatId, SecretChatControlKind kind)
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(chatId);
+        ArgumentOutOfRangeException.ThrowIfZero(chatId);
         long value = ((long)(uint)chatId << 8) | (byte)kind;
         return -value;
     }

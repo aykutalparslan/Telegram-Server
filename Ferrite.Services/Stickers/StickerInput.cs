@@ -22,6 +22,10 @@ public static class StickerInput
         {
             return (null, null, Encoding.UTF8.GetString(named.ShortName));
         }
+        if (input.Is(out InputStickerSetAnimatedEmoji _))
+        {
+            return (null, null, StickerSetCatalog.AnimatedEmojiShortName);
+        }
         return (null, null, null);
     }
 

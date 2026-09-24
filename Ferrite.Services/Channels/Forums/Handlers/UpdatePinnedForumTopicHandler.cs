@@ -5,7 +5,7 @@ using System.Text;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
-using Ferrite.TL.baseLayer.channels;
+using Ferrite.TL.baseLayer.messages;
 using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Handlers.ChannelForums;
@@ -33,11 +33,11 @@ public sealed class UpdatePinnedForumTopicHandler
         _fanout = fanout;
     }
 
-    [TLFunction(Constructors.baseLayer_UpdatePinnedForumTopic)]
+    [TLFunction(Constructors.baseLayer_MessagesUpdatePinnedForumTopic)]
     public async Task<Ferrite.TL.baseLayer.TLUpdates> Handle(long authKeyId, TLBytes q)
     {
-        var request = (UpdatePinnedForumTopic)q;
-        long? channelId = ChannelForumAccess.ResolveInputChannelId(request.Get_ChannelView());
+        var request = (MessagesUpdatePinnedForumTopic)q;
+        long? channelId = PeerResolver.ResolveInputPeerChannelId(request.Get_PeerView());
         int topicId = request.TopicId;
         bool pinned = request.Pinned;
         var (currentUserId, channelBytes, error) =
@@ -66,8 +66,9 @@ public sealed class UpdatePinnedForumTopicHandler
         }
 
         byte[] updateBytes;
-        var updateBuilder = UpdateChannelPinnedTopic.Builder()
-            .ChannelId(channelId.Value).TopicId(topicId);
+        using TLPeer peer = PeerChannel.Builder().ChannelId(channelId.Value).Build();
+        var updateBuilder = UpdatePinnedForumTopic.Builder()
+            .Peer(peer.AsSpan()).TopicId(topicId);
         if (pinned) updateBuilder = updateBuilder.Pinned(true);
         using (TLUpdate update = updateBuilder.Build())
         {

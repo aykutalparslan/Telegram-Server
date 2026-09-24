@@ -17,4 +17,7 @@ public interface IUpdatesContext: IMessageBox, ISecretMessageBox
 
     public ValueTask<int> DeliveredPts() => ValueTask.FromResult(0);
     public ValueTask AdvanceDeliveredPts(int pts) => ValueTask.CompletedTask;
+
+    public ValueTask SettlePts(int first, int last) => ValueTask.CompletedTask;
+    public ValueTask<int> ExtendCommittedPts(int committed) => ValueTask.FromResult(committed);
 }

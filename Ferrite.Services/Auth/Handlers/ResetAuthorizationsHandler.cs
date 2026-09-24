@@ -3,6 +3,7 @@
 
 using System.Text;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Auth;
 using Ferrite.TL;
 
 namespace Ferrite.Services.Handlers.AuthMethods;
@@ -36,11 +37,13 @@ public sealed class ResetAuthorizationsHandler
         var authorizations = await _authorizationRepository
             .GetAuthorizationsAsync(
                 Encoding.UTF8.GetString(currentAuth.Value.AsAuthInfo().Phone));
+        long homeAuthKeyId = await _authorizationRepository.GetHomeAuthKeyIdAsync(authKeyId);
         foreach (var auth in authorizations)
         {
-            if (auth.AsAuthInfo().AuthKeyId != authKeyId)
+            long revokedAuthKeyId = auth.AsAuthInfo().AuthKeyId;
+            if (revokedAuthKeyId != authKeyId &&
+                await _authorizationRepository.GetHomeAuthKeyIdAsync(revokedAuthKeyId) != homeAuthKeyId)
             {
-                long revokedAuthKeyId = auth.AsAuthInfo().AuthKeyId;
                 await _secretChatCleanup.CleanupAsync(revokedAuthKeyId);
                 _authorizationRepository.DeleteAuthorization(revokedAuthKeyId);
             }

@@ -150,7 +150,7 @@ public sealed class SendMultiMediaHandler
     private static byte[] BuildSendMessage(SendMultiMedia request,
         InputSingleMedia item, bool includeReplyTo)
     {
-        var builder = SendMessage.Builder()
+        var builder = MessagesSendMessage.Builder()
             .Silent(request.Silent)
             .Background(request.Background)
             .ClearDraft(request.ClearDraft)
@@ -171,7 +171,7 @@ public sealed class SendMultiMediaHandler
         if (flags[21]) builder = builder.AllowPaidStars(request.AllowPaidStars);
         if (item.Flags[0]) builder = builder.Entities(item.Entities);
 
-        using SendMessage result = builder.Build();
+        using MessagesSendMessage result = builder.Build();
         return result.ToReadOnlySpan().ToArray();
     }
 

@@ -5,7 +5,7 @@ using System.Text;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
-using Ferrite.TL.baseLayer.channels;
+using Ferrite.TL.baseLayer.messages;
 using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Handlers.ChannelForums;
@@ -37,7 +37,7 @@ public sealed class ReorderPinnedForumTopicsHandler
     public async Task<Ferrite.TL.baseLayer.TLUpdates> Handle(long authKeyId, TLBytes q)
     {
         var request = (ReorderPinnedForumTopics)q;
-        long? channelId = ChannelForumAccess.ResolveInputChannelId(request.Get_ChannelView());
+        long? channelId = PeerResolver.ResolveInputPeerChannelId(request.Get_PeerView());
         var vector = request.Order;
         List<int> order = new List<int>(vector.Count);
         for (int i = 0; i < vector.Count; i++) order.Add(vector[i]);
@@ -73,8 +73,9 @@ public sealed class ReorderPinnedForumTopicsHandler
         byte[] updateBytes;
         var orderVector = new VectorOfInt();
         foreach (int id in order) orderVector.Append(id);
-        using (TLUpdate update = UpdateChannelPinnedTopics.Builder()
-                   .ChannelId(channelId.Value).Order(orderVector).Build())
+        using TLPeer peer = PeerChannel.Builder().ChannelId(channelId.Value).Build();
+        using (TLUpdate update = UpdatePinnedForumTopics.Builder()
+                   .Peer(peer.AsSpan()).Order(orderVector).Build())
         {
             updateBytes = update.AsSpan().ToArray();
         }

@@ -252,14 +252,15 @@ public sealed class DialogOrganizationStore
             new TLUpdate(updateBytes, 0, updateBytes.Length),
             UpdateDeliveryScope.ExcludingAuthKeys([authKeyId]));
 
+        await context.SettlePts(pts, pts);
+
         var userIds = moves.Where(x => x.Peer.Type == TLPeer.PeerType.PeerUser)
             .Select(x => x.Peer.Id).Distinct().ToArray();
         var chatIds = moves.Where(x => x.Peer.Type is TLPeer.PeerType.PeerChat or
                 TLPeer.PeerType.PeerChannel)
             .Select(x => x.Peer.Id).Distinct().ToArray();
         List<byte[]> chats = await _fanout.GetChatBytesForViewerAsync(userId, chatIds);
-        int seq = await context.IncrementSeq();
-        return _fanout.BuildUpdates(userId, [updateBytes], userIds, chats, Now(), seq);
+        return _fanout.BuildUpdates(userId, [updateBytes], userIds, chats, Now(), seq: 0);
     }
 
     public async ValueTask<bool> CanUsePeerAsync(long userId, DialogPeerKey peer)

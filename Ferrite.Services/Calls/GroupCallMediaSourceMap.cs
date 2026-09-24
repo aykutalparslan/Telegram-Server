@@ -47,6 +47,28 @@ public sealed class GroupCallMediaSourceMap
             : null;
     }
 
+    public string? FindProducer(long callId, string? viewerMediaId, int source)
+    {
+        if (source == 0 || string.IsNullOrEmpty(viewerMediaId) ||
+            !_calls.TryGetValue(callId, out CallMap? map) ||
+            !map.Viewers.TryGetValue(viewerMediaId, out var producers))
+        {
+            return null;
+        }
+
+        foreach ((string producerMediaId, GroupCallViewerSources sources) in producers)
+        {
+            if (sources.AudioSource == source ||
+                sources.Video?.AudioSource == source ||
+                sources.Presentation?.AudioSource == source)
+            {
+                return producerMediaId;
+            }
+        }
+
+        return null;
+    }
+
     public void RemoveParticipant(long callId, string mediaId)
     {
         if (string.IsNullOrEmpty(mediaId) || !_calls.TryGetValue(callId, out CallMap? map))

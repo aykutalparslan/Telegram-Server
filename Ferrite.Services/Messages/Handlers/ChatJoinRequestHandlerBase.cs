@@ -445,10 +445,6 @@ public abstract class ChatJoinRequestHandlerBase
         }
         await _fanout.EnqueueSerializedAsync(adminIds, new[] { pendingUpdateBytes });
 
-        int seq = peer.IsChannel
-            ? await _updatesContextFactory.GetUpdatesContext(authKeyId, currentUserId)
-                .IncrementSeq()
-            : 0;
         var resultUserIds = new HashSet<long>(activeIds);
         foreach (PendingInviteImporter importer in remaining.OrderByDescending(x => x.Date)
                      .ThenBy(x => x.UserId).Take(3))
@@ -456,7 +452,7 @@ public abstract class ChatJoinRequestHandlerBase
             resultUserIds.Add(importer.UserId);
         }
         return _fanout.BuildUpdates(currentUserId, resultUpdateBytes, resultUserIds,
-            new[] { resultChatBytes }, date, seq);
+            new[] { resultChatBytes }, date, seq: 0);
     }
 
     private static bool IsActiveParticipant(int role) =>

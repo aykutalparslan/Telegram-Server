@@ -21,12 +21,12 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
     private readonly IGroupCallMediaPlane _media;
     private readonly ConferenceJoinOperation _conferenceJoin;
 
-    public JoinGroupCallHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, UpdateFanout fanout,
+    public JoinGroupCallHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository, UpdateFanout fanout,
         GroupCallChatLink chatLink, IUpdatesContextFactory updatesContexts,
         IMTProtoTime time, GroupCallVideoOptions videoOptions,
         GroupCallMediaSourceMap sourceMap, ILogger log, IGroupCallMediaPlane media,
         ConferenceJoinOperation conferenceJoin)
-        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, fanout, chatLink, updatesContexts, time, videoOptions,
+        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, messageRepository, fanout, chatLink, updatesContexts, time, videoOptions,
             sourceMap, log)
     {
         _groupCallsRepository = groupCallsRepository;
@@ -41,7 +41,7 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
         ConferenceCallRef conferenceRef;
         var request = (JoinGroupCall)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
         bool conference = request.Flags[3];
         if (conference)
         {
@@ -61,6 +61,12 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
         byte[] paramsJson = ReadParamsJson(request.Get_ParamsPropertyView());
         byte[] publicKey = conference ? request.PublicKey.ToArray() : Array.Empty<byte>();
         byte[] block = conference ? request.Block.ToArray() : Array.Empty<byte>();
+
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
+        }
 
         if (!callRead)
         {
@@ -313,7 +319,7 @@ public sealed class JoinGroupCallHandler : GroupCallHandlerBase
                     GroupCallParticipantDecoration.Versioned);
                 return BuildParticipantsUpdate(call, row.AsSpan());
             });
-        await PushCallUpdateToOtherMembersAsync(call, access.Peer.Id,
+        await PushCallUpdateToOtherMembersAsync(call, access,
             access.CurrentUserId, videoCount);
         return delivered;
     }

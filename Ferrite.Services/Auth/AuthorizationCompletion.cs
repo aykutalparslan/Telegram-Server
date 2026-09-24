@@ -24,14 +24,16 @@ public interface IAuthorizationCompletion
 public sealed class AuthorizationCompletion : IAuthorizationCompletion
 {
     private readonly IAuthorizationRepository _authorizationRepository;
+    private readonly IClientLayerRepository _clientLayerRepository;
     private readonly IUserRepository _userRepository;
 
     private readonly IUnitOfWork _unitOfWork;
     private readonly TimeProvider _timeProvider;
 
-    public AuthorizationCompletion(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IUserRepository userRepository, TimeProvider timeProvider)
+    public AuthorizationCompletion(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IClientLayerRepository clientLayerRepository, IUserRepository userRepository, TimeProvider timeProvider)
     {
         _authorizationRepository = authorizationRepository;
+        _clientLayerRepository = clientLayerRepository;
         _userRepository = userRepository;
 
         _unitOfWork = unitOfWork;
@@ -47,9 +49,26 @@ public sealed class AuthorizationCompletion : IAuthorizationCompletion
         TLAuthInfo? resolved = await ResolveAsync(authKeyId);
         using TLAuthInfo? existing = resolved;
 
+        if (apiLayer < 0)
+        {
+            TLClientLayer? stored = await _clientLayerRepository
+                .GetClientLayerAsync(authKeyId);
+            using (stored)
+            {
+                if (stored is { } clientLayer)
+                {
+                    apiLayer = clientLayer.AsClientLayer().ApiLayer;
+                }
+                else if (existing is { } authorization)
+                {
+                    apiLayer = authorization.AsAuthInfo().ApiLayer;
+                }
+            }
+        }
+
         byte[] phoneBytes = Encoding.UTF8.GetBytes(phone);
         using TLAuthInfo pending = existing is { } current
-            ? BuildUpdatedPending(current, userId, phoneBytes)
+            ? BuildUpdatedPending(current, userId, phoneBytes, apiLayer)
             : AuthInfo.Builder()
                 .AuthKeyId(authKeyId)
                 .UserId(userId)
@@ -107,12 +126,13 @@ public sealed class AuthorizationCompletion : IAuthorizationCompletion
     }
 
     private static TLAuthInfo BuildUpdatedPending(TLAuthInfo existing, long userId,
-        ReadOnlySpan<byte> phone)
+        ReadOnlySpan<byte> phone, int apiLayer)
     {
         var info = existing.AsAuthInfo();
         return info.Clone()
             .UserId(userId)
             .Phone(phone)
+            .ApiLayer(apiLayer)
             .LoggedIn(false)
             .LoggedInAt(0)
             .Build();

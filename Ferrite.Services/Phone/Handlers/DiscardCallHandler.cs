@@ -73,8 +73,6 @@ public sealed class DiscardCallHandler : PhoneCallHandlerBase
     private async ValueTask<TLUpdatesResult> BuildUpdatesAsync(CallSnapshot call,
         long authKeyId, long userId, List<byte[]> updateBytes)
     {
-        var seqContext = _updatesContextFactory.GetUpdatesContext(authKeyId, userId);
-        int seq = await seqContext.IncrementSeq();
         var updatesVector = new Vector();
         foreach (byte[] update in updateBytes)
         {
@@ -88,7 +86,7 @@ public sealed class DiscardCallHandler : PhoneCallHandlerBase
             .Users(users)
             .Chats(new Vector())
             .Date(Now())
-            .Seq(seq)
+            .Seq(0)
             .Build();
     }
 

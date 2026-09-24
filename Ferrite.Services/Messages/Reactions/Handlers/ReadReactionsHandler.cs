@@ -87,6 +87,10 @@ public sealed class ReadReactionsHandler
         await _unitOfWork.SaveAsync();
         var userCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, userId);
         int pts = cleared > 0 ? await userCtx.IncrementPts() : await userCtx.Pts();
+        if (cleared > 0)
+        {
+            await userCtx.SettlePts(pts, pts);
+        }
         _log.Debug($"💟 ReadReactions user:{userId} peerType:{peerType} peer:{peerId} " +
                    $"cleared:{cleared}");
         return AffectedHistory.Builder()

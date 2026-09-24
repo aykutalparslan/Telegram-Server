@@ -72,7 +72,7 @@ public sealed class RequestEncryptionHandler : SecretChatLifecycleHandlerBase
         {
             return Error(400, "USER_ID_INVALID"u8);
         }
-        if (randomId <= 0)
+        if (randomId == 0)
         {
             return Error(400, "RANDOM_ID_INVALID"u8);
         }

@@ -38,10 +38,6 @@ public sealed class DiscardEncryptionHandler : SecretChatLifecycleHandlerBase
         {
             return Error("CHAT_ID_EMPTY"u8);
         }
-        if (chatId < 0)
-        {
-            return Error("ENCRYPTION_ID_INVALID"u8);
-        }
         if (await GetCurrentUserIdAsync(authKeyId) is null)
         {
             return Error("AUTH_KEY_INVALID"u8);

@@ -21,13 +21,13 @@ public sealed class StartScheduledGroupCallHandler : GroupCallHandlerBase
     private readonly IGroupCallMediaPlane _media;
     private readonly IGroupCallBroadcastPlane _broadcast;
 
-    public StartScheduledGroupCallHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, UpdateFanout fanout,
+    public StartScheduledGroupCallHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository, UpdateFanout fanout,
         GroupCallChatLink chatLink, IUpdatesContextFactory updatesContexts,
         IMTProtoTime time, GroupCallVideoOptions videoOptions,
         GroupCallMediaSourceMap sourceMap, ILogger log,
         GroupCallActionMessages actions, IGroupCallMediaPlane media,
         IGroupCallBroadcastPlane broadcast)
-        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, fanout, chatLink, updatesContexts, time, videoOptions,
+        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, messageRepository, fanout, chatLink, updatesContexts, time, videoOptions,
             sourceMap, log)
     {
         _groupCallsRepository = groupCallsRepository;
@@ -42,7 +42,13 @@ public sealed class StartScheduledGroupCallHandler : GroupCallHandlerBase
     {
         var request = (StartScheduledGroupCall)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
+
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
+        }
 
         if (!callRead)
         {
@@ -142,7 +148,7 @@ public sealed class StartScheduledGroupCallHandler : GroupCallHandlerBase
         byte[] callUpdate = BuildCallUpdateBytes(call, viewer, access.Peer.Id,
             videoCount);
 
-        await PushCallUpdateToOtherMembersAsync(call, access.Peer.Id,
+        await PushCallUpdateToOtherMembersAsync(call, access,
             access.CurrentUserId, videoCount);
 
         byte[] actionBytes = BuildStartedActionBytes(call);

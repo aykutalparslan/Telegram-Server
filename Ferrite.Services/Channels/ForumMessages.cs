@@ -45,7 +45,7 @@ internal static class ForumMessages
 
     public static int ResolveRequestedForumTopicId(TLBytes sendMessage)
     {
-        var request = (SendMessage)sendMessage;
+        var request = (MessagesSendMessage)sendMessage;
         if (!request.Flags[0] ||
             !request.Get_ReplyToView().Is(out InputReplyToMessage reply))
             return 1;
@@ -98,12 +98,15 @@ internal static class ForumMessages
             unreadReactions = state.UnreadReactionsCount;
         }
         using TLPeer creator = new PeerUser(topic.CreatorId);
+        using TLPeer channel = new PeerChannel(topic.ChannelId);
         using var notifySettings = PeerNotifySettings.Builder().Build();
         var builder = ForumTopic.Builder().Id(topic.TopicId).Date(topic.Date)
+            .Peer(channel.AsSpan())
             .Title(topic.Title).IconColor(topic.IconColor).TopMessage(topic.TopMessage)
             .ReadInboxMaxId(readInbox).ReadOutboxMaxId(readOutbox)
             .UnreadCount(unread).UnreadMentionsCount(unreadMentions)
-            .UnreadReactionsCount(unreadReactions).FromId(creator.AsSpan())
+            .UnreadReactionsCount(unreadReactions).UnreadPollVotesCount(0)
+            .FromId(creator.AsSpan())
             .NotifySettings(notifySettings.ToReadOnlySpan());
         if (topic.CreatorId == viewerId) builder = builder.My(true);
         if (topic.IconEmojiId != 0) builder = builder.IconEmojiId(topic.IconEmojiId);

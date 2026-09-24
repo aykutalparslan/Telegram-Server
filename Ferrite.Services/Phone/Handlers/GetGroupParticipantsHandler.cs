@@ -23,11 +23,11 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
 
     private const int MaxSelectors = 200;
 
-    public GetGroupParticipantsHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IUserRepository userRepository, UpdateFanout fanout,
+    public GetGroupParticipantsHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository, IUserRepository userRepository, UpdateFanout fanout,
         GroupCallChatLink chatLink, IUpdatesContextFactory updatesContexts,
         IMTProtoTime time, GroupCallVideoOptions videoOptions,
         GroupCallMediaSourceMap sourceMap, ILogger log)
-        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, fanout, chatLink, updatesContexts, time, videoOptions,
+        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, messageRepository, fanout, chatLink, updatesContexts, time, videoOptions,
             sourceMap, log)
     {
         _groupCallsRepository = groupCallsRepository;
@@ -40,11 +40,17 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
     {
         var request = (GetGroupParticipants)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
         string offset = Encoding.UTF8.GetString(request.Offset);
         int limit = request.Limit;
         ReadIdSelectors(request.Ids, out List<long> userIds, out List<GroupCallReferencedPeer> peers);
         List<int> sources = ReadSourceSelectors(request.Sources);
+
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
+        }
 
         if (!callRead)
         {
@@ -70,7 +76,8 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
             discarded
                 ? (Array.Empty<TLDto.TLGroupCallParticipantState>(), null)
                 : hasSelectors
-                    ? (await SelectAsync(callId, userIds, peers, sources), null)
+                    ? (await SelectAsync(callId, access.CurrentUserId, userIds, peers,
+                        sources), null)
                     : await PageAsync(callId, offset, limit);
 
         try
@@ -101,8 +108,8 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
             Encoding.UTF8.GetBytes(message));
 
     private async ValueTask<IReadOnlyList<TLDto.TLGroupCallParticipantState>> SelectAsync(
-        long callId, IReadOnlyList<long> userIds, IReadOnlyList<GroupCallReferencedPeer> peers,
-        IReadOnlyList<int> sources)
+        long callId, long viewerUserId, IReadOnlyList<long> userIds,
+        IReadOnlyList<GroupCallReferencedPeer> peers, IReadOnlyList<int> sources)
     {
         var rows = new List<TLDto.TLGroupCallParticipantState>();
         var seen = new HashSet<long>();
@@ -113,10 +120,14 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
                 .GetParticipantAsync(callId, userId);
             Keep(row);
         }
+        string? viewerMediaId = sources.Count > 0
+            ? await GetMediaIdAsync(callId, viewerUserId)
+            : null;
         foreach (int source in sources)
         {
             TLDto.TLGroupCallParticipantState? row = await _groupCallsRepository
                 .GetParticipantBySourceAsync(callId, source);
+            row ??= await ResolveViewerSourceAsync(callId, viewerMediaId, source);
             Keep(row);
         }
 
@@ -168,6 +179,34 @@ public sealed class GetGroupParticipantsHandler : GroupCallHandlerBase
 
             rows.Add(row.Value);
         }
+    }
+
+    private async ValueTask<TLDto.TLGroupCallParticipantState?> ResolveViewerSourceAsync(
+        long callId, string? viewerMediaId, int source)
+    {
+        string? producerMediaId = SourceMap.FindProducer(callId, viewerMediaId, source);
+        if (producerMediaId == null)
+        {
+            return null;
+        }
+
+        GroupCallParticipantPage page = await _groupCallsRepository
+            .GetParticipantsPageAsync(callId, offset: null, MaxSelectors);
+        TLDto.TLGroupCallParticipantState? found = null;
+        foreach (TLDto.TLGroupCallParticipantState candidate in page.Participants)
+        {
+            var view = candidate.AsGroupCallParticipantState();
+            if (found == null && !view.Left &&
+                Encoding.UTF8.GetString(view.MediaId) == producerMediaId)
+            {
+                found = candidate;
+                continue;
+            }
+
+            candidate.Dispose();
+        }
+
+        return found;
     }
 
     private async ValueTask<(IReadOnlyList<TLDto.TLGroupCallParticipantState> Rows,

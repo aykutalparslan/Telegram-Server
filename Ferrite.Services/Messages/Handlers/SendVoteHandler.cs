@@ -140,10 +140,8 @@ public sealed class SendVoteHandler
         List<byte[]> chats = peer.Type == TLPeer.PeerType.PeerChat
             ? await _fanout.GetChatBytesForViewerAsync(userId, new[] { peer.Id })
             : new List<byte[]>();
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         return _fanout.BuildUpdates(userId, new[] { callerUpdateBytes }, userIds, chats,
-            now, seq);
+            now, seq: 0);
     }
 
     private async Task<TLUpdates> ApplyChannelVoteAsync(long authKeyId, long userId,
@@ -184,10 +182,8 @@ public sealed class SendVoteHandler
             }
             channelBytes = chat.Value.AsSpan().ToArray();
         }
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         return _fanout.BuildUpdates(userId, new[] { callerUpdateBytes }, new[] { userId },
-            new[] { channelBytes }, now, seq);
+            new[] { channelBytes }, now, seq: 0);
     }
 
     private static byte[] RebuildMedia(byte[] storedBytes, byte[] mediaBytes)

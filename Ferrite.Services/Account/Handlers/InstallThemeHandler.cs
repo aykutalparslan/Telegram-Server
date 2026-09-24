@@ -27,7 +27,7 @@ public sealed class InstallThemeHandler : ThemeHandlerBase
         {
             builder = builder.Format(sent.Format).Theme(sent.Theme);
         }
-        using var current = builder.Build();
+        var current = builder.Build();
         return current.TLBytes!.Value;
     }
 

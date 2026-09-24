@@ -119,8 +119,6 @@ public sealed class SetHistoryTTLHandler : MessagesHandlerBase
         await _updates.EnqueueUpdate(peerUserId,
             BuildHistoryTtlUpdate(peerSidePeerBytes, period));
 
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         var updateBytes = new List<byte[]>(2);
         using (TLUpdate updateNewMessage = UpdateNewMessage.Builder()
                    .Message(callerWrite.Bytes)
@@ -137,7 +135,7 @@ public sealed class SetHistoryTTLHandler : MessagesHandlerBase
 
         _log.Debug($"⌛ SetHistoryTTL user:{userId} peer:{peerUserId} period:{period}");
         return _fanout.BuildUpdates(userId, updateBytes, new[] { userId, peerUserId },
-            Array.Empty<byte[]>(), date, seq);
+            Array.Empty<byte[]>(), date, seq: 0);
     }
 
     private async Task<TLUpdates> SetBasicGroupTtlAsync(long authKeyId, long chatId,
@@ -212,8 +210,6 @@ public sealed class SetHistoryTTLHandler : MessagesHandlerBase
                 BuildHistoryTtlUpdate(peerBytes, period));
         }
 
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         var updateBytes = new List<byte[]>(2);
         using (TLUpdate updateNewChannelMessage = UpdateNewChannelMessage.Builder()
                    .Message(write.Bytes)
@@ -231,7 +227,7 @@ public sealed class SetHistoryTTLHandler : MessagesHandlerBase
         _log.Debug($"⌛ SetHistoryTTL user:{userId} channel:{channelId} " +
                    $"period:{period}");
         return _fanout.BuildUpdates(userId, updateBytes, new[] { userId },
-            new[] { channelBytes }, date, seq);
+            new[] { channelBytes }, date, seq: 0);
     }
 
     private static byte[] BuildPeerBytes(TLPeer.PeerType peerType, long peerId)

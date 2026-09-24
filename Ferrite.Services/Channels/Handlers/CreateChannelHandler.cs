@@ -160,8 +160,6 @@ public sealed class CreateChannelHandler : ChannelsHandlerBase
 
         await _unitOfWork.SaveAsync();
 
-        var seqCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, creatorUserId);
-        int seq = await seqCtx.IncrementSeq();
 
         var resultUpdates = new Vector();
         using (TLUpdate updateChannel = UpdateChannel.Builder().ChannelId(channelId).Build())
@@ -194,7 +192,8 @@ public sealed class CreateChannelHandler : ChannelsHandlerBase
         var userVector = new Vector();
         AppendUser(creatorUserId, ref userVector, creatorUserId);
         var chatVector = new Vector();
-        chatVector.AppendTLObject(channelBytes);
+        chatVector.AppendTLObject(ChannelRows.ForViewer(channelBytes,
+            viewerIsActiveParticipant: true, viewerIsCreator: true));
 
         _log.Debug($"📣 CreateChannel creator:{creatorUserId} channel:{channelId} " +
                    $"broadcast:{broadcast} megagroup:{megagroup} forum:{forum} pts:{creationPts}");
@@ -204,7 +203,7 @@ public sealed class CreateChannelHandler : ChannelsHandlerBase
             .Users(userVector)
             .Chats(chatVector)
             .Date(date)
-            .Seq(seq)
+            .Seq(0)
             .Build();
     }
 }

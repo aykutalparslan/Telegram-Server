@@ -9,6 +9,7 @@ public interface ILangPackRepository
 {
     public bool SaveLanguage(string langPack, TLLangPackLanguage language);
     public bool SaveLangPackDifference(string langPack, TLLangPackDifference difference);
+    public bool HasLanguages(string langPack);
     public ValueTask<List<TLLangPackLanguage>> GetLanguagesAsync(string? langPack);
     public ValueTask<TLLangPackLanguage?> GetLanguageAsync(string langPack, string langCode);
     public ValueTask<TLLangPackDifference?> GetLangPackAsync(string langPack, string langCode);

@@ -73,7 +73,7 @@ public sealed record SecretChatQtsAppendResult(
 public enum SecretChatSendAppendStatus
 {
     Appended,
-    AlreadyExists,
+    Redelivered,
     NotFound,
     NotActive,
     Unauthorized,

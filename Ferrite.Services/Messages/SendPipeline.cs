@@ -87,7 +87,7 @@ public sealed class SendPipeline
         using TLPeer from = new PeerUser(userId);
         using TLPeer to = PeerResolver.BuildPeer(peerType, peerId);
         using var request = new TLBytes(requestBytes, 0, requestBytes.Length);
-        long randomId = ((SendMessage)request).RandomId;
+        long randomId = ((MessagesSendMessage)request).RandomId;
         using TLMessage outgoingMessage = GenerateOutgoingMessage(request, senderMessageId,
             from, to, UnixNow(), media: media, groupedId: groupedId,
             ttlPeriod: ttlPeriod);
@@ -134,7 +134,7 @@ public sealed class SendPipeline
         using TLPeer from = new PeerUser(userId);
         using TLPeer to = new PeerChat(chatId);
         using var request = new TLBytes(requestBytes, 0, requestBytes.Length);
-        long randomId = ((SendMessage)request).RandomId;
+        long randomId = ((MessagesSendMessage)request).RandomId;
         using TLMessage outgoingMessage = GenerateOutgoingMessage(request, senderMessageId,
             from, to, UnixNow(), media: media, groupedId: groupedId,
             entitiesOverride: mentions.EntitiesBytes, ttlPeriod: ttlPeriod);
@@ -182,7 +182,7 @@ public sealed class SendPipeline
         byte[]? media = null, long groupedId = 0)
     {
         using var request = new TLBytes(requestBytes, 0, requestBytes.Length);
-        long randomId = ((SendMessage)request).RandomId;
+        long randomId = ((MessagesSendMessage)request).RandomId;
         var channelBox = new ChannelMessageBox(_counterFactory, channelId);
         int messageId = await channelBox.NextMessageId();
         MentionPlan mentions = broadcast
@@ -860,7 +860,7 @@ public sealed class SendPipeline
         var userIds = new HashSet<long>();
         using (var request = new TLBytes(requestBytes, 0, requestBytes.Length))
         {
-            var sendMessage = (SendMessage)request;
+            var sendMessage = (MessagesSendMessage)request;
             text = Encoding.UTF8.GetString(sendMessage.Message);
             clientEntities = sendMessage.Flags[3]
                 ? sendMessage.Entities.ToReadOnlySpan().ToArray()
@@ -952,7 +952,7 @@ public sealed class SendPipeline
         byte[]? media = null, long groupedId = 0, byte[]? entitiesOverride = null,
         int ttlPeriod = 0)
     {
-        var request = (SendMessage)sendMessage;
+        var request = (MessagesSendMessage)sendMessage;
         var builder = Message.Builder()
             .Id(senderMessageId)
             .OutProperty(outgoing)

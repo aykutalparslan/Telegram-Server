@@ -18,11 +18,11 @@ public sealed class EditGroupCallTitleHandler : GroupCallHandlerBase
 
     private const int MaxTitleLength = 64;
 
-    public EditGroupCallTitleHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, UpdateFanout fanout,
+    public EditGroupCallTitleHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository, UpdateFanout fanout,
         GroupCallChatLink chatLink, IUpdatesContextFactory updatesContexts,
         IMTProtoTime time, GroupCallVideoOptions videoOptions,
         GroupCallMediaSourceMap sourceMap, ILogger log)
-        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, fanout, chatLink, updatesContexts, time, videoOptions,
+        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, messageRepository, fanout, chatLink, updatesContexts, time, videoOptions,
             sourceMap, log)
     {
         _groupCallsRepository = groupCallsRepository;
@@ -34,8 +34,14 @@ public sealed class EditGroupCallTitleHandler : GroupCallHandlerBase
     {
         var request = (EditGroupCallTitle)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
         string title = Encoding.UTF8.GetString(request.Title).Trim();
+
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
+        }
 
         if (!callRead)
         {
@@ -76,7 +82,7 @@ public sealed class EditGroupCallTitleHandler : GroupCallHandlerBase
         {
             BuildCallUpdateBytes(updatedCall, viewer, access.Peer.Id, videoCount)
         };
-        await PushCallUpdateToOtherMembersAsync(updatedCall, access.Peer.Id,
+        await PushCallUpdateToOtherMembersAsync(updatedCall, access,
             access.CurrentUserId, videoCount);
 
         Log.Debug($"📞 editGroupCallTitle call:{callId} by:{access.CurrentUserId} " +

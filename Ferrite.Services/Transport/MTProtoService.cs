@@ -13,6 +13,7 @@ public class MTProtoService : IMTProtoService
 {
     private readonly IAuthKeyRepository _authKeyRepository;
     private readonly IBoundAuthKeyRepository _boundAuthKeyRepository;
+    private readonly IClientLayerRepository _clientLayerRepository;
     private readonly IServerSaltRepository _serverSaltRepository;
     private readonly ITempAuthKeyRepository _tempAuthKeyRepository;
 
@@ -20,11 +21,12 @@ public class MTProtoService : IMTProtoService
     private readonly IUnitOfWork _unitOfWork;
     private readonly ISecretChatAuthKeyCleanup _secretChatCleanup;
 
-    public MTProtoService(IMTProtoTime time, IUnitOfWork unitOfWork, IAuthKeyRepository authKeyRepository, IBoundAuthKeyRepository boundAuthKeyRepository, IServerSaltRepository serverSaltRepository, ITempAuthKeyRepository tempAuthKeyRepository,
+    public MTProtoService(IMTProtoTime time, IUnitOfWork unitOfWork, IAuthKeyRepository authKeyRepository, IBoundAuthKeyRepository boundAuthKeyRepository, IClientLayerRepository clientLayerRepository, IServerSaltRepository serverSaltRepository, ITempAuthKeyRepository tempAuthKeyRepository,
         ISecretChatAuthKeyCleanup secretChatCleanup)
     {
         _authKeyRepository = authKeyRepository;
         _boundAuthKeyRepository = boundAuthKeyRepository;
+        _clientLayerRepository = clientLayerRepository;
         _serverSaltRepository = serverSaltRepository;
         _tempAuthKeyRepository = tempAuthKeyRepository;
 
@@ -194,7 +196,8 @@ public class MTProtoService : IMTProtoService
 
         await _secretChatCleanup.CleanupAsync(authKeyId);
         var success = _authKeyRepository.DeleteAuthKey(authKeyId);
-        return success && await _unitOfWork.SaveAsync();
+        var layerDeleted = _clientLayerRepository.DeleteClientLayer(authKeyId);
+        return success && layerDeleted && await _unitOfWork.SaveAsync();
     }
 
     public async Task<KeyStatus> GetKeyStatus(long keyId)

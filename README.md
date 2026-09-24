@@ -36,6 +36,10 @@ out the pinned official client source, applies Ferrite's
 patch, builds the app, boots an emulator or Simulator, and signs in a disposable
 account for you. It also starts the complete two-node Ferrite stack.
 
+The launcher builds Telegram for Android 12.10.1 and Telegram-iOS 12.9, both at
+layer 229, Ferrite's base layer. The screenshots above were captured with older
+builds at layer 214, which Ferrite still serves.
+
 There is one unavoidable bit of setup: these are the real apps, so you
 need their build tools. Start with Git, Python 3, the .NET 10 SDK selected by
 [`global.json`](global.json), and Docker running Linux containers. The launcher
@@ -49,8 +53,8 @@ git clone https://github.com/aykutalparslan/Telegram-Server.git
 cd Telegram-Server
 ```
 
-For two Android clients on macOS or Linux, install the pinned Android API 35
-toolchain from the
+For two Android clients on macOS or Linux, install the pinned Android SDK 36,
+NDK and API 35 emulator image from the
 [official-client guide](interop/upstream-clients/README.md), then run:
 
 ```sh
@@ -127,27 +131,29 @@ not affiliated with, endorsed by, or connected to Telegram Messenger Inc.
 
 ## Implemented API surface
 
-Ferrite classifies every function declared by its layer-214 schema and dispatches
-*494 of 732 operations* — 490 through concrete method handlers and four through
-core request-pipeline wrappers.
-
-Coverage is complete or near-complete in the namespaces a running client depends
-on: `phone`, `chatlists`, `stickers`, `langpack`, `photos`, `updates` and
-`folders` are fully implemented, `channels` is 64 of 66, `contacts` 26 of 27 and
-`auth` 22 of 23. The two largest namespaces are partial by size but not by
-gap: `messages` 167 of 230 and `account` 95 of 120.
+Ferrite classifies all **813 published functions** in its layer-229 base schema.
+Of these, **489** have registered handling, including core request-pipeline
+wrappers, and **324** are explicitly disabled. Internal streaming-prefix
+declarations are excluded from these counts.
 
 The `bots`, `payments`, `stories`, `premium`, `smsjobs` and `fragment` namespaces
 are deliberately disabled and return `403 METHOD_DISABLED`. Coverage describes
 which RPCs have a server implementation, not complete behavioral parity with
 Telegram's production service.
 
-## What's next: multi-layer support
+## API layers
 
-Ferrite serves exactly layer 214 today. The next protocol milestone is one
-layer-223 implementation that also serves every published API layer back to 214,
-so clients on layers 214, 215, 216, 217, 218, 219, 220, 222, and 223 can share a
-deployment.
+Ferrite uses **layer 229** as its base and accepts exactly **150, 214–225, and
+227–229**. Other layer numbers, including 226, are rejected rather than rounded
+to a supported layer.
+
+Requests are upgraded through consecutive published layers before constructor-only
+handler dispatch. RPC results and pushed updates are converted to each recipient's
+negotiated layer. Clients using different supported layers can share a deployment.
+
+The schema catalog supplies the supported set and both conversion routes. See
+[API layer structure](docs/api-layers.md) for schema ownership, semantic converters,
+and the procedure for adding a layer.
 
 ## Deployment
 

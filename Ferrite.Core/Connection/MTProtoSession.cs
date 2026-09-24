@@ -5,6 +5,8 @@ using System.Buffers;
 using System.Net;
 using System.Security.Cryptography;
 using Ferrite.Crypto;
+using Ferrite.Core.Execution;
+using Ferrite.Data.Repositories;
 using Ferrite.Services.Sessions;
 using Ferrite.TL.mtproto;
 using Ferrite.Utils;
@@ -19,6 +21,8 @@ public class MTProtoSession : IMTProtoSession
     private readonly IMTProtoTime _time;
     private readonly ISessionService _sessionService;
     private readonly IRandomGenerator _random;
+    private readonly IClientLayerRepository _clientLayers;
+    private readonly ISessionOutbox _outbox;
     public MTProtoConnection? Connection { get; set; }
     public IPEndPoint? EndPoint { get; set; }
     private long _authKeyId;
@@ -37,10 +41,12 @@ public class MTProtoSession : IMTProtoSession
     private readonly Dictionary<long, MTProtoSentMessage> _sentMessages = new();
     private readonly Queue<long> _sentMessageOrder = new();
     private Dictionary<string, object> _sessionData = new();
+    public ConnectionLayerState ConnectionLayer { get; } = new();
 
     public MTProtoSession(IMTProtoService mtproto, ILogger log,
         IMTProtoTime time, ISessionService sessionService, IRandomGenerator random,
-        IMessageIdGenerator messageIds, IReceivedMessageIdRegistry receivedMessageIds)
+        IMessageIdGenerator messageIds, IReceivedMessageIdRegistry receivedMessageIds,
+        IClientLayerRepository clientLayers, ISessionOutbox outbox)
     {
         _mtproto = mtproto;
         _log = log;
@@ -49,6 +55,8 @@ public class MTProtoSession : IMTProtoSession
         _random = random;
         _messageIds = messageIds;
         _receivedMessageIds = receivedMessageIds;
+        _clientLayers = clientLayers;
+        _outbox = outbox;
     }
     
     public long AuthKeyId => _authKeyId;
@@ -83,6 +91,7 @@ public class MTProtoSession : IMTProtoSession
         if (authKey is { Length: 192 })
         {
             _authKey = authKey;
+            RestoreClientLayer();
         }
         else
         {
@@ -93,7 +102,15 @@ public class MTProtoSession : IMTProtoSession
         return _authKey != null;
     }
 
-    public bool TryResolvePermAuthKeyId() => TryGetPermAuthKeyId();
+    public bool TryResolvePermAuthKeyId()
+    {
+        bool resolved = TryGetPermAuthKeyId();
+        if (resolved)
+        {
+            RestoreClientLayer();
+        }
+        return resolved;
+    }
 
     private bool TryGetPermAuthKeyId()
     {
@@ -105,6 +122,18 @@ public class MTProtoSession : IMTProtoSession
             _log.Information($"Retrieved the permAuthKeyId: {_permAuthKeyId}");
         }
         return _permAuthKeyId != 0;
+    }
+
+    private void RestoreClientLayer()
+    {
+        long authKeyId = _permAuthKeyId != 0 ? _permAuthKeyId : _authKeyId;
+        using TL.baseLayer.dto.TLClientLayer? row =
+            _clientLayers.GetClientLayer(authKeyId);
+        if (row is { } clientLayer &&
+            SupportedLayers.Contains(clientLayer.AsClientLayer().ApiLayer))
+        {
+            ConnectionLayer.Resolve(clientLayer.AsClientLayer().ApiLayer);
+        }
     }
 
     public int GenerateQuickAck(Span<byte> messageSpan)
@@ -162,6 +191,7 @@ public class MTProtoSession : IMTProtoSession
 
     public bool MarkSentMessageAcknowledged(long messageId)
     {
+        _outbox.Acknowledge(DedupAuthKeyId, _sessionId, messageId);
         lock (_sentMessagesLock)
         {
             if (!_sentMessages.TryGetValue(messageId, out var message))
@@ -175,6 +205,43 @@ public class MTProtoSession : IMTProtoSession
             };
             return true;
         }
+    }
+
+    public void TrackOutgoing(Services.Transport.MTProtoMessage original,
+        Services.Transport.MTProtoMessage sent)
+    {
+        if (_authKeyId != 0 && sent.SessionId != 0 && IsResendable(sent))
+        {
+            _outbox.Track(DedupAuthKeyId, sent.SessionId, this, original, sent);
+        }
+    }
+
+    public void MarkOutgoingSent(Services.Transport.MTProtoMessage sent, long messageId)
+    {
+        if (_authKeyId != 0 && sent.SessionId != 0 && IsResendable(sent))
+        {
+            _outbox.MarkSent(DedupAuthKeyId, sent.SessionId, sent, messageId);
+        }
+    }
+
+    public IReadOnlyList<Services.Transport.MTProtoMessage> TakeUnacknowledged()
+    {
+        return _authKeyId == 0 || _sessionId == 0
+            ? Array.Empty<Services.Transport.MTProtoMessage>()
+            : _outbox.TakeFromOtherOwners(DedupAuthKeyId, _sessionId, this);
+    }
+
+    private static bool IsResendable(Services.Transport.MTProtoMessage message)
+    {
+        if (!message.IsContentRelated || message.Data is not { Length: >= 4 } data)
+        {
+            return false;
+        }
+
+        return message.MessageType == Services.Transport.MTProtoMessageType.Updates ||
+               message.MessageType == Services.Transport.MTProtoMessageType.Encrypted &&
+               message.IsResponse &&
+               BitConverter.ToInt32(data, 0) == TL.Constructors.mtproto_RpcResult;
     }
 
     public long NextMessageId(bool response) => _messageIds.NextMessageId(response);
@@ -194,7 +261,8 @@ public class MTProtoSession : IMTProtoSession
             RefreshServerSalt();
         }
         
-        if (authKeyId != 0)
+        if (authKeyId != 0 &&
+            ConnectionLayer.Value is ConnectionLayerResolution.Resolved)
         {
             if (Connection != null)
                 _sessionService.AddSession(authKeyId, _sessionId,
@@ -202,6 +270,9 @@ public class MTProtoSession : IMTProtoSession
         }
         return _serverSalt;
     }
+    public bool IsKnownSession(long sessionId) =>
+        _receivedMessageIds.ContainsSession(DedupAuthKeyId, sessionId);
+
     public bool IsValidMessageId(long sessionId, long messageId)
     {
         return TryValidateMessageId(sessionId, messageId, out _);

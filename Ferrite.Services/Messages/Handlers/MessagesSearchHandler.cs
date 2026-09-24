@@ -67,13 +67,20 @@ public sealed class MessagesSearchHandler
         };
         HistoryQuery query = new HistoryQuery(request.OffsetId, 0, request.AddOffset,
             request.Limit, 0, 0);
-        bool reactionTagged = request.Flags[3];
+        bool reactionTagged = request.Flags[3] && request.SavedReaction.Count > 0;
 
         if (reactionTagged)
         {
             return await BuildAsync(userId, target, [], query);
         }
 
+        if (!request.Flags[2] && request.Get_PeerView().Is(out InputPeerEmpty _))
+        {
+            List<MessageSnapshot> everywhere = await _search.SelectCommonBoxAsync(userId,
+                criteria);
+            return await _dialogs.BuildCommonSearchSliceAsync(userId,
+                TLPeer.PeerType.PeerUser, 0, everywhere, query, "Search");
+        }
         (string? error, List<MessageSnapshot> matched) = await _search.SelectPeerAsync(
             userId, target, criteria);
         if (error != null)

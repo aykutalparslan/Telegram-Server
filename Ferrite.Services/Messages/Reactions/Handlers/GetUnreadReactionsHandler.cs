@@ -160,6 +160,7 @@ public sealed class GetUnreadReactionsHandler
 
         return Ferrite.TL.baseLayer.messages.Messages.Builder()
             .MessagesProperty(messageVector)
+            .Topics(new Vector())
             .Chats(chatVector)
             .Users(userVector)
             .Build();

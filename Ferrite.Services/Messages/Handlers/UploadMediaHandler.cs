@@ -44,7 +44,7 @@ public sealed class UploadMediaHandler
     private static TLBytes ToCurrentUploadMediaRequest(TLBytes q)
     {
         var sent = new TL.layer67.messages.MessagesUploadMedia(q.AsSpan());
-        using var current = UploadMedia.Builder()
+        var current = UploadMedia.Builder()
             .Peer(sent.Peer)
             .Media(sent.Media)
             .Build();

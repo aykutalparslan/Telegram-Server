@@ -22,11 +22,11 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
 
     private readonly IGroupCallMediaPlane _media;
 
-    public EditGroupCallParticipantHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, UpdateFanout fanout,
+    public EditGroupCallParticipantHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository, UpdateFanout fanout,
         GroupCallChatLink chatLink, IUpdatesContextFactory updatesContexts,
         IMTProtoTime time, GroupCallVideoOptions videoOptions,
         GroupCallMediaSourceMap sourceMap, ILogger log, IGroupCallMediaPlane media)
-        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, fanout, chatLink, updatesContexts, time, videoOptions,
+        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, messageRepository, fanout, chatLink, updatesContexts, time, videoOptions,
             sourceMap, log)
     {
         _groupCallsRepository = groupCallsRepository;
@@ -45,7 +45,7 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
         bool? presentationPaused = null;
         var request = (EditGroupCallParticipant)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
         bool targetRead = TryReadTargetPeer(request.Get_ParticipantView(), out bool targetSelf,
             out long namedUserId);
         if (request.Flags[0])
@@ -71,6 +71,12 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
         if (request.Flags[5])
         {
             presentationPaused = request.PresentationPaused;
+        }
+
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
         }
 
         if (!callRead)
@@ -231,7 +237,7 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
     private async ValueTask<TLUpdatesResult> HandleAdminMutedAsync(EditContext context,
         bool muted)
     {
-        bool targetManages = await CanManageCallAsync(context.Access.Peer.Id,
+        bool targetManages = await CanManageCallAsync(context.Access,
             context.TargetUserId);
         if (targetManages)
         {
@@ -495,10 +501,10 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
         string producerMediaId = Encoding.UTF8.GetString(
             participant.AsGroupCallParticipantState().MediaId);
 
-        await Fanout.PushGroupCallUpdatesAsync(access.Peer.Id, access.CurrentUserId,
+        await PushToCallMembersAsync(access, callId, access.CurrentUserId,
             async memberId =>
             {
-                bool canManage = await CanManageCallAsync(access.Peer.Id, memberId);
+                bool canManage = await CanManageCallAsync(access, memberId);
                 GroupCallViewer viewer = await BuildViewerAsync(callId, memberId,
                     canManage);
                 string? viewerMediaId = await GetMediaIdAsync(callId, memberId);
@@ -512,7 +518,7 @@ public sealed class EditGroupCallParticipantHandler : GroupCallHandlerBase
             });
         if (videoStateChanged)
         {
-            await PushCallUpdateToOtherMembersAsync(call, access.Peer.Id,
+            await PushCallUpdateToOtherMembersAsync(call, access,
                 access.CurrentUserId, videoCount);
         }
     }

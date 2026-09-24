@@ -18,14 +18,14 @@ public ref struct VectorOfString
     public VectorOfString()
     {
         _buff = new byte[512];
-        SetConstructor(unchecked((int)0x1cb5c415));
+        SetConstructor(Vector.ConstructorId);
         SetCount(0);
         _position = 8;
         _offset = 8;
     }
     public VectorOfString(Span<byte> buffer)
     {
-        if (MemoryMarshal.Read<int>(buffer) != unchecked((int)0x1cb5c415))
+        if (MemoryMarshal.Read<int>(buffer) != Vector.ConstructorId)
         {
             throw new InvalidOperationException();
         }
@@ -48,7 +48,7 @@ public ref struct VectorOfString
 
     public static Span<byte> Read(Span<byte> data, int offset)
     {
-        if (MemoryMarshal.Read<int>(data[..4]) != unchecked((int)0x1cb5c415))
+        if (MemoryMarshal.Read<int>(data[..4]) != Vector.ConstructorId)
         {
             throw new InvalidOperationException();
         }
@@ -63,7 +63,7 @@ public ref struct VectorOfString
 
     public static int ReadSize(Span<byte> data, int offset)
     {
-        if (MemoryMarshal.Read<int>(data[offset..]) != unchecked((int)0x1cb5c415))
+        if (MemoryMarshal.Read<int>(data[offset..]) != Vector.ConstructorId)
         {
             throw new InvalidOperationException();
         }

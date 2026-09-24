@@ -35,6 +35,7 @@ STATE = Path(os.environ.get(
 SESSION = STATE / "session.json"
 PACKAGE = "org.telegram.messenger.beta"
 COMPONENT = f"{PACKAGE}/org.telegram.messenger.DefaultIcon"
+EXIT_EVENT = re.compile(r"\b(am_anr|am_crash|am_kill)\s*: (\[.*\])")
 CONFIG_NAME = "ferrite-conformance.properties"
 LOGIN_PERMISSIONS = (
     "android.permission.POST_NOTIFICATIONS",
@@ -53,6 +54,7 @@ PHONE_MIME = "vnd.android.cursor.item/phone_v2"
 GUEST_BRIDGE_PORT = 8790
 # The bracket keeps grep from counting its own process.
 DEXOPT_PROBE = "ps -A | grep -c '[d]ex2oat'"
+APP_NAP = ("qemu-system-aarch64", "NSAppSleepDisabled")
 FIRST_CONSOLE_PORT = 5570
 FIRST_BRIDGE_PORT = 8791
 FIRST_PHONE = 15550000001
@@ -136,11 +138,11 @@ def sha256(path: Path) -> str:
 def android_inputs() -> dict[str, Any]:
     values = read_pin()
     patterns = {
-        "LAYER": r"214",
+        "LAYER": r"[0-9]+",
         "ANDROID_COMMIT": r"[0-9a-f]{40}",
         "ANDROID_PATCH_SHA256": r"[0-9a-f]{64}",
         "ANDROID_APK_SHA256": r"[0-9a-f]{64}",
-        "ANDROID_EMULATOR_API": r"35",
+        "ANDROID_EMULATOR_API": r"[0-9]+",
         "ANDROID_EMULATOR_TAG": r"[a-z0-9_]+",
         "ANDROID_EMULATOR_ABI": r"[A-Za-z0-9_-]+",
         "ANDROID_EMULATOR_DEVICE": r"[A-Za-z0-9_-]+",
@@ -365,8 +367,27 @@ def bridge_request(instance: Instance, token: str, payload: dict[str, Any],
     return value
 
 
-def await_state(instance: Instance, token: str, expected: str,
-                timeout: float = 600.0) -> dict[str, Any]:
+def application_exit(tools: dict[str, Path],
+                     instance: Instance) -> str | None:
+    try:
+        probe = adb(tools, instance, "shell",
+                    f"pidof {PACKAGE} || echo absent", check=False, timeout=30)
+    except LaunchError:
+        return None
+    if probe.returncode or probe.stdout.strip() != "absent":
+        return None
+    events = adb(tools, instance, "logcat", "-b", "events", "-d",
+                 check=False, timeout=30).stdout
+    reasons = [
+        match.group(1) + " " + match.group(2)
+        for match in EXIT_EVENT.finditer(events)
+        if f",{PACKAGE}," in match.group(2)
+    ]
+    return "; ".join(reasons) or "no exit event was logged"
+
+
+def await_state(tools: dict[str, Path], instance: Instance, token: str,
+                expected: str, timeout: float = 600.0) -> dict[str, Any]:
     deadline = time.monotonic() + timeout
     last: Any = "bridge did not answer"
     while time.monotonic() < deadline:
@@ -382,6 +403,11 @@ def await_state(instance: Instance, token: str, expected: str,
         except (BridgeUnavailable, ConnectionError, OSError,
                 json.JSONDecodeError) as error:
             last = str(error)
+            reason = application_exit(tools, instance)
+            if reason is not None:
+                raise LaunchError(
+                    f"{instance.instance_id}: application process exited "
+                    f"while waiting for {expected}: {reason}") from error
         time.sleep(2)
     raise LaunchError(
         f"{instance.instance_id}: never reached {expected}; last={last}")
@@ -442,6 +468,19 @@ def wait_for_boot(tools: dict[str, Path], instance: Instance,
                 return
         time.sleep(3)
     raise LaunchError(f"{instance.instance_id}: emulator never completed boot")
+
+
+@contextlib.contextmanager
+def app_nap_disabled(headless: bool):
+    if headless or sys.platform != "darwin" or run(
+            ["defaults", "read", *APP_NAP], check=False).returncode == 0:
+        yield
+        return
+    run(["defaults", "write", *APP_NAP, "-bool", "YES"])
+    try:
+        yield
+    finally:
+        run(["defaults", "delete", *APP_NAP], check=False)
 
 
 def quiesce_packages(tools: dict[str, Path], instance: Instance,
@@ -672,19 +711,20 @@ def command_start(count: int, token: str, ferrite_port: int,
             ]
             if headless:
                 command += ["-no-window", "-gpu", "swiftshader_indirect"]
-            process = subprocess.Popen(
-                command,
-                stdout=stream,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL,
-                start_new_session=True,
-                env=sdk_environment(tools["sdk"]),
-            )
-            stream.close()
-            instance.process_pid = process.pid
-            value["instances"] = [asdict(item) for item in instances]
-            write_session(value)
-            wait_for_boot(tools, instance)
+            with app_nap_disabled(headless):
+                process = subprocess.Popen(
+                    command,
+                    stdout=stream,
+                    stderr=subprocess.STDOUT,
+                    stdin=subprocess.DEVNULL,
+                    start_new_session=True,
+                    env=sdk_environment(tools["sdk"]),
+                )
+                stream.close()
+                instance.process_pid = process.pid
+                value["instances"] = [asdict(item) for item in instances]
+                write_session(value)
+                wait_for_boot(tools, instance)
             quiesce_packages(tools, instance)
             adb(tools, instance, "uninstall", PACKAGE, check=False)
             adb(tools, instance, "install", "-t", "-g", str(APK), timeout=900)
@@ -697,7 +737,7 @@ def command_start(count: int, token: str, ferrite_port: int,
                 seen = len(issued_codes(container))
                 adb(tools, instance, "shell", "am", "start", "-W", "-n",
                     COMPONENT, timeout=180)
-                await_state(instance, token, "AWAITING_CODE")
+                await_state(tools, instance, token, "AWAITING_CODE")
                 code = await_code(container, seen, instance.phone)
                 bridge_request(instance, token, {
                     "type": "deliver-code",
@@ -705,7 +745,7 @@ def command_start(count: int, token: str, ferrite_port: int,
                 }, timeout=120)
 
         statuses = {
-            item.instance_id: await_state(item, token, "READY")
+            item.instance_id: await_state(tools, item, token, "READY")
             for item in instances
         }
         value["status"] = "running"

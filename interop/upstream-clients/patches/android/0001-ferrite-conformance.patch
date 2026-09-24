@@ -1,22 +1,9 @@
-diff --git a/TMessagesProj/build.gradle b/TMessagesProj/build.gradle
-index a1d28146360ab82814a6d9d308bd20bf7c48b991..ff42d0d25c7e67c65415d8be27f91b2efb206bb2 100644
---- a/TMessagesProj/build.gradle
-+++ b/TMessagesProj/build.gradle
-@@ -74,7 +74,7 @@ def isWindows = String.valueOf(DefaultNativePlatform.currentOperatingSystem.toFa
- android {
-     compileSdkVersion 35
-     buildToolsVersion '35.0.0'
--    ndkVersion "21.4.7075529" // 26.3.11579264
-+    ndkVersion "21.4.7075529"
-
-     sourceSets.main.jniLibs.srcDirs = ['./jni/']
-
 diff --git a/TMessagesProj/jni/CMakeLists.txt b/TMessagesProj/jni/CMakeLists.txt
-index aceea8998a8fd62577a9c04e32f3b78ddf5219ac..b19de175faa5e2020bee76e9c8f261dcdccb9c1c 100644
+index 836ba83c8f47559b9e1eebc8bd3d379172c22ff9..0f8e72e3e4180e0dd08f89d72e7a27c51705a6d3 100644
 --- a/TMessagesProj/jni/CMakeLists.txt
 +++ b/TMessagesProj/jni/CMakeLists.txt
 @@ -1,5 +1,26 @@
- cmake_minimum_required(VERSION 3.10.2)
+ cmake_minimum_required(VERSION 3.16)
 
 +# The GNU binutils archiver shipped with this NDK does not run on current macOS
 +# hosts. The LLVM archiver from the same NDK writes identical archives.
@@ -40,9 +27,9 @@ index aceea8998a8fd62577a9c04e32f3b78ddf5219ac..b19de175faa5e2020bee76e9c8f261dc
 +    -Wno-builtin-macro-redefined -D__FILE__=__FILE_NAME__)
 +
  set(CMAKE_CXX_FLAGS "-std=c++14 -DANDROID -g")
- set(CMAKE_C_FLAGS "-w -std=c11 -DANDROID -D_LARGEFILE_SOURCE=1 -g")
+ set(CMAKE_C_FLAGS "-w -std=c11 -DANDROID -D_LARGEFILE_SOURCE=1 -g -Wno-error=implicit-function-declaration")
  set(CMAKE_ASM_FLAGS "${CFLAGS} -x assembler-with-cpp")
-@@ -353,6 +374,11 @@ add_library(breakpad STATIC
+@@ -128,6 +149,11 @@ add_library(breakpad STATIC
          third_party/breakpad/src/common/linux/safe_readlink.cc)
  set_target_properties(breakpad PROPERTIES ANDROID_ARM_MODE arm)
  set_property(SOURCE third_party/breakpad/src/common/android/breakpad_getcontext.S PROPERTY LANGUAGE C)
@@ -55,7 +42,7 @@ index aceea8998a8fd62577a9c04e32f3b78ddf5219ac..b19de175faa5e2020bee76e9c8f261dc
          third_party/breakpad/src/common/android/include
          third_party/breakpad/src)
 diff --git a/TMessagesProj/jni/tgnet/ConnectionsManager.cpp b/TMessagesProj/jni/tgnet/ConnectionsManager.cpp
-index f543d9f7bcd71ae4e80f396d1dd2c0e00e689aa0..215b94ab22c8d9a520999d112c4d90a5f2fabf8b 100644
+index 32d590e852443031cb299ac3bb5057879682ac2b..ea9ecb629875a83e1d7eb8abdfd74f6e20a46909 100644
 --- a/TMessagesProj/jni/tgnet/ConnectionsManager.cpp
 +++ b/TMessagesProj/jni/tgnet/ConnectionsManager.cpp
 @@ -13,6 +13,7 @@
@@ -66,7 +53,7 @@ index f543d9f7bcd71ae4e80f396d1dd2c0e00e689aa0..215b94ab22c8d9a520999d112c4d90a5
  #include <memory.h>
  #include <openssl/rand.h>
  #include <zlib.h>
-@@ -1806,8 +1807,64 @@ uint8_t ConnectionsManager::getIpStratagy() {
+@@ -1811,8 +1812,64 @@ uint8_t ConnectionsManager::getIpStratagy() {
      return ipStrategy;
  }
 
@@ -132,10 +119,10 @@ index f543d9f7bcd71ae4e80f396d1dd2c0e00e689aa0..215b94ab22c8d9a520999d112c4d90a5
          if (datacenters.find(1) == datacenters.end()) {
              datacenter = new Datacenter(instanceNum, 1);
 diff --git a/TMessagesProj/jni/tgnet/ConnectionsManager.h b/TMessagesProj/jni/tgnet/ConnectionsManager.h
-index 3214a53a7514461942745a28d9afb1bb894e17a2..4b9110090cdbfcf62842aaf1b159de2e4157f19c 100644
+index d5ab4bdd66331b21f69fd8421051b5590a9d8dc4..f37fb0776f40b98f184eb6c370e1bd38cab4f654 100644
 --- a/TMessagesProj/jni/tgnet/ConnectionsManager.h
 +++ b/TMessagesProj/jni/tgnet/ConnectionsManager.h
-@@ -90,6 +90,7 @@ private:
+@@ -92,6 +92,7 @@ private:
      static void *ThreadProc(void *data);
 
      void initDatacenters();
@@ -490,12 +477,13 @@ index 0000000000000000000000000000000000000000..ab3b921a6aea3324a7808d9a1552bd92
 +}
 diff --git a/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceLogin.java b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceLogin.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..a3e73534293ba226be09f7e041f699adbd563860
+index 0000000000000000000000000000000000000000..ff6ecb30b313950e5b6a2e3dc94d3702cf1b837f
 --- /dev/null
 +++ b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceLogin.java
-@@ -0,0 +1,142 @@
+@@ -0,0 +1,295 @@
 +package org.telegram.conformance;
 +
++import org.telegram.messenger.MessagesController;
 +import org.telegram.messenger.UserConfig;
 +import org.telegram.tgnet.TLRPC;
 +import org.telegram.ui.ActionBar.BaseFragment;
@@ -512,6 +500,8 @@ index 0000000000000000000000000000000000000000..a3e73534293ba226be09f7e041f699ad
 +    private static final long POLL_MS = 250L;
 +
 +    private static volatile LoginActivity fragment;
++
++    private static volatile LoginActivity additional;
 +
 +    private ConformanceLogin() {
 +    }
@@ -591,6 +581,156 @@ index 0000000000000000000000000000000000000000..a3e73534293ba226be09f7e041f699ad
 +        return login == null ? -1 : login.ferriteConformanceCurrentView();
 +    }
 +
++    /**
++     * Presents a login screen for the first account slot the application has
++     * left, which is what its own drawer does when a user adds an account. The
++     * slot the provisioned user occupies is never touched, so the rows that
++     * come after this one still find the application signed in as itself.
++     */
++    static int presentAdditional(long timeoutMs) throws InterruptedException {
++        LaunchActivity activity = awaitLauncher(timeoutMs);
++        final int[] account = new int[]{-1};
++        final LoginActivity[] slot = new LoginActivity[1];
++        ConformanceProvisioner.runOnUiThreadAndWait(() -> {
++            for (int index = 0; index < UserConfig.MAX_ACCOUNT_COUNT; index++) {
++                if (!UserConfig.getInstance(index).isClientActivated()) {
++                    account[0] = index;
++                    break;
++                }
++            }
++            if (account[0] < 0) {
++                return;
++            }
++            LoginActivity login = new LoginActivity(account[0]);
++            activity.presentFragment(login);
++            slot[0] = login;
++        });
++        if (slot[0] == null) {
++            throw new IllegalStateException(
++                    "the application has no free account slot to sign in with");
++        }
++        additional = slot[0];
++        return account[0];
++    }
++
++    static void submitAdditionalPhone(String digits) throws InterruptedException {
++        LoginActivity login = additional();
++        ConformanceProvisioner.runOnUiThreadAndWait(
++                () -> login.ferriteConformanceSubmitPhone(digits));
++    }
++
++    static void submitAdditionalCode(String code) throws InterruptedException {
++        LoginActivity login = additional();
++        ConformanceProvisioner.runOnUiThreadAndWait(
++                () -> login.ferriteConformanceSubmitCode(code));
++    }
++
++    static void submitPassword(String password) throws InterruptedException {
++        LoginActivity login = additional();
++        ConformanceProvisioner.runOnUiThreadAndWait(
++                () -> login.ferriteConformanceSubmitPassword(password));
++    }
++
++    static void forgotPassword() throws InterruptedException {
++        LoginActivity login = additional();
++        ConformanceProvisioner.runOnUiThreadAndWait(
++                login::ferriteConformanceForgotPassword);
++    }
++
++    static void submitRecoveryCode(String code) throws InterruptedException {
++        LoginActivity login = additional();
++        ConformanceProvisioner.runOnUiThreadAndWait(
++                () -> login.ferriteConformanceSubmitRecoveryCode(code));
++    }
++
++    static void submitNewPassword(String password) throws InterruptedException {
++        LoginActivity login = additional();
++        ConformanceProvisioner.runOnUiThreadAndWait(
++                () -> login.ferriteConformanceSubmitNewPassword(password));
++    }
++
++    static void submitPasswordHint(String hint) throws InterruptedException {
++        LoginActivity login = additional();
++        ConformanceProvisioner.runOnUiThreadAndWait(
++                () -> login.ferriteConformanceSubmitPasswordHint(hint));
++    }
++
++    /** Presses the alert's own continue button, once it is on screen. */
++    static boolean awaitConfirmedDialog(long timeoutMs) throws InterruptedException {
++        LoginActivity login = additional();
++        return await(timeoutMs, login::ferriteConformanceConfirmDialog);
++    }
++
++    static boolean awaitAdditionalPhonePage(long timeoutMs) throws InterruptedException {
++        return await(timeoutMs, () -> additional().ferriteConformanceOnPhonePage());
++    }
++
++    static boolean awaitAdditionalCodePage(long timeoutMs) throws InterruptedException {
++        return await(timeoutMs, () -> additional().ferriteConformanceOnCodePage());
++    }
++
++    static boolean awaitPasswordPage(long timeoutMs) throws InterruptedException {
++        return await(timeoutMs, () -> additional().ferriteConformanceOnPasswordPage());
++    }
++
++    static boolean awaitRecoverPage(long timeoutMs) throws InterruptedException {
++        return await(timeoutMs, () -> additional().ferriteConformanceOnRecoverPage());
++    }
++
++    static boolean awaitNewPasswordPage(long timeoutMs) throws InterruptedException {
++        return await(timeoutMs, () -> additional().ferriteConformanceOnNewPasswordPage());
++    }
++
++    static boolean awaitPasswordHintPage(long timeoutMs) throws InterruptedException {
++        return await(timeoutMs, () -> additional().ferriteConformanceOnPasswordHintPage());
++    }
++
++    static boolean awaitAdditionalAuthorized(int account, long timeoutMs)
++            throws InterruptedException {
++        return await(timeoutMs, () -> isAuthorized(account));
++    }
++
++    static boolean isAuthorized(int account) {
++        UserConfig config = UserConfig.getInstance(account);
++        return config.isClientActivated() && config.getCurrentUser() != null;
++    }
++
++    static TLRPC.User currentUser(int account) {
++        return UserConfig.getInstance(account).getCurrentUser();
++    }
++
++    static int additionalPage() {
++        LoginActivity login = additional;
++        return login == null ? -1 : login.ferriteConformanceCurrentView();
++    }
++
++    /**
++     * Signs the extra slot out through the application's own logout, so the
++     * next row finds exactly the accounts provisioning left behind.
++     */
++    static void logOutAdditional(int account) throws InterruptedException {
++        LoginActivity login = additional;
++        ConformanceProvisioner.runOnUiThreadAndWait(() -> {
++            if (UserConfig.getInstance(account).isClientActivated()) {
++                MessagesController.getInstance(account).performLogout(1);
++            } else if (login != null) {
++                // A login that never signed in leaves its screen on top of the
++                // provisioned account, where the next row would drive it.
++                login.finishFragment();
++            }
++        });
++        additional = null;
++    }
++
++    private static LoginActivity additional() {
++        LoginActivity login = additional;
++        if (login == null) {
++            throw new IllegalStateException(
++                    "no additional login fragment has been presented");
++        }
++        return login;
++    }
++
 +    private static LoginActivity current() {
 +        LoginActivity login = fragment;
 +        if (login == null) {
@@ -638,17 +778,16 @@ index 0000000000000000000000000000000000000000..a3e73534293ba226be09f7e041f699ad
 +}
 diff --git a/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceProvisioner.java b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceProvisioner.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..e952e544045f46400fa7f8931e30fd65b84cbf92
+index 0000000000000000000000000000000000000000..312ab895cfcc321c983406c993dc88c30cbcaa90
 --- /dev/null
 +++ b/TMessagesProj/src/main/java/org/telegram/conformance/ConformanceProvisioner.java
-@@ -0,0 +1,298 @@
+@@ -0,0 +1,267 @@
 +package org.telegram.conformance;
 +
 +import org.telegram.messenger.AndroidUtilities;
 +import org.telegram.messenger.ContactsController;
 +import org.telegram.messenger.MessagesController;
 +import org.telegram.messenger.UserConfig;
-+import org.telegram.tgnet.TLObject;
 +import org.telegram.tgnet.TLRPC;
 +
 +import java.util.ArrayList;
@@ -836,7 +975,6 @@ index 0000000000000000000000000000000000000000..e952e544045f46400fa7f8931e30fd65
 +        long deadline = System.currentTimeMillis() + CONTACT_TIMEOUT_MS;
 +        forceImportContacts();
 +        awaitContacts(config, deadline);
-+        awaitLocalContacts(config, deadline);
 +    }
 +
 +    private static void forceImportContacts() {
@@ -845,7 +983,8 @@ index 0000000000000000000000000000000000000000..e952e544045f46400fa7f8931e30fd65
 +
 +    private static void awaitContacts(ConformanceConfig config, long deadline) throws Exception {
 +        while (System.currentTimeMillis() < deadline) {
-+            Map<String, Long> resolved = serverContacts(config);
++            Map<String, Long> resolved = new LinkedHashMap<>();
++            runOnUiThreadAndWait(() -> resolved.putAll(localContacts(config)));
 +            if (resolved.size() == config.peers.size()) {
 +                synchronized (ConformanceProvisioner.class) {
 +                    peerUserIds.clear();
@@ -855,54 +994,24 @@ index 0000000000000000000000000000000000000000..e952e544045f46400fa7f8931e30fd65
 +            }
 +            Thread.sleep(2000L);
 +            forceImportContacts();
-+        }
-+        throw new IllegalStateException("peer contacts never appeared in contacts.getContacts");
-+    }
-+
-+    /**
-+     * Waits until the application's own contact list holds every peer, so the
-+     * witness is the client's state and not only the server's answer.
-+     */
-+    private static void awaitLocalContacts(ConformanceConfig config, long deadline) throws Exception {
-+        while (System.currentTimeMillis() < deadline) {
-+            if (localContactPhones().size() >= config.peers.size()) {
-+                return;
-+            }
 +            runOnUiThreadAndWait(() ->
 +                    ContactsController.getInstance(ACCOUNT).loadContacts(false, 0));
-+            Thread.sleep(2000L);
 +        }
++        java.util.List<String> observed = new ArrayList<>();
++        runOnUiThreadAndWait(() -> observed.addAll(localContacts(config).keySet()));
 +        throw new IllegalStateException(
 +                "peer contacts never reached the application's own contact list; observed "
-+                        + localContactPhones());
++                        + observed);
 +    }
 +
-+    private static java.util.List<String> localContactPhones() {
-+        java.util.List<String> phones = new ArrayList<>();
++    /** Reads the peers the application's own contact list holds. */
++    private static Map<String, Long> localContacts(ConformanceConfig config) {
++        Map<String, Long> resolved = new LinkedHashMap<>();
 +        for (TLRPC.TL_contact contact : ContactsController.getInstance(ACCOUNT).contacts) {
 +            TLRPC.User user = MessagesController.getInstance(ACCOUNT).getUser(contact.user_id);
-+            if (user != null && user.phone != null) {
-+                phones.add(user.phone);
++            if (user == null) {
++                continue;
 +            }
-+        }
-+        return phones;
-+    }
-+
-+    /**
-+     * Reads the contact list back from Ferrite rather than from local state, so
-+     * the witness is the server's view of this instance's contacts.
-+     */
-+    private static Map<String, Long> serverContacts(ConformanceConfig config) throws Exception {
-+        TLRPC.TL_contacts_getContacts request = new TLRPC.TL_contacts_getContacts();
-+        request.hash = 0;
-+        TLObject response = ConformanceRpc.invoke(
-+                ACCOUNT, request, ConformanceRpc.AUTHORIZED_FLAGS, REQUEST_TIMEOUT_MS);
-+        Map<String, Long> resolved = new LinkedHashMap<>();
-+        if (!(response instanceof TLRPC.TL_contacts_contacts)) {
-+            return resolved;
-+        }
-+        TLRPC.TL_contacts_contacts contacts = (TLRPC.TL_contacts_contacts) response;
-+        for (TLRPC.User user : contacts.users) {
 +            for (String peer : config.peers) {
 +                if (samePhone(user.phone, peer)) {
 +                    resolved.put(peer, user.id);
@@ -1024,10 +1133,10 @@ index 0000000000000000000000000000000000000000..28727a1da4552f7ec64bf38bf4115797
 +    }
 +}
 diff --git a/TMessagesProj/src/main/java/org/telegram/messenger/ApplicationLoader.java b/TMessagesProj/src/main/java/org/telegram/messenger/ApplicationLoader.java
-index 8951a4039f2863d0d66c01ee66c5710c14b87c6a..07a53e2c18a82ee20d7fc3dc1f05f16a0a8575cb 100644
+index dc63e5e28b7d17b373b1bfd57d81fc8cb668e8bd..4e8f761f67dc35ae45c4ef1bed1f754b447969f5 100644
 --- a/TMessagesProj/src/main/java/org/telegram/messenger/ApplicationLoader.java
 +++ b/TMessagesProj/src/main/java/org/telegram/messenger/ApplicationLoader.java
-@@ -279,6 +279,7 @@ public class ApplicationLoader extends Application {
+@@ -272,6 +272,7 @@ public class ApplicationLoader extends Application {
              DownloadController.getInstance(a);
          }
          BillingController.getInstance().startConnection();
@@ -1035,7 +1144,7 @@ index 8951a4039f2863d0d66c01ee66c5710c14b87c6a..07a53e2c18a82ee20d7fc3dc1f05f16a
      }
 
      public ApplicationLoader() {
-@@ -325,6 +326,12 @@ public class ApplicationLoader extends Application {
+@@ -322,6 +323,12 @@ public class ApplicationLoader extends Application {
              applicationContext = getApplicationContext();
          }
 
@@ -1046,13 +1155,13 @@ index 8951a4039f2863d0d66c01ee66c5710c14b87c6a..07a53e2c18a82ee20d7fc3dc1f05f16a
 +        }
 +
          NativeLoader.initNativeLibs(ApplicationLoader.applicationContext);
+
          try {
-             ConnectionsManager.native_setJava(false);
 diff --git a/TMessagesProj/src/main/java/org/telegram/ui/LoginActivity.java b/TMessagesProj/src/main/java/org/telegram/ui/LoginActivity.java
-index c84d1613e543448b19e412993b6414fa828b34fc..ea2d12f4d574235b3cce8abfa6c75511e50b281b 100644
+index b09347dc6d516d419c6bc5cc36cccae7bba77376..26f0c8c567640dfbb56130d95b3045868b2cdbf7 100644
 --- a/TMessagesProj/src/main/java/org/telegram/ui/LoginActivity.java
 +++ b/TMessagesProj/src/main/java/org/telegram/ui/LoginActivity.java
-@@ -1728,6 +1728,64 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
+@@ -1683,6 +1683,134 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
          needFinishActivity(afterSignup, res.setup_password_required, res.otherwise_relogin_days);
      }
 
@@ -1112,6 +1221,76 @@ index c84d1613e543448b19e412993b6414fa828b34fc..ea2d12f4d574235b3cce8abfa6c75511
 +        view.firstNameField.setText(firstName);
 +        view.lastNameField.setText(lastName);
 +        view.onNextPressed(null);
++    }
++
++    public boolean ferriteConformanceOnPasswordPage() {
++        return currentViewNum == VIEW_PASSWORD && views[VIEW_PASSWORD] != null;
++    }
++
++    public boolean ferriteConformanceOnRecoverPage() {
++        return currentViewNum == VIEW_RECOVER && views[VIEW_RECOVER] != null;
++    }
++
++    public boolean ferriteConformanceOnNewPasswordPage() {
++        return currentViewNum == VIEW_NEW_PASSWORD_STAGE_1
++                && views[VIEW_NEW_PASSWORD_STAGE_1] != null;
++    }
++
++    public boolean ferriteConformanceOnPasswordHintPage() {
++        return currentViewNum == VIEW_NEW_PASSWORD_STAGE_2
++                && views[VIEW_NEW_PASSWORD_STAGE_2] != null;
++    }
++
++    public void ferriteConformanceSubmitPassword(String password) {
++        LoginActivityPasswordView view = (LoginActivityPasswordView) views[VIEW_PASSWORD];
++        view.codeField.setText(password);
++        view.onNextPressed(null);
++    }
++
++    /* The screen's own "forgot password" button, which is the only thing that
++       asks for a recovery code. */
++    public void ferriteConformanceForgotPassword() {
++        LoginActivityPasswordView view = (LoginActivityPasswordView) views[VIEW_PASSWORD];
++        view.cancelButton.performClick();
++    }
++
++    public void ferriteConformanceSubmitRecoveryCode(String code) {
++        LoginActivityRecoverView view = (LoginActivityRecoverView) views[VIEW_RECOVER];
++        view.codeFieldContainer.setCode(code);
++        view.onNextPressed(null);
++    }
++
++    /* Stage one holds the new password twice, the way a user retypes it. */
++    public void ferriteConformanceSubmitNewPassword(String password) {
++        LoginActivityNewPasswordView view =
++                (LoginActivityNewPasswordView) views[VIEW_NEW_PASSWORD_STAGE_1];
++        for (EditTextBoldCursor field : view.codeField) {
++            field.setText(password);
++        }
++        view.onNextPressed(null);
++    }
++
++    public void ferriteConformanceSubmitPasswordHint(String hint) {
++        LoginActivityNewPasswordView view =
++                (LoginActivityNewPasswordView) views[VIEW_NEW_PASSWORD_STAGE_2];
++        view.codeField[0].setText(hint);
++        view.onNextPressed(null);
++    }
++
++    /* Two steps of the recovery flow continue only when the user acknowledges
++       an alert, so the conformance run presses the same button they would. */
++    public boolean ferriteConformanceConfirmDialog() {
++        Dialog dialog = visibleDialog;
++        if (!(dialog instanceof AlertDialog)) {
++            return false;
++        }
++        View button = ((AlertDialog) dialog).getButton(
++                android.content.DialogInterface.BUTTON_POSITIVE);
++        if (button == null) {
++            return false;
++        }
++        button.performClick();
++        return true;
 +    }
 +
      private void fillNextCodeParams(Bundle params, TL_account.sentEmailCode res) {

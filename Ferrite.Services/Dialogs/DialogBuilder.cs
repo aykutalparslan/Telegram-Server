@@ -198,7 +198,7 @@ public sealed class DialogBuilder
         {
             relatedUserIds.Add(peerId);
         }
-        else
+        else if (peerId > 0)
         {
             relatedChatIds.Add(peerId);
         }
@@ -729,7 +729,7 @@ public sealed class DialogBuilder
         _fanout.AppendUsers(viewerUserId, ref users, userIds);
         var chats = BuildVector(chatBytes);
         return Ferrite.TL.baseLayer.messages.Messages.Builder()
-            .MessagesProperty(messages).Chats(chats).Users(users)
+            .MessagesProperty(messages).Topics(new Vector()).Chats(chats).Users(users)
             .Build();
     }
 
@@ -737,7 +737,8 @@ public sealed class DialogBuilder
         List<byte[]> messageBytes, IEnumerable<long> userIds,
         IReadOnlyCollection<byte[]> chatBytes, int? offsetIdOffset = null)
     {
-        var messages = BuildVector(messageBytes);
+        var messages = BuildVector(messageBytes.Select(value =>
+            MessageRows.StampOutgoingForViewer(value, viewerUserId)));
         var users = new Vector();
         _fanout.AppendUsers(viewerUserId, ref users, userIds);
         var chats = BuildVector(chatBytes);
@@ -771,7 +772,8 @@ public sealed class DialogBuilder
         {
             builder = builder.SearchFlood(searchFlood);
         }
-        return builder.Messages(messages).Chats(chats).Users(users).Build();
+        return builder.Messages(messages).Topics(new Vector()).Chats(chats)
+            .Users(users).Build();
     }
 
     private static Vector BuildVector(IEnumerable<byte[]> values)
@@ -903,7 +905,7 @@ public sealed class DialogBuilder
         var builder = Dialog.Builder().Peer(peer.AsSpan()).TopMessage(topMessageId)
             .ReadInboxMaxId(state.ReadInbox).ReadOutboxMaxId(state.ReadOutbox)
             .UnreadCount(state.Unread).UnreadMentionsCount(state.UnreadMentions)
-            .UnreadReactionsCount(unreadReactionsCount)
+            .UnreadReactionsCount(unreadReactionsCount).UnreadPollVotesCount(0)
             .NotifySettings(notifySettings.ToReadOnlySpan());
         if (peerKey.Type == TLPeer.PeerType.PeerChannel) builder = builder.Pts(channelPts);
         if (state.Pinned) builder = builder.Pinned(true);
@@ -956,8 +958,11 @@ public sealed class DialogBuilder
     private static long ResolveChannelPostSenderId(Span<byte> messageSpan)
     {
         var message = (Message)messageSpan;
-        if (message.Constructor != Constructors.baseLayer_Message) return 0;
-        return message.Get_FromIdView().Is(out PeerUser user) ? user.UserId : 0;
+        if (message.Constructor == Constructors.baseLayer_Message)
+            return message.Get_FromIdView().Is(out PeerUser sender) ? sender.UserId : 0;
+        var service = (MessageService)messageSpan;
+        if (service.Constructor != Constructors.baseLayer_MessageService) return 0;
+        return service.Get_FromIdView().Is(out PeerUser author) ? author.UserId : 0;
     }
 
     private static bool IsActiveParticipant(TLChatParticipantInfo participant)

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
+using System.Text;
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
 using Ferrite.Services.Calls.E2E;
@@ -16,6 +17,8 @@ namespace Ferrite.Services.Phone.Handlers;
 public sealed class CreateConferenceCallHandler : ConferenceCallHandlerBase
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
+
+    private const int SlugAttempts = 8;
 
     private readonly IdAllocators _ids;
     private readonly IGroupCallMediaPlane _media;
@@ -75,9 +78,10 @@ public sealed class CreateConferenceCallHandler : ConferenceCallHandlerBase
         }
 
         int now = Now();
+        string slug = await AllocateSlugAsync();
         GroupCallCreateResult created;
         using (TLDto.TLGroupCallState row = BuildConferenceRow(callId, accessHash, userId,
-                   randomId, now))
+                   randomId, now, slug))
         {
             created = await _groupCallsRepository
                 .TryCreateConferenceCallAsync(row);
@@ -99,6 +103,7 @@ public sealed class CreateConferenceCallHandler : ConferenceCallHandlerBase
         }
 
         using TLDto.TLGroupCallState call = created.Call!.Value;
+        await RegisterSlugAsync(callId, slug, userId, now);
         if (!join)
         {
             GroupCallViewer creatorViewer = await BuildViewerAsync(callId, userId,
@@ -128,8 +133,43 @@ public sealed class CreateConferenceCallHandler : ConferenceCallHandlerBase
     private static byte[] ReadParamsJson(DataJSONView view) =>
         view.Is(out DataJSON json) ? json.Data.ToArray() : Array.Empty<byte>();
 
+    private async ValueTask<string> AllocateSlugAsync()
+    {
+        for (int attempt = 0; attempt < SlugAttempts; attempt++)
+        {
+            string candidate = GroupCallInviteLinks.GenerateHash();
+            using TLDto.TLGroupCallInvite? existing = await _groupCallsRepository
+                .GetInviteByHashAsync(candidate);
+            if (existing == null)
+            {
+                return candidate;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "Could not allocate a unique conference call slug.");
+    }
+
+    private async ValueTask RegisterSlugAsync(long callId, string slug, long creatorUserId,
+        int now)
+    {
+        using TLDto.TLGroupCallInvite invite = TLDto.GroupCallInvite.Builder()
+            .CallId(callId)
+            .Hash(Encoding.UTF8.GetBytes(slug))
+            .Generation(1)
+            .CreatorUserId(creatorUserId)
+            .Date(now)
+            .CanSelfUnmute(true)
+            .Build();
+        if (!await _groupCallsRepository.PutInviteAsync(invite))
+        {
+            Log.Warning($"📞 createConferenceCall could not register the slug for " +
+                        $"call:{callId} creator:{creatorUserId}");
+        }
+    }
+
     private static TLDto.TLGroupCallState BuildConferenceRow(long callId, long accessHash,
-        long creatorUserId, int randomId, int now) =>
+        long creatorUserId, int randomId, int now, string slug) =>
         TLDto.GroupCallState.Builder()
             .Id(callId)
             .AccessHash(accessHash)
@@ -145,6 +185,7 @@ public sealed class CreateConferenceCallHandler : ConferenceCallHandlerBase
             .InviteGeneration(1)
             .MediaEpoch(1)
             .Conference(true)
+            .InviteSlug(Encoding.UTF8.GetBytes(slug))
             .Build();
 
     private async Task ReleaseRoomAsync(long callId)

@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Ferrite.Crypto;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Auth;
 using Ferrite.Services.Gateway;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -47,7 +48,9 @@ public sealed class ChangeAuthorizationSettingsHandler : AccountHandlerBase
             {
                 return (TLBool)RpcErrorGenerator.GenerateError(400, "AUTH_KEY_INVALID"u8);
             }
-            var appAuthKeyId = _appInfoRepository.GetAuthKeyIdByAppHash(hash);
+            long? appAuthKeyId = hash == 0
+                ? await _authorizationRepository.GetHomeAuthKeyIdAsync(authKeyId)
+                : _appInfoRepository.GetAuthKeyIdByAppHash(hash);
             if(appAuthKeyId == null)
             {
                 return (TLBool)RpcErrorGenerator.GenerateError(400, "HASH_INVALID"u8);

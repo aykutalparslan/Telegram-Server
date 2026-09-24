@@ -108,6 +108,10 @@ public sealed class ReadMentionsHandler
         IUpdatesContext context = _updatesContextFactory.GetUpdatesContext(authKeyId,
             userId);
         int pts = cleared > 0 ? await context.IncrementPts() : await context.Pts();
+        if (cleared > 0)
+        {
+            await context.SettlePts(pts, pts);
+        }
         _log.Debug($"📣 ReadMentions user:{userId} peer:{peerType}:{peerId} " +
                    $"topic:{topMsgId} cleared:{cleared}");
         return AffectedHistory.Builder()

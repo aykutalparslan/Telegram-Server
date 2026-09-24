@@ -23,8 +23,6 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PUBLIC_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
 PIN="$PUBLIC_ROOT/interop/upstream-clients/PIN"
 PATCH="$PUBLIC_ROOT/interop/upstream-clients/patches/ios/0001-ferrite-conformance.patch"
-PRIVATE_PATCH=${FERRITE_IOS_PRIVATE_PATCH:-}
-APPLE_SUPPORT_PATCH="$PUBLIC_ROOT/interop/upstream-clients/patches/ios-submodules/apple_support/0001-macos26-lc-uuid.patch"
 CONFIG="$PUBLIC_ROOT/interop/upstream-clients/config/ios-simulator.json"
 
 die() {
@@ -46,9 +44,8 @@ done
 : "${IOS_CANDIDATE_BAZEL_SHA256:?missing IOS_CANDIDATE_BAZEL_SHA256}"
 : "${IOS_CANDIDATE_XCODE:?missing IOS_CANDIDATE_XCODE}"
 : "${IOS_CANDIDATE_PATCH_SHA256:?missing IOS_CANDIDATE_PATCH_SHA256}"
-: "${IOS_CANDIDATE_APPLE_SUPPORT_PATCH_SHA256:?missing IOS_CANDIDATE_APPLE_SUPPORT_PATCH_SHA256}"
 
-[ "$LAYER" = "214" ] || die "candidate layer is $LAYER, expected 214"
+printf '%s\n' "$LAYER" | rg -q '^[0-9]+$' || die "LAYER is not a layer number"
 printf '%s\n' "$IOS_CANDIDATE_COMMIT" | rg -q '^[0-9a-f]{40}$' || \
   die "IOS_CANDIDATE_COMMIT is not a lowercase Git object id"
 printf '%s\n' "$IOS_CANDIDATE_BAZEL_SHA256" | rg -q '^[0-9a-f]{64}$' || \
@@ -57,22 +54,10 @@ printf '%s\n' "$IOS_CANDIDATE_PATCH_SHA256" | rg -q '^[0-9a-f]{64}$' || \
   die "IOS_CANDIDATE_PATCH_SHA256 is not a lowercase SHA-256 digest"
 
 [ -f "$PATCH" ] || die "candidate patch is missing"
-[ -f "$APPLE_SUPPORT_PATCH" ] || die "apple_support host-compatibility patch is missing"
 [ -f "$CONFIG" ] || die "Simulator configuration is missing"
 actual_patch=$(shasum -a 256 "$PATCH" | awk '{print $1}')
 [ "$actual_patch" = "$IOS_CANDIDATE_PATCH_SHA256" ] || \
   die "candidate patch digest is $actual_patch, expected $IOS_CANDIDATE_PATCH_SHA256"
-private_patch_digest=
-if [ -n "$PRIVATE_PATCH" ]; then
-  : "${IOS_PRIVATE_PATCH_SHA256:?missing IOS_PRIVATE_PATCH_SHA256}"
-  [ -f "$PRIVATE_PATCH" ] || die "private iOS patch is missing: $PRIVATE_PATCH"
-  private_patch_digest=$(shasum -a 256 "$PRIVATE_PATCH" | awk '{print $1}')
-  [ "$private_patch_digest" = "$IOS_PRIVATE_PATCH_SHA256" ] || \
-    die "private iOS patch digest is $private_patch_digest, expected $IOS_PRIVATE_PATCH_SHA256"
-fi
-actual_apple_support=$(shasum -a 256 "$APPLE_SUPPORT_PATCH" | awk '{print $1}')
-[ "$actual_apple_support" = "$IOS_CANDIDATE_APPLE_SUPPORT_PATCH_SHA256" ] || \
-  die "apple_support patch digest is $actual_apple_support, expected $IOS_CANDIDATE_APPLE_SUPPORT_PATCH_SHA256"
 
 python3 - "$CONFIG" <<'PY'
 import json
@@ -129,19 +114,13 @@ actual_bazel=$(shasum -a 256 "$BAZEL_BIN" | awk '{print $1}')
 "$BAZEL_BIN" --version | rg -q "bazel $IOS_CANDIDATE_BAZEL$" || \
   die "FERRITE_IOS_BAZEL does not report Bazel $IOS_CANDIDATE_BAZEL"
 
-WORK="$PUBLIC_ROOT/interop/upstream-clients/work"
+WORK="$PUBLIC_ROOT/.ferrite/upstream-apps/work"
 SOURCE=${FERRITE_IOS_SOURCE_ROOT:-"$WORK/ios/source"}
 BUILD_ROOT=${FERRITE_IOS_BUILD_ROOT:-"$WORK/ios/build"}
 ARTIFACTS=${FERRITE_IOS_ARTIFACTS:-"$PUBLIC_ROOT/.ferrite/upstream-apps/artifacts/ios"}
 mkdir -p "$(dirname -- "$SOURCE")" "$BUILD_ROOT" "$ARTIFACTS"
 
-if [ -n "$PRIVATE_PATCH" ]; then
-  BUILD_ARTIFACTS="$BUILD_ROOT/artifacts-private"
-  ARTIFACT_NAME=Telegram-private.ipa
-else
-  BUILD_ARTIFACTS="$BUILD_ROOT/artifacts-public"
-  ARTIFACT_NAME=Telegram.ipa
-fi
+BUILD_ARTIFACTS="$BUILD_ROOT/artifacts"
 mkdir -p "$BUILD_ARTIFACTS"
 rm -f "$BUILD_ARTIFACTS/Telegram.ipa"
 
@@ -154,18 +133,14 @@ fi
 current=$(git -C "$SOURCE" rev-parse HEAD 2>/dev/null || true)
 if [ "$current" != "$IOS_CANDIDATE_COMMIT" ]; then
   [ -z "$(git -C "$SOURCE" status --short)" ] || \
-    die "source checkout has unrelated changes: $SOURCE"
+    die "source checkout has changes and is not at $IOS_CANDIDATE_COMMIT; move $SOURCE aside to start from a new clone"
   git -C "$SOURCE" fetch origin "$IOS_CANDIDATE_COMMIT"
   git -C "$SOURCE" switch --detach "$IOS_CANDIDATE_COMMIT"
 fi
 git -C "$SOURCE" submodule sync --recursive
 git -C "$SOURCE" submodule update --init --recursive
 
-if [ -n "$PRIVATE_PATCH" ] && \
-   git -C "$SOURCE" apply --reverse --check "$PRIVATE_PATCH" 2>/dev/null; then
-  : # The checkout already carries the complete public + private series.
-elif [ -z "$PRIVATE_PATCH" ] && \
-   git -C "$SOURCE" apply --reverse --check "$PATCH" 2>/dev/null; then
+if git -C "$SOURCE" apply --reverse --check "$PATCH" 2>/dev/null; then
   : # The checkout already carries the public provisioning patch.
 else
   # A series the checkout already carries cannot be reversed by the patches
@@ -174,7 +149,7 @@ else
   series_paths=$(mktemp)
   checkout_paths=$(mktemp)
   trap 'rm -f "$series_paths" "$checkout_paths"' EXIT
-  git -C "$SOURCE" apply --numstat "$PATCH" ${PRIVATE_PATCH:+"$PRIVATE_PATCH"} \
+  git -C "$SOURCE" apply --numstat "$PATCH" \
     | cut -f3 | sort -u > "$series_paths"
   # Bazel leaves its convenience symlinks in the source root. They are build
   # output, not a change to the source.
@@ -194,25 +169,13 @@ else
   git -C "$SOURCE" apply --check "$PATCH" 2>/dev/null || \
     die "public provisioning patch does not apply to the pinned checkout"
   git -C "$SOURCE" apply "$PATCH"
-  if [ -n "$PRIVATE_PATCH" ]; then
-    git -C "$SOURCE" apply --check "$PRIVATE_PATCH" 2>/dev/null || \
-      die "private iOS patch does not apply after the public patch"
-    git -C "$SOURCE" apply "$PRIVATE_PATCH"
-  fi
   rm -f "$series_paths" "$checkout_paths"
   trap - EXIT
 fi
 
-APPLE_SUPPORT="$SOURCE/build-system/bazel-rules/apple_support"
-if git -C "$APPLE_SUPPORT" apply --check "$APPLE_SUPPORT_PATCH" 2>/dev/null; then
-  git -C "$APPLE_SUPPORT" apply "$APPLE_SUPPORT_PATCH"
-elif ! git -C "$APPLE_SUPPORT" apply --reverse --check "$APPLE_SUPPORT_PATCH" 2>/dev/null; then
-  die "apple_support is neither clean nor exactly host-compatibility patched"
-fi
-
-rg -q 'return 214' \
+rg -q "return $LAYER$" \
   "$SOURCE/submodules/TelegramCore/Sources/State/Serialization.swift" || \
-  die "candidate full application does not announce layer 214"
+  die "candidate full application does not announce layer $LAYER"
 
 # Upstream's --lock (--lockfile_mode=error) also compares bzlTransitiveDigest,
 # which covers Starlark embedded in the Bazel binary; the committed lock does not
@@ -261,5 +224,5 @@ git -C "$SOURCE" checkout -- MODULE.bazel.lock
 # The Swift frameworks embed their absolute workspace path, so an IPA digest
 # identifies the checkout that built it, not the candidate. The commit, both
 # patches and Bazel stay pinned; the IPA itself cannot be.
-cp "$BUILD_ARTIFACTS/Telegram.ipa" "$ARTIFACTS/$ARTIFACT_NAME"
-echo "$ARTIFACTS/$ARTIFACT_NAME"
+cp "$BUILD_ARTIFACTS/Telegram.ipa" "$ARTIFACTS/Telegram.ipa"
+echo "$ARTIFACTS/Telegram.ipa"

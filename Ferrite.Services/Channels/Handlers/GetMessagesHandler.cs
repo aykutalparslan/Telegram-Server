@@ -54,7 +54,7 @@ public sealed class GetMessagesHandler : ChannelsHandlerBase
             currentIds.AppendTLObject(message.ToReadOnlySpan());
         }
 
-        using var current = ChannelsGetMessages.Builder()
+        var current = ChannelsGetMessages.Builder()
             .Channel(sent.Channel)
             .Id(currentIds)
             .Build();

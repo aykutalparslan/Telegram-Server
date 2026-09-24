@@ -19,13 +19,15 @@ namespace Ferrite.Services.Handlers.AuthMethods;
 public sealed class ImportAuthorizationHandler
 {
     private readonly IAuthorizationRepository _authorizationRepository;
+    private readonly IClientLayerRepository _clientLayerRepository;
     private readonly IUserRepository _userRepository;
 
     private readonly IUnitOfWork _unitOfWork;
 
-    public ImportAuthorizationHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IUserRepository userRepository)
+    public ImportAuthorizationHandler(IUnitOfWork unitOfWork, IAuthorizationRepository authorizationRepository, IClientLayerRepository clientLayerRepository, IUserRepository userRepository)
     {
         _authorizationRepository = authorizationRepository;
+        _clientLayerRepository = clientLayerRepository;
         _userRepository = userRepository;
 
         _unitOfWork = unitOfWork;
@@ -74,6 +76,16 @@ public sealed class ImportAuthorizationHandler
             }
         }
 
+        int apiLayer;
+        {
+            TLClientLayer? resolved = await _clientLayerRepository
+                .GetClientLayerAsync(authKeyId);
+            using TLClientLayer? targetLayer = resolved;
+            apiLayer = targetLayer is { } layer
+                ? layer.AsClientLayer().ApiLayer
+                : -1;
+        }
+
         bool persisted;
         {
             TLAuthInfo? resolved = await _authorizationRepository
@@ -93,8 +105,11 @@ public sealed class ImportAuthorizationHandler
 
             using TLAuthInfo imported = info.Clone()
                 .AuthKeyId(authKeyId)
+                .ApiLayer(apiLayer)
                 .Build();
-            persisted = _authorizationRepository.PutAuthorization(imported);
+            persisted = _authorizationRepository.PutAuthorization(imported) &&
+                        _authorizationRepository.PutImportedAuthorization(
+                            authKeyId, export.SourceAuthKeyId);
         }
 
         if (!persisted || !await _unitOfWork.SaveAsync())

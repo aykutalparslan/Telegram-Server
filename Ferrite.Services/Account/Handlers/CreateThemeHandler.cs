@@ -32,7 +32,7 @@ public sealed class CreateThemeHandler : ThemeHandlerBase
             settings.AppendTLObject(sent.Settings);
             builder = builder.Settings(settings);
         }
-        using var current = builder.Build();
+        var current = builder.Build();
         return current.TLBytes!.Value;
     }
 

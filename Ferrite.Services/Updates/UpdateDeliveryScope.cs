@@ -40,6 +40,9 @@ public sealed class UpdateDeliveryScope
     public bool AreTargetsOwnedBy(IReadOnlySet<long> ownedAuthKeyIds) =>
         _targetAuthKeyIds == null || _targetAuthKeyIds.IsSubsetOf(ownedAuthKeyIds);
 
+    public bool Targets(long authKeyId) =>
+        _targetAuthKeyIds != null && _targetAuthKeyIds.Contains(authKeyId);
+
     public bool Includes(long authKeyId) =>
         (_targetAuthKeyIds == null || _targetAuthKeyIds.Contains(authKeyId)) &&
         !_excludedAuthKeyIds.Contains(authKeyId);

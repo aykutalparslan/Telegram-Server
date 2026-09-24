@@ -2,8 +2,11 @@
 
 `PIN` fixes the Android and iOS repositories, commits, layer, source roots, and
 supported toolchains used by Ferrite's full-client conformance environment.
-Upstream sources and build products belong under the ignored `work/` directory;
-they are never vendored into Ferrite or modified in place.
+`LAYER` is the layer the pinned applications announce, which is Ferrite's base
+layer.
+Upstream sources and build products belong under the ignored
+`.ferrite/upstream-apps/work/` directory; they are never vendored into Ferrite
+or modified in place.
 
 The public entry point is:
 
@@ -23,15 +26,23 @@ build helper, launch helper, and loopback token-authenticated provisioning
 endpoint recorded in `PIN`. The public patch can report provisioning state and
 accept the one-time verification code; it contains no messaging, group, call,
 account, media, network-fault, or scenario-observation commands. Those test-only
-controls live in a separate private Harness patch series. `PIN` records both
-patch digests so a Harness build can prove the exact public-then-private series,
-but the public launcher applies only the public patch.
+controls live in a separate private Harness patch series.
 
 The launcher treats a missing or mismatched patch or application digest as a
 preflight error rather than silently starting fewer applications, substituting
-a lower-level probe, or accepting an unpinned binary.
+a lower-level probe, or accepting an unpinned binary. Builds write `Telegram.apk`
+and `Telegram.ipa` below `.ferrite/upstream-apps/artifacts/`. `up` reuses a
+staged APK only while its digest matches `ANDROID_APK_SHA256`. The IPA embeds
+its workspace path, so no IPA digest is pinned; `up` reuses a staged IPA only
+while its version matches `IOS_CANDIDATE_VERSION`, and the iOS launch helper
+refuses any other version. Anything else is rebuilt.
 
-The promoted iOS layer-214 input can be inspected without Xcode, Bazel, network
+When `PIN` moves to a new commit, a work checkout under
+`.ferrite/upstream-apps/work/` that still carries the previous patch is refused
+rather than discarded. Move it aside and
+the next build clones the pinned commit again.
+
+The promoted iOS input can be inspected without Xcode, Bazel, network
 access, or a Simulator:
 
 ```sh
@@ -40,17 +51,20 @@ access, or a Simulator:
 ```
 
 Both commands verify the patch against `PIN`; neither launches a client. A real
-build needs the pinned Bazel 8.3.1, which it downloads itself: `provision-bazel`
+build needs the Bazel release pinned in `IOS_CANDIDATE_BAZEL`, which it downloads itself: `provision-bazel`
 fetches the release asset named in `PIN`, checks it against the pinned SHA-256,
 and caches it under `.ferrite/upstream-apps/toolchains/`. The helper rejects a
 different Bazel, Xcode, patch, source commit, layer, configuration, or output
 bundle and writes the successful Simulator IPA under
 `.ferrite/upstream-apps/artifacts/ios/`.
 
-The pinned Android build requires Android platform 35, build-tools 35.0.0, NDK
-21.4.7075529, command-line/platform/emulator tools, an API 35 system image, and
-an API 35 AVD. It does not require a JDK on the host: `provision-jdk` downloads
-the pinned Temurin 17.0.20+8 build the APK digests were produced by, verifies it
+The pinned Android build requires the Android platform, build-tools and NDK
+revisions named by `ANDROID_COMPILE_SDK`, `ANDROID_BUILD_TOOLS` and
+`ANDROID_NDK`, command-line/platform/emulator tools, and a system image and AVD
+for `ANDROID_EMULATOR_API`. The build initializes the upstream native
+submodules itself. It does not require a JDK on the host: `provision-jdk`
+downloads the Temurin build named by `ANDROID_JDK_VERSION`, which the APK
+digest was produced by, verifies it
 against `PIN`, and caches it under `.ferrite/upstream-apps/toolchains/`. A host
 JDK is not substituted for it, because a host JDK is not the build the digests
 came from. On macOS the launcher discovers the normal `~/Library/Android/sdk`
@@ -100,12 +114,6 @@ to remove only devices whose recorded id, UDID, generated name, and bridge token
 match the owning run manifest. If a partial launch needs inspection, use
 `./interop/upstream-clients/scripts/launch-ios status`; cleanup refuses a token
 belonging to another run.
-
-Build products are isolated by scope. Public builds write `Telegram.apk` and
-`Telegram.ipa`; a private Harness build supplies `FERRITE_ANDROID_PRIVATE_PATCH`
-or `FERRITE_IOS_PRIVATE_PATCH` and writes `Telegram-private.apk` or
-`Telegram-private.ipa`. Each path is verified against its distinct SHA-256 pin,
-and producing one artifact does not overwrite the other.
 
 `status` prints the manifest-owned server and client state. Logs and generated
 artifacts live below `.ferrite/upstream-apps/`; inspect them before cleanup when

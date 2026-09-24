@@ -36,7 +36,7 @@ public static class MessageSendTargetResolver
         if (!hasExplicitSender && requestBytes.Length > 0)
         {
             using var request = new TLBytes(requestBytes, 0, requestBytes.Length);
-            var send = (SendMessage)request;
+            var send = (MessagesSendMessage)request;
             if (send.Flags[13])
             {
                 hasExplicitSender = true;

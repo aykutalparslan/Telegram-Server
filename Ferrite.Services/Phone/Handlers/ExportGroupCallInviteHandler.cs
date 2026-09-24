@@ -18,11 +18,11 @@ public sealed class ExportGroupCallInviteHandler : GroupCallHandlerBase
 
     private const int HashAttempts = 8;
 
-    public ExportGroupCallInviteHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, UpdateFanout fanout,
+    public ExportGroupCallInviteHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository, UpdateFanout fanout,
         GroupCallChatLink chatLink, IUpdatesContextFactory updatesContexts,
         IMTProtoTime time, GroupCallVideoOptions videoOptions,
         GroupCallMediaSourceMap sourceMap, ILogger log)
-        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, fanout, chatLink, updatesContexts, time, videoOptions,
+        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, messageRepository, fanout, chatLink, updatesContexts, time, videoOptions,
             sourceMap, log)
     {
         _groupCallsRepository = groupCallsRepository;
@@ -34,15 +34,21 @@ public sealed class ExportGroupCallInviteHandler : GroupCallHandlerBase
     {
         var request = (ExportGroupCallInvite)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
         bool canSelfUnmute = request.CanSelfUnmute;
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
+        }
+
         if (!callRead)
         {
             return Error(400, GroupCallErrors.GroupCallInvalid);
         }
 
         using GroupCallResolution resolution = await ResolveCallAsync(authKeyId, callId,
-            accessHash, GroupCallAccessLevel.Participate);
+            accessHash, GroupCallAccessLevel.Read);
         if (resolution.Error != null)
         {
             return Error(400, resolution.Error);
@@ -53,6 +59,10 @@ public sealed class ExportGroupCallInviteHandler : GroupCallHandlerBase
         if (call.AsGroupCallState().State != (int)GroupCallPersistenceState.Active)
         {
             return Error(400, GroupCallErrors.GroupCallInvalid);
+        }
+        if (access.IsConference)
+        {
+            return await ExportConferenceInviteAsync(callId, call, access);
         }
         if (!TryReadPublicUsername(access, out string username, out bool liveStream))
         {
@@ -78,6 +88,30 @@ public sealed class ExportGroupCallInviteHandler : GroupCallHandlerBase
         string link = GroupCallInviteLinks.Build(username, liveStream, hash);
         Log.Debug($"📞 exportGroupCallInvite call:{callId} user:{access.CurrentUserId} " +
                   $"speak:{canSelfUnmute} generation:{call.AsGroupCallState().InviteGeneration}");
+        return ExportedGroupCallInvite.Builder()
+            .Link(Encoding.UTF8.GetBytes(link))
+            .Build();
+    }
+
+    private async ValueTask<TLExportedGroupCallInvite> ExportConferenceInviteAsync(
+        long callId, TLDto.TLGroupCallState call, GroupCallPeerAccess access)
+    {
+        if (!access.IsCreator &&
+            !await IsActiveParticipantAsync(callId, access.CurrentUserId))
+        {
+            return Error(403, GroupCallErrors.GroupCallForbidden);
+        }
+
+        var view = call.AsGroupCallState();
+        if (!view.Flags[14])
+        {
+            return Error(400, GroupCallErrors.GroupCallInvalid);
+        }
+
+        string link = GroupCallInviteLinks.BuildConference(
+            Encoding.UTF8.GetString(view.InviteSlug));
+        Log.Debug($"📞 exportGroupCallInvite conference call:{callId} " +
+                  $"user:{access.CurrentUserId}");
         return ExportedGroupCallInvite.Builder()
             .Link(Encoding.UTF8.GetBytes(link))
             .Build();

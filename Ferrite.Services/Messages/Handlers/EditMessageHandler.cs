@@ -66,7 +66,7 @@ public sealed class EditMessageHandler
         _log = log;
     }
 
-    [TLFunction(Constructors.baseLayer_EditMessage)]
+    [TLFunction(Constructors.baseLayer_MessagesEditMessage)]
     public async Task<TLUpdates> Handle(long authKeyId, TLBytes q)
     {
         long userId;
@@ -80,7 +80,7 @@ public sealed class EditMessageHandler
             userId = auth.Value.AsAuthInfo().UserId;
         }
 
-        var request = (EditMessage)q;
+        var request = (MessagesEditMessage)q;
         if (!PeerResolver.TryResolveInputPeerDialogKey(request.Get_PeerView(),
                 userId, out DialogPeerKey peer))
         {
@@ -222,11 +222,9 @@ public sealed class EditMessageHandler
         if (peer.Type == TLPeer.PeerType.PeerUser) userIds.Add(peer.Id);
         else chatIds.Add(peer.Id);
         List<byte[]> chats = await _fanout.GetChatBytesForViewerAsync(userId, chatIds);
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         _log.Debug($"⏰ Rescheduled user:{userId} peer:{peer.Type}:{peer.Id} " +
                    $"scheduled:{moved.ScheduledId} at:{moved.SendDate}");
-        return _fanout.BuildUpdates(userId, new[] { updateBytes }, userIds, chats, now, seq);
+        return _fanout.BuildUpdates(userId, new[] { updateBytes }, userIds, chats, now, seq: 0);
     }
 
     private async Task<TLUpdates> EditCommonMessageAsync(long authKeyId, long userId,
@@ -304,11 +302,13 @@ public sealed class EditMessageHandler
                 using TLUpdate callerUpdate = BuildEditUpdate(copy.MessageBytes, pts,
                     channel: false);
                 callerUpdateBytes = callerUpdate.AsSpan().ToArray();
+                await context.SettlePts(pts, pts);
                 continue;
             }
 
             await _updates.EnqueueUpdate(copy.OwnerId,
                 BuildEditUpdate(copy.MessageBytes, pts, channel: false));
+            await context.SettlePts(pts, pts);
         }
         if (callerUpdateBytes == null)
         {
@@ -323,12 +323,10 @@ public sealed class EditMessageHandler
         List<byte[]> chats = peer.Type == TLPeer.PeerType.PeerChat
             ? await _fanout.GetChatBytesForViewerAsync(userId, new[] { peer.Id })
             : new List<byte[]>();
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         _log.Debug($"✏️ EditMessage user:{userId} peer:{peer.Type}:{peer.Id} " +
                    $"id:{edit.MessageId} copies:{updated.Count}");
         return _fanout.BuildUpdates(userId, new[] { callerUpdateBytes }, userIds, chats,
-            editDate, seq);
+            editDate, seq: 0);
     }
 
     private async Task<TLUpdates> EditChannelMessageAsync(long authKeyId, long userId,
@@ -455,12 +453,10 @@ public sealed class EditMessageHandler
         {
             callerUpdateBytes = callerUpdate.AsSpan().ToArray();
         }
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         _log.Debug($"✏️ EditMessage user:{userId} channel:{channelId} " +
                    $"id:{edit.MessageId} pts:{pts} members:{memberIds.Count}");
         return _fanout.BuildUpdates(userId, new[] { callerUpdateBytes }, new[] { userId },
-            new[] { channelBytes }, editDate, seq);
+            new[] { channelBytes }, editDate, seq: 0);
     }
 
     private byte[]? CompleteLiveLocationEdit(byte[]? mediaBytes,
@@ -614,7 +610,7 @@ public sealed class EditMessageHandler
         byte[] ReplyMarkup, bool ReplacesReplyMarkup, bool Scheduled,
         int ScheduleDate, bool QuickReply);
 
-    private static RequestedEdit ReadRequestedEdit(EditMessage request)
+    private static RequestedEdit ReadRequestedEdit(MessagesEditMessage request)
     {
         Flags flags = request.Flags;
         return new RequestedEdit(

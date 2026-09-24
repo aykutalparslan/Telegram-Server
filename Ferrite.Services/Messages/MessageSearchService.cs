@@ -77,6 +77,21 @@ public sealed class MessageSearchService
             : (null, MessageSearchFilter.Select(conversation, criteria));
     }
 
+    public async Task<List<MessageSnapshot>> SelectCommonBoxAsync(long userId,
+        MessageSearchFilter.Criteria criteria)
+    {
+        var matched = new List<MessageSnapshot>();
+        foreach (BoxMessage row in await _dialogs.ReadCommonBoxAsync(userId))
+        {
+            if (row.PeerType is TLPeer.PeerType.PeerUser or TLPeer.PeerType.PeerChat &&
+                MessageSearchFilter.Matches(row.Snapshot, criteria))
+            {
+                matched.Add(row.Snapshot);
+            }
+        }
+        return matched;
+    }
+
     public async Task<(string? Error, List<MessageSnapshot> Conversation)>
         ReadPeerConversationAsync(long userId, MessageSearchTarget target)
     {

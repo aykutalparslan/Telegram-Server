@@ -36,7 +36,7 @@ public class VerificationGateway : IVerificationGateway
 
     public ValueTask<string> SendEmail(string phone)
     {
-        return ValueTask.FromResult(PrintCode(GetCode().ToString(), phone));
+        return ValueTask.FromResult(PrintCode(GetEmailCode().ToString(), phone));
     }
 
     public ValueTask<string> SendSms(string phone)
@@ -62,6 +62,16 @@ public class VerificationGateway : IVerificationGateway
         var code = 12345;
 #else
         var code = _random.GetNext(10000, 99999);
+#endif
+        return code;
+    }
+
+    private int GetEmailCode()
+    {
+#if DEBUG
+        var code = 123456;
+#else
+        var code = _random.GetNext(100000, 1000000);
 #endif
         return code;
     }

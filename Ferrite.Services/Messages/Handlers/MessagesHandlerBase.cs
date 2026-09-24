@@ -110,6 +110,10 @@ public abstract class MessagesHandlerBase
 
         await PutChatAbout(channelId, about);
         await _unitOfWork.SaveAsync();
+        foreach (long memberId in await _fanout.GetActiveMemberIdsAsync(channelId, null))
+        {
+            await _fanout.EnqueueUpdateChannelAsync(memberId, channelId);
+        }
         _log.Debug($"📣 EditChatAbout(channel) user:{currentUserId} channel:{channelId}");
         return BoolTrue.Builder().Build();
     }
@@ -228,8 +232,6 @@ public abstract class MessagesHandlerBase
     protected async Task<TLUpdates> BuildDefaultBannedRightsResult(long authKeyId,
         long actorUserId, byte[] chatBytes, byte[] updateBytes)
     {
-        var seqCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, actorUserId);
-        int seq = await seqCtx.IncrementSeq();
 
         var resultUpdates = new Vector();
         resultUpdates.AppendTLObject(updateBytes);
@@ -243,7 +245,7 @@ public abstract class MessagesHandlerBase
             .Users(userVector)
             .Chats(chatVector)
             .Date((int)DateTimeOffset.Now.ToUnixTimeSeconds())
-            .Seq(seq)
+            .Seq(0)
             .Build();
     }
 
@@ -443,8 +445,6 @@ public abstract class MessagesHandlerBase
             }
         }
 
-        var seqCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, joinerUserId);
-        int seq = await seqCtx.IncrementSeq();
 
         var resultUpdates = new Vector();
         using (TLUpdate updateChannel = UpdateChannel.Builder().ChannelId(channelId).Build())
@@ -471,7 +471,7 @@ public abstract class MessagesHandlerBase
             .Users(userVector)
             .Chats(chatVector)
             .Date(date)
-            .Seq(seq)
+            .Seq(0)
             .Build();
     }
 
@@ -952,8 +952,6 @@ public abstract class MessagesHandlerBase
             await _updates.EnqueueUpdate(memberId, memberUpdate);
         }
 
-        var seqCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, userId);
-        int seq = await seqCtx.IncrementSeq();
         _log.Debug($"📌 UpdatePinnedMessage user:{userId} channel:{channelId} " +
                    $"id:{messageId} pinned:{pin} pts:{pts} members:{memberIds.Count}");
 
@@ -973,7 +971,7 @@ public abstract class MessagesHandlerBase
             .Users(userVector)
             .Chats(chatVector)
             .Date((int)DateTimeOffset.Now.ToUnixTimeSeconds())
-            .Seq(seq)
+            .Seq(0)
             .Build();
     }
 

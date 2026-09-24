@@ -672,6 +672,8 @@ public class UploadService : IUploadService
             uploadFileId = row.UploadFileId;
         }
 
+        long deviceAuthKeyId = await _authorizationRepository
+            .GetImportSourceAsync(authKeyId) ?? authKeyId;
         bool authorized = false;
         IReadOnlyList<TLSecretChatEncryptedFileAssociation> associations =
             await _secretChatsRepository
@@ -692,8 +694,8 @@ public class UploadService : IUploadService
                 }
                 using TLSecretChatState chat = chatValue.Value;
                 var chatRow = chat.AsSecretChatState();
-                if (chatRow.InitiatorAuthKeyId == authKeyId ||
-                    chatRow.Flags[1] && chatRow.RecipientAuthKeyId == authKeyId)
+                if (chatRow.InitiatorAuthKeyId == deviceAuthKeyId ||
+                    chatRow.Flags[1] && chatRow.RecipientAuthKeyId == deviceAuthKeyId)
                 {
                     authorized = true;
                 }

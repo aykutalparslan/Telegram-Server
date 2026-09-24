@@ -39,7 +39,7 @@ public sealed class AddChatUserHandler : MessagesHandlerBase
     private static TLBytes ToCurrentAddChatUserRequest(TLBytes q)
     {
         var sent = new TL.layer133.messages.MessagesAddChatUser(q.AsSpan());
-        using var current = AddChatUser.Builder()
+        var current = AddChatUser.Builder()
             .ChatId(sent.ChatId)
             .UserId(sent.UserId)
             .FwdLimit(sent.FwdLimit)

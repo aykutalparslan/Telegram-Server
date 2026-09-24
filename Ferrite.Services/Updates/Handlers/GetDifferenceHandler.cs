@@ -175,7 +175,9 @@ public sealed class GetDifferenceHandler : UpdatesHandlerBase
             ? commonDifference.Messages.Count == 0
                 ? requestPts
                 : commonDifference.Messages.Max(x => x.Pts)
-            : currentPts;
+            : requestPts > currentPts && requestPts <= await updatesCtx.Pts()
+                ? requestPts
+                : currentPts;
         using TLState state = await BuildState(updatesCtx, statePts, currentDate,
             stateQts);
 

@@ -162,7 +162,7 @@ public sealed class SendMediaHandler
     private static SendMediaSnapshot Snapshot(SendMedia request,
         TLPeer.PeerType peerType, long peerId)
     {
-        var builder = SendMessage.Builder()
+        var builder = MessagesSendMessage.Builder()
             .Silent(request.Silent)
             .Background(request.Background)
             .ClearDraft(request.ClearDraft)
@@ -189,7 +189,7 @@ public sealed class SendMediaHandler
         if (flags[21]) builder = builder.AllowPaidStars(request.AllowPaidStars);
         if (flags[22]) builder = builder.SuggestedPost(request.SuggestedPost);
 
-        using SendMessage sendMessage = builder.Build();
+        using MessagesSendMessage sendMessage = builder.Build();
         return new SendMediaSnapshot(peerType, peerId, request.Media.ToArray(),
             sendMessage.ToReadOnlySpan().ToArray(),
             flags[10] ? request.ScheduleDate : 0);

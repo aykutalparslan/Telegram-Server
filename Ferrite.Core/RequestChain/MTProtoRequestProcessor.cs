@@ -55,7 +55,7 @@ public class MTProtoRequestProcessor : ILinkedHandler
         try
         {
             await ProcessAndSend(connection, ctx, () => _api.Invoke(input, ctx), ack: true,
-                input.Constructor);
+                input.Constructor, input.Constructor);
         }
         catch (Exception e)
         {
@@ -94,27 +94,69 @@ public class MTProtoRequestProcessor : ILinkedHandler
             else
             {
                 await ProcessAndSend(connection, ctx, () => _api.Invoke(input, ctx),
-                    RequiresEarlyAck(input.Constructor), input.Constructor);
+                    RequiresEarlyAck(input.Constructor), input.Constructor,
+                    ResolveMethodConstructor(input));
             }
         }
-        else if (await _api.Invoke(input, ctx) is { } result)
+        else
         {
-            using (result)
-            {
-                await ForwardToRemoteSession(ctx, result.AsSpan().ToArray());
-            }
+            await ProcessAndForward(input, ctx);
         }
         if (Next != null) await Next.Process(sender, input, ctx);
         else input.Dispose();
     }
 
-    private async Task ProcessAndSend(IMTProtoConnection connection, TLExecutionContext ctx,
-        Func<ValueTask<TLBytes?>> invoke, bool ack, int constructor)
+    private async Task ProcessAndForward(TLBytes input, TLExecutionContext ctx)
     {
-        if (ack) await Send(connection, ctx, BuildMsgsAckPayload(ctx.MessageId));
-        if (await AnswerOnce(ctx, invoke, constructor) is { } data)
+        AfterResponse afterResponse = AfterResponse.Begin();
+        try
         {
-            await Send(connection, ctx, data);
+            if (await _api.Invoke(input, ctx) is { } result)
+            {
+                using (result)
+                {
+                    await ForwardToRemoteSession(ctx, result.AsSpan().ToArray(),
+                        ResolveMethodConstructor(input));
+                }
+            }
+        }
+        finally
+        {
+            await CompleteAfterResponse(afterResponse, input.Constructor);
+        }
+    }
+
+    private async Task ProcessAndSend(IMTProtoConnection connection, TLExecutionContext ctx,
+        Func<ValueTask<TLBytes?>> invoke, bool ack, int constructor,
+        int methodConstructor)
+    {
+        if (ack)
+        {
+            await Send(connection, ctx, BuildMsgsAckPayload(ctx.MessageId), null);
+        }
+        AfterResponse afterResponse = AfterResponse.Begin();
+        try
+        {
+            if (await AnswerOnce(ctx, invoke, constructor) is { } data)
+            {
+                await Send(connection, ctx, data, methodConstructor);
+            }
+        }
+        finally
+        {
+            await CompleteAfterResponse(afterResponse, constructor);
+        }
+    }
+
+    private async ValueTask CompleteAfterResponse(AfterResponse afterResponse, int constructor)
+    {
+        try
+        {
+            await afterResponse.CompleteAsync();
+        }
+        catch (Exception e)
+        {
+            _log.Error(e, $"😭 => {this} => after response #{constructor:x} => {e.Message}");
         }
     }
 
@@ -163,7 +205,7 @@ public class MTProtoRequestProcessor : ILinkedHandler
             using (error)
             using (var rpcResult = RpcResultGenerator.Generate(error, ctx.MessageId))
             {
-                await Send(connection, ctx, rpcResult.AsSpan().ToArray());
+                await Send(connection, ctx, rpcResult.AsSpan().ToArray(), null);
             }
         }
     }
@@ -173,21 +215,37 @@ public class MTProtoRequestProcessor : ILinkedHandler
         return constructor is Constructors.baseLayer_UploadProfilePhoto;
     }
 
-    private static ValueTask Send(IMTProtoConnection connection, TLExecutionContext ctx, byte[] data)
+    private static ValueTask Send(IMTProtoConnection connection, TLExecutionContext ctx,
+        byte[] data, int? methodConstructor)
     {
-        return connection.SendAsync(BuildResponse(ctx, data));
+        return connection.SendAsync(BuildResponse(ctx, data, methodConstructor));
     }
 
-    private async Task ForwardToRemoteSession(TLExecutionContext ctx, byte[] data)
+    private async Task ForwardToRemoteSession(TLExecutionContext ctx, byte[] data,
+        int methodConstructor)
     {
         if (await _sessionManager.GetSessionStateAsync(ctx.SessionId) is { } session)
         {
-            var bytes = MTProtoMessageEnvelope.Serialize(BuildResponse(ctx, data));
+            var bytes = MTProtoMessageEnvelope.Serialize(
+                BuildResponse(ctx, data, methodConstructor));
             await _pipe.WriteMessageAsync(MessagePipeChannels.ForNode(session.NodeId), bytes);
         }
     }
 
-    private static MTProtoMessage BuildResponse(TLExecutionContext ctx, byte[] data)
+    private static int ResolveMethodConstructor(TLBytes input)
+    {
+        try
+        {
+            return RequestUnwrapper.MethodConstructor(input);
+        }
+        catch
+        {
+            return input.Constructor;
+        }
+    }
+
+    private static MTProtoMessage BuildResponse(TLExecutionContext ctx, byte[] data,
+        int? methodConstructor)
     {
         return new MTProtoMessage
         {
@@ -196,7 +254,8 @@ public class MTProtoRequestProcessor : ILinkedHandler
             IsResponse = true,
             IsContentRelated = true,
             MessageId = ctx.MessageId,
-            Data = data
+            Data = data,
+            RequestConstructor = methodConstructor
         };
     }
 }

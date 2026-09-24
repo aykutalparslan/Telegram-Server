@@ -25,14 +25,14 @@ public sealed class DiscardGroupCallHandler : GroupCallHandlerBase
     private readonly IGroupCallRecordingCoordinator _recording;
     private readonly IGroupCallChainService _chain;
 
-    public DiscardGroupCallHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, UpdateFanout fanout,
+    public DiscardGroupCallHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository, UpdateFanout fanout,
         GroupCallChatLink chatLink, IUpdatesContextFactory updatesContexts,
         IMTProtoTime time, GroupCallVideoOptions videoOptions,
         GroupCallMediaSourceMap sourceMap, ILogger log,
         GroupCallActionMessages actions, GroupCallActivityTracker activity,
         IGroupCallMediaPlane media, IGroupCallBroadcastPlane broadcast,
         IGroupCallRecordingCoordinator recording, IGroupCallChainService chain)
-        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, fanout, chatLink, updatesContexts, time, videoOptions, sourceMap, log)
+        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, messageRepository, fanout, chatLink, updatesContexts, time, videoOptions, sourceMap, log)
     {
         _groupCallsRepository = groupCallsRepository;
 
@@ -49,7 +49,13 @@ public sealed class DiscardGroupCallHandler : GroupCallHandlerBase
     {
         var request = (DiscardGroupCall)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
+
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
+        }
 
         if (!callRead)
         {
@@ -114,7 +120,7 @@ public sealed class DiscardGroupCallHandler : GroupCallHandlerBase
             access.CanManageCall);
         byte[] callUpdate = BuildCallUpdateBytes(call, viewer, access.Peer.Id,
             unmutedVideoCount: 0);
-        await PushCallUpdateToOtherMembersAsync(call, access.Peer.Id,
+        await PushCallUpdateToOtherMembersAsync(call, access,
             access.CurrentUserId, unmutedVideoCount: 0);
 
         byte[] actionBytes = BuildEndedActionBytes(callId, accessHash, duration);

@@ -27,8 +27,14 @@ public sealed class SendConferenceCallBroadcastHandler : ConferenceCallHandlerBa
     {
         var request = (SendConferenceCallBroadcast)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
         byte[] block = request.Block.ToArray();
+
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
+        }
 
         if (!callRead)
         {

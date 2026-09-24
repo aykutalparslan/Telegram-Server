@@ -12,4 +12,5 @@ public interface IAppInfoRepository
     public TLAppInfo? GetAppInfo(long authKeyId);
     public TLAppInfo? GetAppInfoByAppHash(long hash);
     public long? GetAuthKeyIdByAppHash(long hash);
+    public IReadOnlyList<TLAppInfo> GetAppInfos();
 }

@@ -922,22 +922,32 @@ public sealed class SecretChatsRepository : ISecretChatsRepository
                             SecretChatSendAppendStatus.Unauthorized, null, null);
                     }
 
+                    int receiptDate = date;
+                    byte[] receiptResult = resultCopy;
+                    bool repeated = false;
                     TLDto.TLSecretChatSendReceipt? existing =
                         await GetSendReceiptAsync(chatId, senderAuthKeyId, randomId,
                             cancellationToken: cancellationToken);
                     if (existing is not null)
                     {
-                        int minimumReceiptDate = checked(date - receiptRetentionSeconds);
-                        if (existing.Value.AsSecretChatSendReceipt().Date >=
-                            minimumReceiptDate)
+                        using (TLDto.TLSecretChatSendReceipt existingReceipt =
+                                   existing.Value)
                         {
-                            return new SecretChatSendAppendResult(
-                                SecretChatSendAppendStatus.AlreadyExists, null,
-                                existing.Value);
+                            TLDto.SecretChatSendReceipt existingRow =
+                                existingReceipt.AsSecretChatSendReceipt();
+                            if (existingRow.Date >=
+                                checked(date - receiptRetentionSeconds))
+                            {
+                                receiptDate = existingRow.Date;
+                                receiptResult = existingRow.Result.ToArray();
+                                repeated = true;
+                            }
                         }
-                        existing.Value.Dispose();
-                        await _sendReceipts.DeleteAsync(chatId, senderAuthKeyId,
-                            randomId);
+                        if (!repeated)
+                        {
+                            await _sendReceipts.DeleteAsync(chatId, senderAuthKeyId,
+                                randomId);
+                        }
                     }
 
                     TLDto.SecretChatQtsState stateRow = state.AsSecretChatQtsState();
@@ -978,7 +988,7 @@ public sealed class SecretChatsRepository : ISecretChatsRepository
                     try
                     {
                         receipt = BuildSendReceipt(chatId, senderAuthKeyId, randomId,
-                            date, qts, resultCopy);
+                            receiptDate, qts, receiptResult);
                     }
                     catch
                     {
@@ -1004,8 +1014,9 @@ public sealed class SecretChatsRepository : ISecretChatsRepository
                         entry.Dispose();
                         throw;
                     }
-                    return new SecretChatSendAppendResult(
-                        SecretChatSendAppendStatus.Appended, entry, receipt);
+                    return new SecretChatSendAppendResult(repeated
+                        ? SecretChatSendAppendStatus.Redelivered
+                        : SecretChatSendAppendStatus.Appended, entry, receipt);
                 }
                 finally
                 {
@@ -1516,6 +1527,24 @@ public sealed class SecretChatsRepository : ISecretChatsRepository
         bool result = await _controlUpdates.DeleteAsync(recipientAuthKeyId);
         await FlushAsync("secret-chat control-update deletion");
         return result;
+    }
+
+    public async ValueTask<bool> DeleteControlUpdateAsync(long recipientAuthKeyId,
+        long updateId, CancellationToken cancellationToken = default)
+    {
+        SemaphoreSlim gate = GetGate(_authKeyGates, recipientAuthKeyId);
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            bool result = await _controlUpdates.DeleteAsync(recipientAuthKeyId,
+                updateId);
+            await FlushAsync("secret-chat control-update deletion");
+            return result;
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     public async ValueTask<SecretChatControlDifferenceResult>
@@ -2075,6 +2104,7 @@ public sealed class SecretChatsRepository : ISecretChatsRepository
             }
         }
 
+        int receiptDate = date;
         if (senderAuthKeyId is long sender)
         {
             TLDto.TLSecretChatSendReceipt? existingReceipt =
@@ -2082,7 +2112,11 @@ public sealed class SecretChatsRepository : ISecretChatsRepository
             if (existingReceipt is not null)
             {
                 using TLDto.TLSecretChatSendReceipt receipt = existingReceipt.Value;
-                recoveredQts ??= receipt.AsSecretChatSendReceipt().RecipientQts;
+                TLDto.SecretChatSendReceipt receiptRow =
+                    receipt.AsSecretChatSendReceipt();
+                recoveredQts ??= receiptRow.RecipientQts;
+                receiptDate = receiptRow.Date;
+                result = receiptRow.Result.ToArray();
             }
         }
 
@@ -2115,7 +2149,7 @@ public sealed class SecretChatsRepository : ISecretChatsRepository
             if (senderAuthKeyId is long senderKey)
             {
                 using TLDto.TLSecretChatSendReceipt receipt = BuildSendReceipt(chatId,
-                    senderKey, randomId, date, qts, result!);
+                    senderKey, randomId, receiptDate, qts, result!);
                 _sendReceipts.Put(receipt.AsSpan().ToArray(), chatId, senderKey,
                     randomId);
             }

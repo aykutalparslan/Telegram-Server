@@ -5,7 +5,7 @@ using System.Text;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
-using Ferrite.TL.baseLayer.channels;
+using Ferrite.TL.baseLayer.messages;
 using Ferrite.TL.baseLayer.dto;
 using Ferrite.Utils;
 
@@ -51,7 +51,7 @@ public sealed class CreateForumTopicHandler
     public async Task<Ferrite.TL.baseLayer.TLUpdates> Handle(long authKeyId, TLBytes q)
     {
         var request = (CreateForumTopic)q;
-        long? channelId = ChannelForumAccess.ResolveInputChannelId(request.Get_ChannelView());
+        long? channelId = PeerResolver.ResolveInputPeerChannelId(request.Get_PeerView());
         byte[] title = request.Title.ToArray();
         int iconColor = request.IconColor == 0 ? 0x6FB9F0 : request.IconColor;
         long iconEmojiId = request.IconEmojiId;

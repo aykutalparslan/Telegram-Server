@@ -92,6 +92,8 @@ public interface ISecretChatsRepository
         long recipientAuthKeyId, CancellationToken cancellationToken = default);
     ValueTask<bool> DeleteControlUpdatesAsync(long recipientAuthKeyId,
         CancellationToken cancellationToken = default);
+    ValueTask<bool> DeleteControlUpdateAsync(long recipientAuthKeyId, long updateId,
+        CancellationToken cancellationToken = default);
     ValueTask<SecretChatControlDifferenceResult> GetControlDifferenceAsync(
         long recipientAuthKeyId, int requestDate, int responseDate, int now,
         bool isProbe, CancellationToken cancellationToken = default);

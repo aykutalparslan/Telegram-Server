@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:24.10.0-bookworm-slim
+FROM node:24.10.0-trixie-slim
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \

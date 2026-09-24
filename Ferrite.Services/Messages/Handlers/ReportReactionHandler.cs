@@ -39,7 +39,7 @@ public sealed class ReportReactionHandler
     {
         var sent = new TL.layer214.messages.MessagesReportReaction(q.AsSpan());
         using TLInputPeer reactor = InputPeerFromInputUser(sent.Get_UserIdView());
-        using var current = ReportReaction.Builder()
+        var current = ReportReaction.Builder()
             .Peer(sent.Peer)
             .Id(sent.Id)
             .ReactionPeer(reactor.AsSpan())

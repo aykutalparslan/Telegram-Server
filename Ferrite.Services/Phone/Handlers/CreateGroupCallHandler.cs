@@ -28,13 +28,13 @@ public sealed class CreateGroupCallHandler : GroupCallHandlerBase
     private readonly IGroupCallMediaPlane _media;
     private readonly IGroupCallBroadcastPlane _broadcast;
 
-    public CreateGroupCallHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, UpdateFanout fanout,
+    public CreateGroupCallHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository, UpdateFanout fanout,
         GroupCallChatLink chatLink, IUpdatesContextFactory updatesContexts,
         IMTProtoTime time, GroupCallVideoOptions videoOptions,
         GroupCallMediaSourceMap sourceMap, ILogger log,
         IdAllocators ids, GroupCallActionMessages actions, IGroupCallMediaPlane media,
         IGroupCallBroadcastPlane broadcast)
-        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, fanout, chatLink, updatesContexts, time, videoOptions, sourceMap, log)
+        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, messageRepository, fanout, chatLink, updatesContexts, time, videoOptions, sourceMap, log)
     {
         _authorizationRepository = authorizationRepository;
         _chatParticipantsRepository = chatParticipantsRepository;

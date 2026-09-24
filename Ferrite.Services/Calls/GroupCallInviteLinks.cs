@@ -15,6 +15,12 @@ public static class GroupCallInviteLinks
         return encoded.TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
 
+    public static string BuildConference(string slug)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(slug);
+        return $"https://t.me/call/{slug}";
+    }
+
     public static string Build(string username, bool liveStream, string? inviteHash)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(username);

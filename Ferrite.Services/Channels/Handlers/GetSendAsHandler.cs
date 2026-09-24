@@ -43,7 +43,7 @@ public sealed class GetSendAsHandler
     private static TLBytes ToCurrentGetSendAsRequest(TLBytes q)
     {
         var sent = new TL.layer135.channels.ChannelsGetSendAs(q.AsSpan());
-        using var current = GetSendAs.Builder()
+        var current = GetSendAs.Builder()
             .Peer(sent.Peer)
             .Build();
         return current.TLBytes!.Value;

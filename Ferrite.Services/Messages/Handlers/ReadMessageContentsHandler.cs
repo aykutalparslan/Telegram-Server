@@ -82,12 +82,14 @@ public sealed class ReadMessageContentsHandler
         int date = checked((int)_timeProvider.GetUtcNow().ToUnixTimeSeconds());
         int pts = await callerCtx.IncrementPts();
         await _updates.EnqueueUpdate(userId, BuildUpdate(callerIds, pts, date));
+        await callerCtx.SettlePts(pts, pts);
 
         foreach ((long peerUserId, List<int> ids) in peerIds)
         {
             var peerCtx = _updatesContextFactory.GetUpdatesContext(null, peerUserId);
             int peerPts = await peerCtx.IncrementPts();
             await _updates.EnqueueUpdate(peerUserId, BuildUpdate(ids, peerPts, date));
+            await peerCtx.SettlePts(peerPts, peerPts);
         }
 
         _log.Debug($"👂 ReadMessageContents user:{userId} ids:{callerIds.Count} " +

@@ -264,8 +264,6 @@ public sealed class CreateChatHandler : MessagesHandlerBase
                     new TLUpdate(participantUpdateBytes, 0, participantUpdateBytes.Length));
             }
 
-            var seqCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, creatorUserId);
-            int seq = await seqCtx.IncrementSeq();
             var resultUpdates = new Vector();
             foreach (byte[] updateBytes in resultUpdateBytes)
             {
@@ -281,7 +279,7 @@ public sealed class CreateChatHandler : MessagesHandlerBase
                 .Users(userVector)
                 .Chats(chatVector)
                 .Date(date)
-                .Seq(seq)
+                .Seq(0)
                 .Build();
 
             _log.Debug($"👥 CreateChat creator:{creatorUserId} chat:{chatId} " +

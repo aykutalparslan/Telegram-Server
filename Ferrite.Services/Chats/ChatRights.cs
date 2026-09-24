@@ -88,6 +88,23 @@ public static class ChatRights
         return BansAction(rights, action);
     }
 
+    public static byte[] BuildFullAdminRights()
+    {
+        using var rights = ChatAdminRights.Builder()
+            .ChangeInfo(true)
+            .PostMessages(true)
+            .EditMessages(true)
+            .DeleteMessages(true)
+            .BanUsers(true)
+            .InviteUsers(true)
+            .PinMessages(true)
+            .AddAdmins(true)
+            .ManageCall(true)
+            .ManageTopics(true)
+            .Build();
+        return rights.ToReadOnlySpan().ToArray();
+    }
+
     public static byte[] BuildUnrestrictedDefaultBannedRights()
     {
         using var rights = ChatBannedRights.Builder()

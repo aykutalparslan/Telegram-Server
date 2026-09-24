@@ -85,13 +85,11 @@ public sealed class ToggleNoForwardsHandler : MessagesHandlerBase
             await _fanout.PushUpdateChatAsync(chatId, participantIds);
 
             int date = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
-            int seq = await _updatesContextFactory
-                .GetUpdatesContext(authKeyId, context.CurrentUserId).IncrementSeq();
             _log.Debug($"🚫 ToggleNoForwards user:{context.CurrentUserId} " +
                        $"chat:{chatId} enabled:{enabled}");
             using TLUpdate updateChat = UpdateChat.Builder().ChatId(chatId).Build();
             return _fanout.BuildUpdates(context.CurrentUserId, new[] { updateChat.AsSpan().ToArray() },
-                participantIds, new[] { updatedChatBytes }, date, seq);
+                participantIds, new[] { updatedChatBytes }, date, seq: 0);
         }
         finally
         {
@@ -128,14 +126,12 @@ public sealed class ToggleNoForwardsHandler : MessagesHandlerBase
         await _fanout.PushUpdateChannelToOtherMembersAsync(channelId, userId);
 
         int date = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         _log.Debug($"🚫 ToggleNoForwards user:{userId} channel:{channelId} " +
                    $"enabled:{enabled}");
         using TLUpdate updateChannel = UpdateChannel.Builder()
             .ChannelId(channelId)
             .Build();
         return _fanout.BuildUpdates(userId, new[] { updateChannel.AsSpan().ToArray() },
-            new[] { userId }, new[] { updatedChannelBytes }, date, seq);
+            new[] { userId }, new[] { updatedChannelBytes }, date, seq: 0);
     }
 }

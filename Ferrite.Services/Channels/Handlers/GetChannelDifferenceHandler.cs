@@ -140,12 +140,15 @@ public sealed class GetChannelDifferenceHandler : ChannelsHandlerBase
             }
         }
 
+        long viewerUserId = auth.Value.AsAuthInfo().UserId;
         var relatedChatBytes = new List<byte[]>();
         foreach (long relatedChatId in relatedChatIds)
         {
             if (relatedChatId == channelId.Value && channel != null)
             {
-                relatedChatBytes.Add(channel.Value.AsSpan().ToArray());
+                relatedChatBytes.Add(await ChannelRows.ForViewerAsync(
+                    _chatParticipantsRepository, viewerUserId, channelId.Value,
+                    channel.Value.AsSpan().ToArray()));
                 continue;
             }
             using var relatedChat = await _chatRepository

@@ -20,13 +20,16 @@ public class FasterUpdatesContext : IUpdatesContext
     private readonly IAtomicCounter _counter;
     private readonly IMessageBox _commonMessageBox;
     private readonly ISecretMessageBox? _secondaryMessageBox;
+    private readonly FasterSettledPts _settledPts;
     public FasterUpdatesContext(FasterContext<string, long> counterContext, 
         FasterContext<string, SortedSet<long>> unreadContext,
         FasterContext<string, SortedSet<string>> dialogContext,
+        FasterContext<string, byte[]> settledPtsContext,
         long? authKeyId, long userId)
     {
         _authKeyId = authKeyId;
         _userId = userId;
+        _settledPts = new FasterSettledPts(settledPtsContext, userId);
         _counter = new FasterCounter(counterContext,
             authKeyId != null ? $"seq:updates:auth:{authKeyId}" : $"seq:updates:{userId}");
         _commonMessageBox = new FasterMessageBox(counterContext, unreadContext, dialogContext, userId);
@@ -154,4 +157,8 @@ public class FasterUpdatesContext : IUpdatesContext
         return ValueTask.FromResult(PendingPublications.TryGetValue(_userId,
             out int count) ? count : 0);
     }
+
+    public ValueTask SettlePts(int first, int last) => _settledPts.Settle(first, last);
+
+    public ValueTask<int> ExtendCommittedPts(int committed) => _settledPts.Extend(committed);
 }

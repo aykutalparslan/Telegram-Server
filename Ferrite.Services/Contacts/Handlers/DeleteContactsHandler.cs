@@ -37,13 +37,19 @@ public sealed class DeleteContactsHandler : ContactsHandlerBase
 
             var userId = auth.Value.AsAuthInfo().UserId;
             var id = ToInputUserIds(new DeleteContacts(q.AsSpan()).Id, userId);
+            foreach (var contactUserId in id)
+            {
+                _contactsRepository.DeleteContact(userId, contactUserId);
+            }
+
+            await _unitOfWork.SaveAsync();
+
             List<TLUser> userList = new();
             List<TLUpdate> updateList = new();
             foreach (var contactUserId in id)
             {
                 var contactUser = await GetUserInternal(userId, contactUserId);
                 if (contactUser != null) userList.Add(contactUser.Value);
-                _contactsRepository.DeleteContact(userId, contactUserId);
                 using TLPeer peer = new PeerUser(contactUserId);
                 using TLPeerSettings settings = PeerSettings.Builder()
                     .AddContact(true)
@@ -55,16 +61,11 @@ public sealed class DeleteContactsHandler : ContactsHandlerBase
                 updateList.Add(update);
             }
 
-            await _unitOfWork.SaveAsync();
-
-            var updatesCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, userId);
-            var seq = await updatesCtx.IncrementSeq();
-
             TLUpdates res = Ferrite.TL.baseLayer.Updates.Builder()
                 .Users(ToUserVector(userList))
                 .UpdatesProperty(ToUpdateVector(updateList))
                 .Chats(new Vector())
-                .Seq(seq)
+                .Seq(0)
                 .Date((int)DateTimeOffset.Now.ToUnixTimeSeconds())
                 .Build();
             return res;

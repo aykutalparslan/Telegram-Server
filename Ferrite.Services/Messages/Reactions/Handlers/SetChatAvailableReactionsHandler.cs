@@ -135,8 +135,6 @@ public sealed class SetChatAvailableReactionsHandler
             }
         }
 
-        var seqCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, actorUserId);
-        int seq = await seqCtx.IncrementSeq();
         List<byte[]> chatBytes = await _fanout.GetChatBytesForViewerAsync(actorUserId,
             new[] { configChatId });
         var userVector = new Vector();
@@ -152,7 +150,7 @@ public sealed class SetChatAvailableReactionsHandler
             .Users(userVector)
             .Chats(chatVector)
             .Date((int)DateTimeOffset.Now.ToUnixTimeSeconds())
-            .Seq(seq)
+            .Seq(0)
             .Build();
     }
 

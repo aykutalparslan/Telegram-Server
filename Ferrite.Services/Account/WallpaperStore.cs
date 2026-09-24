@@ -59,8 +59,12 @@ public sealed class WallpaperStore
         using TLWallpaperCatalogState row = WallpaperCatalogState.Builder()
             .Wallpaper(wallpaper.ToReadOnlySpan()).OwnerUserId(userId).Date(Now())
             .Build();
+        using TLAccountWallpaperState account = AccountWallpaperState.Builder()
+            .Saved(true).UserId(userId).WallpaperId(value.Id)
+            .Wallpaper(wallpaper.ToReadOnlySpan()).Date(Now()).Build();
         TLBytes result = wallpaper.TLBytes!.Value;
         if (!_repository.PutWallpaperCatalog(row) ||
+            !_repository.PutAccountWallpaper(account) ||
             !await _transactions.SaveAsync())
         {
             result.Dispose();
@@ -112,8 +116,10 @@ public sealed class WallpaperStore
             await _repository.GetAccountWallpapersAsync(userId);
         try
         {
-            var globalById = catalogue.ToDictionary(row => WallpaperId(
-                row.AsWallpaperCatalogState().Get_WallpaperView()));
+            var globalById = catalogue
+                .Where(row => row.AsWallpaperCatalogState().OwnerUserId == 0)
+                .ToDictionary(row => WallpaperId(
+                    row.AsWallpaperCatalogState().Get_WallpaperView()));
             var accountById = account.ToDictionary(row =>
                 row.AsAccountWallpaperState().WallpaperId);
             long[] ids = globalById.Keys.Concat(accountById.Keys).Distinct()

@@ -26,9 +26,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-49E9A90F60B9}") = "Ferrite.Services", "Ferrite.Services\Ferrite.Services.csproj", "{F16083E5-FEAC-4C4F-B028-50CCE671047E}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-49E9A90F60B9}") = "Ferrite.TLParser", "Ferrite.TLParser\Ferrite.TLParser.csproj", "{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}"
+Project("{9A19103F-16F7-4668-BE54-49E9A90F60B9}") = "Ferrite.TL.Generator", "Ferrite.TL.Generator\Ferrite.TL.Generator.csproj", "{0DCC3419-A0FB-4A2F-8123-9A8CC6BB3A86}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-49E9A90F60B9}") = "Ferrite.TL", "Ferrite.TL\Ferrite.TL.csproj", "{21EF4764-AF52-440A-84C1-996C19F63283}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-49E9A90F60B9}") = "Ferrite.TL.Schema", "Ferrite.TL.Schema\Ferrite.TL.Schema.csproj", "{6F268C69-6612-4A52-9751-AB502885FEF3}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ferrite.GroupCallMedia", "Ferrite.GroupCallMedia\Ferrite.GroupCallMedia.csproj", "{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}"
 EndProject
@@ -152,6 +154,18 @@ Global
 		{21EF4764-AF52-440A-84C1-996C19F63283}.Release|x64.Build.0 = Release|x64
 		{21EF4764-AF52-440A-84C1-996C19F63283}.Release|x86.ActiveCfg = Release|x86
 		{21EF4764-AF52-440A-84C1-996C19F63283}.Release|x86.Build.0 = Release|x86
+		{6F268C69-6612-4A52-9751-AB502885FEF3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F268C69-6612-4A52-9751-AB502885FEF3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6F268C69-6612-4A52-9751-AB502885FEF3}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6F268C69-6612-4A52-9751-AB502885FEF3}.Debug|x64.Build.0 = Debug|Any CPU
+		{6F268C69-6612-4A52-9751-AB502885FEF3}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6F268C69-6612-4A52-9751-AB502885FEF3}.Debug|x86.Build.0 = Debug|Any CPU
+		{6F268C69-6612-4A52-9751-AB502885FEF3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6F268C69-6612-4A52-9751-AB502885FEF3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6F268C69-6612-4A52-9751-AB502885FEF3}.Release|x64.ActiveCfg = Release|Any CPU
+		{6F268C69-6612-4A52-9751-AB502885FEF3}.Release|x64.Build.0 = Release|Any CPU
+		{6F268C69-6612-4A52-9751-AB502885FEF3}.Release|x86.ActiveCfg = Release|Any CPU
+		{6F268C69-6612-4A52-9751-AB502885FEF3}.Release|x86.Build.0 = Release|Any CPU
 		{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9C9AD8ED-32BA-4CF3-9E60-D6CB5F01AA56}.Debug|x64.ActiveCfg = Debug|Any CPU

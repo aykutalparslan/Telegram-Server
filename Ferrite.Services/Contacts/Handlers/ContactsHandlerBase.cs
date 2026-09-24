@@ -314,14 +314,11 @@ public abstract class ContactsHandlerBase
             .Peer(peer.AsSpan())
             .Settings(settings.AsSpan())
             .Build();
-        var updatesContext = _updatesContextFactory.GetUpdatesContext(authKeyId,
-            ownerUserId);
-        int seq = await updatesContext.IncrementSeq();
         return Ferrite.TL.baseLayer.Updates.Builder()
             .Users(ToUserVector(users))
             .UpdatesProperty(ToUpdateVector(new List<TLUpdate> { update }))
             .Chats(new Vector())
-            .Seq(seq)
+            .Seq(0)
             .Date((int)DateTimeOffset.Now.ToUnixTimeSeconds())
             .Build();
     }

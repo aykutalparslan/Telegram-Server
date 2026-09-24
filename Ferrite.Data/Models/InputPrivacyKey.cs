@@ -18,4 +18,5 @@ public enum InputPrivacyKey
     Birthday,
     StarGiftsAutoSave,
     NoPaidMessages,
+    SavedMusic,
 }

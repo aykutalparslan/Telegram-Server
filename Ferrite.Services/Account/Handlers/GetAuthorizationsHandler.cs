@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Ferrite.Crypto;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Auth;
 using Ferrite.Services.Gateway;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
@@ -45,6 +46,7 @@ public sealed class GetAuthorizationsHandler : AccountHandlerBase
             foreach (var a in authorizations)
             {
                 if(!a.AsAuthInfo().LoggedIn) continue;
+                if (await _authorizationRepository.GetImportSourceAsync(a.AsAuthInfo().AuthKeyId) is not null) continue;
                 var authorization = _appInfoRepository.GetAppInfo(a.AsAuthInfo().AuthKeyId);
                 if (authorization != null) infos.Add(authorization.Value);
             }
@@ -53,6 +55,7 @@ public sealed class GetAuthorizationsHandler : AccountHandlerBase
                 ? AccountSettingsStore.DefaultAuthorizationTtlDays
                 : await _accountSettings.GetAuthorizationTtlAsync(
                     auth.Value.AsAuthInfo().UserId);
-            return GenerateAuthorizations(ttl, authKeyId, infos);
+            return GenerateAuthorizations(ttl,
+                await _authorizationRepository.GetHomeAuthKeyIdAsync(authKeyId), infos);
         }
 }

@@ -114,6 +114,9 @@ public abstract class SecretChatLifecycleHandlerBase
         long keyFingerprint = row.KeyFingerprint;
         long[] requestedAuthKeyIds = row.RequestedRecipientAuthKeyIds.ToArray();
 
+        await ControlDelivery.RetireAsync(recipientAuthKeyId, chatId,
+            SecretChatControlDelivery.SupersededBy(SecretChatControlKind.Accepted),
+            cancellationToken);
         bool persisted = await ControlDelivery.EnsureAsync(initiatorAuthKeyId,
             initiatorUserId,
             recipientAuthKeyId, recipientUserId, chatId, updatedAt,
@@ -153,6 +156,20 @@ public abstract class SecretChatLifecycleHandlerBase
             : requestedAuthKeyIds.Append(initiatorAuthKeyId);
         long[] targets = (notificationAuthKeyIds ?? inferredTargets.ToArray())
             .Where(x => x != callerAuthKeyId).Distinct().ToArray();
+
+        IEnumerable<long> chatAuthKeyIds = requestedAuthKeyIds.Append(initiatorAuthKeyId)
+            .Append(callerAuthKeyId);
+        if (recipientAuthKeyId is long boundKey)
+        {
+            chatAuthKeyIds = chatAuthKeyIds.Append(boundKey);
+        }
+        foreach (long retiredAuthKeyId in chatAuthKeyIds.Where(x => x != 0)
+                     .Except(targets))
+        {
+            await ControlDelivery.RetireAsync(retiredAuthKeyId, chatId,
+                SecretChatControlDelivery.SupersededBy(SecretChatControlKind.Discarded),
+                cancellationToken);
+        }
 
         bool persisted = true;
         foreach (long targetAuthKeyId in targets)

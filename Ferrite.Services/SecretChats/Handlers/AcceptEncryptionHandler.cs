@@ -47,7 +47,7 @@ public sealed class AcceptEncryptionHandler : SecretChatLifecycleHandlerBase
         {
             return Error("CHAT_ID_INVALID"u8);
         }
-        if (chatId <= 0)
+        if (chatId == 0)
         {
             return Error("CHAT_ID_INVALID"u8);
         }

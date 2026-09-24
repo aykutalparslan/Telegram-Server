@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import platform
+import plistlib
 import re
 import signal
 import shutil
@@ -21,6 +22,7 @@ import time
 import uuid
 import urllib.error
 import urllib.request
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -126,6 +128,25 @@ def client_artifact_path(platform: str) -> Path:
     variable, relative = names[platform]
     override = os.environ.get(variable)
     return Path(override) if override else STATE / "artifacts" / relative
+
+
+def staged_artifact_is_current(platform: str, artifact: Path,
+                               pins: dict[str, str]) -> bool:
+    if not artifact.is_file():
+        return False
+    if platform == "android":
+        return sha256(artifact) == pins.get("ANDROID_APK_SHA256")
+    try:
+        with zipfile.ZipFile(artifact) as archive:
+            names = [name for name in archive.namelist()
+                     if name.startswith("Payload/") and name.count("/") == 2
+                     and name.endswith(".app/Info.plist")]
+            if len(names) != 1:
+                return False
+            info = plistlib.loads(archive.read(names[0]))
+    except (OSError, zipfile.BadZipFile, plistlib.InvalidFileException):
+        return False
+    return info.get("CFBundleShortVersionString") == pins.get("IOS_CANDIDATE_VERSION")
 
 
 def orphan_client_sessions() -> dict[str, dict[str, Any]]:
@@ -846,10 +867,8 @@ def command_up(android: int, ios: int,
         if count == 0:
             continue
         artifact = client_artifact_path(platform)
-        pinned = pins.get(f"{platform.upper()}_APK_SHA256"
-                          if platform == "android" else "IOS_IPA_SHA256")
-        staged = artifact.is_file() and (not pinned or sha256(artifact) == pinned)
-        if staged and not rebuild_clients:
+        if (staged_artifact_is_current(platform, artifact, pins)
+                and not rebuild_clients):
             step(f"reusing staged {platform} artifact {artifact.name}"
                  " (--rebuild-clients to rebuild)")
             continue
@@ -862,9 +881,12 @@ def command_up(android: int, ios: int,
         if port_ready(port):
             raise LifecycleError(f"required loopback port is already in use: {port}")
 
-    UI.set_phase("building Ferrite.sln")
-    step("building Ferrite.sln")
-    run_streamed(["dotnet", "build", "Ferrite.sln", "-m:1", "--nologo"])
+    for project in ("Ferrite/Ferrite.csproj", "Ferrite.AppHost/Ferrite.AppHost.csproj"):
+        UI.set_phase(f"building {project}")
+        step(f"building {project}")
+        if not (ROOT / Path(project).parent / "obj/project.assets.json").is_file():
+            run_streamed(["dotnet", "restore", project, "--disable-parallel"])
+        run_streamed(["dotnet", "build", project, "-m:1", "--no-restore", "--nologo"])
     before_containers = docker_ids("container")
     before_volumes = docker_ids("volume")
     run_id = "fh-" + uuid.uuid4().hex[:12]

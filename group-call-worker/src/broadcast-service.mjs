@@ -591,8 +591,9 @@ export class GroupCallBroadcastService {
   }
 
   async refreshSfu(callId) {
-    const call = this.#requireCall(callId);
-    if (call.rtmpStream || !this.#mediaPlane) {
+    safeCallId(callId);
+    const call = this.#calls.get(callId);
+    if (!call || call.rtmpStream || !this.#mediaPlane) {
       return false;
     }
     const deadline = Date.now() + 3000;

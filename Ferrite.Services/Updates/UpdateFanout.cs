@@ -2,6 +2,7 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Channels;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.dto;
@@ -96,16 +97,8 @@ public sealed class UpdateFanout
     public async Task<TLUpdates> BuildReactionsResultAsync(long userId,
         byte[] peerBytes, int msgId, byte[] reactionsBytes,
         IReadOnlyCollection<ReactionEntry> entries, long reactionConfigChatId,
-        bool incrementSeq, long? authKeyId = null)
+        long? authKeyId = null)
     {
-        int seq = 0;
-        if (incrementSeq)
-        {
-            IUpdatesContext seqCtx = _updatesContextFactory
-                .GetUpdatesContext(authKeyId, userId);
-            seq = await seqCtx.IncrementSeq();
-        }
-
         List<byte[]> chatBytes = reactionConfigChatId > 0
             ? await GetChatBytesForViewerAsync(userId, new[] { reactionConfigChatId })
             : new List<byte[]>();
@@ -118,15 +111,12 @@ public sealed class UpdateFanout
         using TLUpdate update = BuildMessageReactionsUpdate(peerBytes, msgId,
             reactionsBytes);
         return BuildUpdates(userId, new[] { update.AsSpan().ToArray() }, reactorIds,
-            chatBytes, (int)DateTimeOffset.Now.ToUnixTimeSeconds(), seq);
+            chatBytes, (int)DateTimeOffset.Now.ToUnixTimeSeconds(), seq: 0);
     }
 
     public async Task<TLUpdates> BuildChannelSentResultAsync(long authKeyId,
         ChannelSentBatch sent)
     {
-        IUpdatesContext seqCtx = _updatesContextFactory
-            .GetUpdatesContext(authKeyId, sent.UserId);
-        int seq = await seqCtx.IncrementSeq();
         var updateBytes = new List<byte[]>(2);
         using (TLUpdate updateMessageId = UpdateMessageID.Builder()
                    .Id(sent.Id)
@@ -136,7 +126,8 @@ public sealed class UpdateFanout
             updateBytes.Add(updateMessageId.AsSpan().ToArray());
         }
         using (TLUpdate updateNewChannelMessage = UpdateNewChannelMessage.Builder()
-                   .Message(sent.MessageBytes)
+                   .Message(MessageRows.StampOutgoingForViewer(sent.MessageBytes,
+                       sent.UserId))
                    .Pts(sent.Pts)
                    .PtsCount(1)
                    .Build())
@@ -152,15 +143,13 @@ public sealed class UpdateFanout
             MessageStore.AddMessageRelatedPeers(message, userIds, chatIds);
         }
         List<byte[]> chats = await GetChatBytesForViewerAsync(sent.UserId, chatIds);
-        return BuildUpdates(sent.UserId, updateBytes, userIds, chats, sent.Date, seq);
+        return BuildUpdates(sent.UserId, updateBytes, userIds, chats, sent.Date, seq: 0);
     }
 
     public async Task<TLUpdates> BuildMediaAlbumSentResultAsync(long authKeyId,
         long actorUserId, IReadOnlyList<MediaSentBatch> sentItems,
         IReadOnlyCollection<long> relatedUserIds)
     {
-        int seq = await _updatesContextFactory
-            .GetUpdatesContext(authKeyId, actorUserId).IncrementSeq();
         var updateBytes = new List<byte[]>(sentItems.Count * 2);
         var userIds = new HashSet<long>(relatedUserIds) { actorUserId };
         var chatIds = new HashSet<long>();
@@ -204,7 +193,7 @@ public sealed class UpdateFanout
         int date = sentItems.Count == 0
             ? (int)DateTimeOffset.Now.ToUnixTimeSeconds()
             : sentItems[^1].Date;
-        return BuildUpdates(actorUserId, updateBytes, userIds, chats, date, seq);
+        return BuildUpdates(actorUserId, updateBytes, userIds, chats, date, seq: 0);
     }
 
     public async Task<TLUpdates> BuildPinnedMessagesResultAsync(long userId,
@@ -379,18 +368,18 @@ public sealed class UpdateFanout
         long actorUserId, byte[] channelBytes, IReadOnlyCollection<long> extraUserIds,
         int date)
     {
-        int seq = await _updatesContextFactory
-            .GetUpdatesContext(authKeyId, actorUserId).IncrementSeq();
         long channelId;
         using (var channel = new TLChat(channelBytes, 0, channelBytes.Length))
         {
             channelId = channel.AsChannel().Id;
         }
+        byte[] viewerChannelBytes = await ChannelRows.ForViewerAsync(
+            _chatParticipantsRepository, actorUserId, channelId, channelBytes);
         using TLUpdate update = UpdateChannel.Builder().ChannelId(channelId).Build();
         var userIds = new List<long> { actorUserId };
         userIds.AddRange(extraUserIds);
         return BuildUpdates(actorUserId, new[] { update.AsSpan().ToArray() }, userIds,
-            new[] { channelBytes }, date, seq);
+            new[] { viewerChannelBytes }, date, seq: 0);
     }
 
     public async Task<TLUpdates> BuildForumResultAsync(long authKeyId,
@@ -398,8 +387,6 @@ public sealed class UpdateFanout
         IReadOnlyCollection<byte[]> updateBytes, int date,
         IReadOnlyCollection<long>? extraChatIds = null)
     {
-        int seq = await _updatesContextFactory
-            .GetUpdatesContext(authKeyId, actorUserId).IncrementSeq();
         var chats = new List<byte[]> { channelBytes };
         if (extraChatIds is { Count: > 0 })
         {
@@ -412,7 +399,7 @@ public sealed class UpdateFanout
                 extraChatIds.Where(id => id != destinationId).Distinct()));
         }
         return BuildUpdates(actorUserId, updateBytes, new[] { actorUserId },
-            chats, date, seq);
+            chats, date, seq: 0);
     }
 
     public async Task<int> AdvanceAndEnqueueDeleteMessagesAsync(long ownerId,
@@ -435,6 +422,7 @@ public sealed class UpdateFanout
             .PtsCount(deletedIds.Count)
             .Build();
         await _updates.EnqueueUpdate(ownerId, update);
+        await ownerContext.SettlePts(pts - deletedIds.Count + 1, pts);
         return pts;
     }
 

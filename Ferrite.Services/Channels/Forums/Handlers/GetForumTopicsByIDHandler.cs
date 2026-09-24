@@ -3,7 +3,7 @@
 
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
-using Ferrite.TL.baseLayer.channels;
+using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.ChannelForums;
 
@@ -38,7 +38,7 @@ public sealed class GetForumTopicsByIDHandler
         long authKeyId, TLBytes q)
     {
         var request = (GetForumTopicsByID)q;
-        long? channelId = ChannelForumAccess.ResolveInputChannelId(request.Get_ChannelView());
+        long? channelId = PeerResolver.ResolveInputPeerChannelId(request.Get_PeerView());
         var topics = request.Topics;
         List<int> topicIds = new List<int>(topics.Count);
         for (int i = 0; i < topics.Count; i++) topicIds.Add(topics[i]);

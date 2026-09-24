@@ -10,7 +10,7 @@ namespace Ferrite.Services.Auth;
 
 public interface IAuthService
 {
-    public ValueTask<bool> SaveAppInfo(TLAppInfo info);
+    public ValueTask<bool> SaveClientInfo(TLAppInfo info, int apiLayer);
     public ValueTask<bool> IsAuthorized(long authKeyId);
     public ValueTask<TLAuthorization> SignUp(long authKeyId, TLBytes q);
     public ValueTask<TLAuthorization> SignIn(long authKeyId, TLBytes q);

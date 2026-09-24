@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\Ferrite.TL\baseLayer.tl"
+                      LogicalName="Ferrite.TL.Schema.Schemas.baseLayer.tl" />
+    <EmbeddedResource Include="..\Ferrite.TL\layer*.tl"
+                      LogicalName="Ferrite.TL.Schema.Compat.%(Filename).tl" />
+    <EmbeddedResource Include="Schemas\layer*.tl" />
+    <EmbeddedResource Include="Schemas\*.tsv" />
+  </ItemGroup>
+
+</Project>

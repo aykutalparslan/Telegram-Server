@@ -215,6 +215,10 @@ public sealed class AccountPasswordManager : IAccountPasswordManager
         {
             PasswordProofResult proof = await VerifyProofAsync(authKeyId,
                 principal.Value.UserId, state, password);
+            if (proof == PasswordProofResult.SrpIdInvalid)
+            {
+                return AuthorizationError("SRP_ID_INVALID");
+            }
             if (proof != PasswordProofResult.Success)
             {
                 return AuthorizationError("PASSWORD_HASH_INVALID");
@@ -312,6 +316,10 @@ public sealed class AccountPasswordManager : IAccountPasswordManager
         {
             PasswordProofResult proof = await VerifyProofAsync(authKeyId,
                 principal.Value.UserId, current, password);
+            if (proof == PasswordProofResult.SrpIdInvalid)
+            {
+                return BoolError("SRP_ID_INVALID");
+            }
             if (proof != PasswordProofResult.Success)
             {
                 return BoolError("PASSWORD_HASH_INVALID");
@@ -572,7 +580,7 @@ public sealed class AccountPasswordManager : IAccountPasswordManager
                 .ConsumeSrpChallengeAsync(srpId);
             if (foundChallenge is not { } challenge)
             {
-                return PasswordProofResult.Invalid;
+                return PasswordProofResult.SrpIdInvalid;
             }
 
             using (challenge)
@@ -583,8 +591,11 @@ public sealed class AccountPasswordManager : IAccountPasswordManager
                     challengeView.UserId != userId ||
                     challengeView.PasswordGeneration !=
                     stateView.PasswordGeneration ||
-                    challengeView.ExpiresAt <= UnixNow() ||
-                    !TryReadPasswordAlgorithm(
+                    challengeView.ExpiresAt <= UnixNow())
+                {
+                    return PasswordProofResult.SrpIdInvalid;
+                }
+                if (!TryReadPasswordAlgorithm(
                         stateView.Get_CurrentAlgoView(), out byte[] salt1,
                         out byte[] salt2))
                 {
@@ -858,5 +869,6 @@ public sealed class AccountPasswordManager : IAccountPasswordManager
     {
         Invalid,
         Success,
+        SrpIdInvalid,
     }
 }

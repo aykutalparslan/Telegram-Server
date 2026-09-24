@@ -101,6 +101,11 @@ together or startup fails. Binding `0.0.0.0` while announcing a specific address
 leaves ICE unable to complete, so keep the bind and advertised addresses
 consistent.
 
+`Ferrite.AppHost` also accepts `FERRITE_GROUP_CALL_CONTROL_URL` to direct its
+server nodes to an external worker. The URL must be reachable from the node
+containers, and the worker must use the AppHost group-call secret. If unset,
+the nodes use the graph's containerized worker.
+
 Recording, live-stream segments, and RTMP ingest have their own
 `FERRITE_GROUP_CALL_RECORDING_*`, `FERRITE_GROUP_CALL_SEGMENT_*`, and
 `FERRITE_GROUP_CALL_RTMP_*` variables, plus per-room and per-recording resource

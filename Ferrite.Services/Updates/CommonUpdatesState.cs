@@ -8,10 +8,24 @@ namespace Ferrite.Services.Updates;
 
 internal static class CommonUpdatesState
 {
-    public static async ValueTask<int> GetCommittedPts(
+    public static ValueTask<int> GetCommittedPts(
         IUpdatesStateRepository updatesStateRepository,
         IMessageRepository messageRepository,
-        IUpdatesContext context, long userId)
+        IUpdatesContext context, long userId) =>
+        ReadPts(updatesStateRepository, messageRepository, context, userId,
+            capAtDelivered: false);
+
+    public static ValueTask<int> GetDeliveredPts(
+        IUpdatesStateRepository updatesStateRepository,
+        IMessageRepository messageRepository,
+        IUpdatesContext context, long userId) =>
+        ReadPts(updatesStateRepository, messageRepository, context, userId,
+            capAtDelivered: true);
+
+    private static async ValueTask<int> ReadPts(
+        IUpdatesStateRepository updatesStateRepository,
+        IMessageRepository messageRepository,
+        IUpdatesContext context, long userId, bool capAtDelivered)
     {
         int publicationsAtEntry = await context.PendingPtsPublications();
         await context.WaitForPtsPublications();
@@ -37,8 +51,10 @@ internal static class CommonUpdatesState
             }
         }
 
-        int visiblePts = Math.Min(reservedPts, Math.Max(1, committedPts));
-        int deliveredPts = await context.DeliveredPts();
+        committedPts = Math.Max(1, committedPts);
+        committedPts = Math.Max(committedPts, await context.ExtendCommittedPts(committedPts));
+        int visiblePts = Math.Min(reservedPts, committedPts);
+        int deliveredPts = capAtDelivered ? await context.DeliveredPts() : 0;
         if (deliveredPts > 0)
         {
             visiblePts = Math.Min(visiblePts, deliveredPts);

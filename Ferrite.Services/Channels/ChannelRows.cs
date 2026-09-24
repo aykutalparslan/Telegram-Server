@@ -4,6 +4,8 @@
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
+using Ferrite.TL.baseLayer.dto;
+using Ferrite.Services.Chats;
 
 namespace Ferrite.Services.Channels;
 
@@ -15,26 +17,37 @@ public static class ChannelRows
         var participant = await participants.GetParticipantAsync(channelId, viewerUserId);
         bool active = false;
         bool creator = false;
+        byte[]? adminRights = null;
         if (participant != null)
         {
             int role = participant.Value.AsChatParticipantInfo().Role;
             active = role != (int)ChatParticipantRole.Banned &&
                      role != (int)ChatParticipantRole.Left;
             creator = role == (int)ChatParticipantRole.Creator;
+            adminRights = active ? ViewerAdminRights(participant.Value) : null;
             participant.Value.Dispose();
         }
 
-        return ForViewer(channelBytes, active, creator);
+        return ForViewer(channelBytes, active, creator, adminRights);
+    }
+
+    public static byte[]? ViewerAdminRights(TLChatParticipantInfo participant)
+    {
+        var info = participant.AsChatParticipantInfo();
+        if (info.Role != (int)ChatParticipantRole.Creator &&
+            info.Role != (int)ChatParticipantRole.Admin)
+        {
+            return null;
+        }
+
+        return info.Flags[0] && info.AdminRights.Length > 0
+            ? info.AdminRights.ToArray()
+            : ChatRights.BuildFullAdminRights();
     }
 
     public static byte[] ForViewer(byte[] channelBytes, bool viewerIsActiveParticipant,
-        bool viewerIsCreator)
+        bool viewerIsCreator, byte[]? viewerAdminRights = null)
     {
-        if (viewerIsActiveParticipant && viewerIsCreator)
-        {
-            return channelBytes;
-        }
-
         using var stored = new TLChat(channelBytes, 0, channelBytes.Length);
         if (stored.Type != TLChat.ChatType.Channel)
         {
@@ -42,11 +55,17 @@ public static class ChannelRows
         }
 
         var channel = stored.AsChannel();
+        byte[] adminRights = viewerIsActiveParticipant
+            ? viewerAdminRights ?? (viewerIsCreator ? ChatRights.BuildFullAdminRights() : [])
+            : [];
         Flags flags = channel.Flags;
         flags[0] = viewerIsCreator && channel.Creator;
         flags[2] = !viewerIsActiveParticipant;
+        flags[14] = adminRights.Length > 0;
 
-        using TLChat adjusted = WithFlags(channel, flags, channel.Flags2);
+        using TLChat adjusted = Rebuild(channel, flags, channel.Flags2, channel.Username,
+            channel.Usernames, channel.Color, channel.ProfileColor, channel.EmojiStatus,
+            adminRights);
         return adjusted.AsSpan().ToArray();
     }
 
@@ -88,6 +107,13 @@ public static class ChannelRows
     private static TLChat Rebuild(Channel source, Flags flags, Flags flags2,
         ReadOnlySpan<byte> username, Vector usernames, ReadOnlySpan<byte> color,
         ReadOnlySpan<byte> profileColor, ReadOnlySpan<byte> emojiStatus) =>
+        Rebuild(source, flags, flags2, username, usernames, color, profileColor,
+            emojiStatus, source.AdminRights);
+
+    private static TLChat Rebuild(Channel source, Flags flags, Flags flags2,
+        ReadOnlySpan<byte> username, Vector usernames, ReadOnlySpan<byte> color,
+        ReadOnlySpan<byte> profileColor, ReadOnlySpan<byte> emojiStatus,
+        ReadOnlySpan<byte> adminRights) =>
         new Channel(flags, flags[0], flags[2], flags[5], flags[7], flags[8],
             flags[9], flags[11], flags[12], flags[19], flags[20], flags[21],
             flags[22], flags[23], flags[24], flags[25], flags[26], flags[27],
@@ -96,9 +122,10 @@ public static class ChannelRows
             flags2[16], flags2[17], flags2[19],
             source.Id, source.AccessHash, source.Title, username,
             source.Photo, source.Date, source.RestrictionReason,
-            source.AdminRights, source.BannedRights, source.DefaultBannedRights,
+            adminRights, source.BannedRights, source.DefaultBannedRights,
             source.ParticipantsCount, usernames, source.StoriesMaxId,
             color, profileColor, emojiStatus, source.Level,
             source.SubscriptionUntilDate, source.BotVerificationIcon,
-            source.SendPaidMessagesStars, source.LinkedMonoforumId);
+            source.SendPaidMessagesStars, source.LinkedMonoforumId,
+            source.LinkedCommunityId);
 }

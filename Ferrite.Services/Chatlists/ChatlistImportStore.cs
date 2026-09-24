@@ -240,7 +240,7 @@ public sealed class ChatlistImportStore
         ImportedSnapshot? import = await GetImportAsync(userId, filterId);
         ShareableFilterSnapshot? filter = await GetChatlistFilterAsync(userId,
             filterId);
-        if (import == null || filter == null)
+        if (filter == null)
         {
             return Error("FILTER_ID_INVALID"u8);
         }
@@ -258,8 +258,9 @@ public sealed class ChatlistImportStore
         }
 
         if (!ApplyLeftMembership(userId, plans) ||
-            !_dialogOrganizationRepository.DeleteImport(userId,
-                filterId) ||
+            (import != null && !_dialogOrganizationRepository.DeleteImport(userId,
+                filterId)) ||
+            !await DeleteOwnInvitesAsync(userId, filterId) ||
             !_dialogOrganizationRepository.DeleteFilter(userId,
                 filterId) || !await _unitOfWork.SaveAsync())
         {
@@ -271,6 +272,23 @@ public sealed class ChatlistImportStore
         await PushChannelUpdatesAsync(userId, plans.Where(x => x.WasActive));
         return await BuildMembershipUpdatesAsync(authKeyId, userId, filterUpdate,
             plans.Select(x => x.Peer));
+    }
+
+    private async Task<bool> DeleteOwnInvitesAsync(long userId, int filterId)
+    {
+        bool success = true;
+        IReadOnlyCollection<TLChatlistInviteState> invites = await _dialogOrganizationRepository.GetInvitesAsync(userId, filterId);
+        foreach (TLChatlistInviteState invite in invites)
+        {
+            using (invite)
+            {
+                string slug = Encoding.UTF8.GetString(
+                    invite.AsChatlistInviteState().Slug);
+                success &= _dialogOrganizationRepository.DeleteInvite(userId,
+                    filterId, slug);
+            }
+        }
+        return success;
     }
 
     private async Task<InviteImportSnapshot?> GetActiveInviteAsync(string slug)
@@ -514,10 +532,8 @@ public sealed class ChatlistImportStore
         }
         List<byte[]> chats = await _fanout.GetChatBytesForViewerAsync(userId,
             peerArray.Select(x => x.Id));
-        int seq = await _updatesContexts.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         TLUpdates result = _fanout.BuildUpdates(userId, updateBytes, [userId], chats,
-            Now(), seq);
+            Now(), seq: 0);
         return result;
     }
 

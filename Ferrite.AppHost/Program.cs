@@ -86,7 +86,10 @@ TraceStartup("elasticsearch-registered");
 
 if (ramStorage)
 {
-    cassandra.WithContainerRuntimeArgs("--tmpfs", "/var/lib/cassandra:size=1g");
+    cassandra.WithContainerRuntimeArgs("--tmpfs", "/var/lib/cassandra:size=1g")
+        .WithEnvironment("JVM_EXTRA_OPTS",
+            "-Dcassandra.config.allow_system_properties=true " +
+            "-Dcassandra.settings.auto_snapshot=false");
     redis.WithContainerRuntimeArgs("--tmpfs", "/data:size=256m");
     kafka.WithContainerRuntimeArgs("--tmpfs", "/tmp/kraft-combined-logs:size=1g");
     minio.WithContainerRuntimeArgs("--tmpfs", "/data:size=1g");
@@ -189,6 +192,10 @@ void AddFerriteNode(string name, string repositoryRoot, int port, int relayPort,
         .WithEnvironment("FERRITE_ELASTICSEARCH_URL", $"http://{host}:19200")
         .WithEnvironment("FERRITE_ELASTICSEARCH_USERNAME", "")
         .WithEnvironment("FERRITE_ELASTICSEARCH_PASSWORD", "")
+        .WithEnvironment("FERRITE_GROUP_CALL_CONTROL_URL",
+            Environment.GetEnvironmentVariable("FERRITE_GROUP_CALL_CONTROL_URL")
+            ?? $"http://{host}:9090")
+        .WithEnvironment("FERRITE_GROUP_CALL_AUTH_SECRET", groupCallSecret)
         .WithEnvironment("FERRITE_TURN_ENABLED", "1")
         .WithEnvironment("FERRITE_TURN_ADVERTISED_IPV4", mediaAddress)
         .WithEnvironment("FERRITE_TURN_PORT", "3478")

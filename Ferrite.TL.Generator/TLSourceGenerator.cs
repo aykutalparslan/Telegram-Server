@@ -1,0 +1,2109 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2022-2026 Aykut Alparslan KOC
+
+using System.Text;
+using Ferrite.TL.Schema;
+using Microsoft.CodeAnalysis;
+
+namespace Ferrite.TL.Generator;
+
+public class TLSourceGenerator
+{
+    public static readonly GeneratedSource DefaultSource = new GeneratedSource("default", "");
+    readonly SortedSet<string> _namespaces = new();
+    readonly SortedSet<string?> _bareNamespaces = new();
+    readonly SortedList<string, CombinatorDeclarationSyntax> _combinators = new();
+    readonly SortedList<string, List<CombinatorDeclarationSyntax>> _types = new();
+    private readonly Dictionary<string?, int> _typeCount = new();
+    private readonly Dictionary<string, DeclarationSignature> _declarations =
+        new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, (string Prefix, string Wrapper)> PrefixAliases =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["dd289f8e"] = ("invokeWithBusinessConnectionPrefix", "invokeWithBusinessConnection"),
+            ["1df92984"] = ("invokeWithGooglePlayIntegrityPrefix", "invokeWithGooglePlayIntegrity"),
+            ["0dae54f8"] = ("invokeWithApnsSecretPrefix", "invokeWithApnsSecret"),
+            ["adbb0f94"] = ("invokeWithReCaptchaPrefix", "invokeWithReCaptcha")
+        };
+
+    public IEnumerable<GeneratedSource> Generate(string nameSpace, string source)
+    {
+        Dictionary<string, List<CombinatorDeclarationSyntax>> types = new();
+        _namespaces.Add(nameSpace);
+        List<Token> tokens = new List<Token>();
+        var lexer = new Lexer(source);
+        foreach (GeneratedSource generatedSource in GenerateSources(nameSpace, lexer, types))
+        {
+            yield return generatedSource;
+        }
+
+        yield return DefaultSource;
+    }
+
+    private IEnumerable<GeneratedSource> GenerateSources(string nameSpace, Lexer lexer,
+        Dictionary<string, List<CombinatorDeclarationSyntax>> types)
+    {
+        List<CombinatorDeclarationSyntax> combinators = new();
+        _types.Clear();
+        ParseCombinators(nameSpace, lexer, combinators);
+        foreach (var combinator in combinators)
+        {
+            DoRenameKeywords(combinator);
+            var ns = GetNamespace(nameSpace, combinator);
+            var id = ns + "." + combinator?.Type?.Identifier;
+            if (combinator?.CombinatorType == CombinatorType.Constructor &&
+                !types.ContainsKey(id))
+            {
+                types.Add(id, new List<CombinatorDeclarationSyntax>() { combinator });
+                yield return GenerateSourceFile(combinator, ns);
+            }
+            else if (combinator?.CombinatorType == CombinatorType.Constructor)
+            {
+                types[id].Add(combinator);
+                yield return GenerateSourceFile(combinator, ns);
+            }
+            else if (combinator?.CombinatorType == CombinatorType.Function)
+            {
+                if (ShouldGenerateStreamingSource(combinator))
+                {
+                    yield return GenerateStreamingFunctionSource(combinator, ns);
+                }
+                else
+                {
+                    yield return GenerateFunctionSource(combinator, ns);
+                }
+            }
+        }
+
+        foreach (var l in _types.Values)
+        {
+            var ns = GetNamespace(nameSpace, l[0]);
+            yield return GenerateWrapper(l, ns);
+        }
+    }
+
+    private static string GetNamespace(string nameSpace, CombinatorDeclarationSyntax combinator)
+    {
+        var ns = nameSpace;
+        if (combinator?.CombinatorType == CombinatorType.Constructor &&
+            combinator.Type?.NamespaceIdentifier != null)
+        {
+            ns += (ns.Length > 0 ? "." : "") + combinator.Type.NamespaceIdentifier;
+        }
+        else if (combinator?.CombinatorType == CombinatorType.Function &&
+                 combinator.Namespace != null)
+        {
+            ns += (ns.Length > 0 ? "." : "") + combinator.Namespace;
+        }
+
+        return ns;
+    }
+
+    private static bool ShouldGenerateStreamingSource(CombinatorDeclarationSyntax combinator)
+    {
+        return combinator is { CombinatorType: CombinatorType.Function, Namespace: "upload", Arguments.Count: > 0 } &&
+               combinator.Identifier is "SaveFilePart" or "SaveBigFilePart" &&
+               combinator.Arguments[combinator.Arguments.Count - 1].TypeTerm?.Identifier == "bytes";
+    }
+
+    private GeneratedSource GenerateStreamingFunctionSource(CombinatorDeclarationSyntax combinator, string nameSpace)
+    {
+        var typeName = combinator.Identifier;
+        var streamArgument = combinator.Arguments![combinator.Arguments.Count - 1];
+        var fixedHeaderLength = 4;
+        foreach (var arg in combinator.Arguments.Take(combinator.Arguments.Count - 1))
+        {
+            fixedHeaderLength += GetFixedSize(arg);
+        }
+
+        StringBuilder sourceBuilder = new StringBuilder(@"//  <auto-generated>
+//  This file was auto-generated by the Ferrite TL Generator.
+//  Please do not modify as all changes will be lost.
+//  <auto-generated/>
+
+#nullable enable
+
+using System.IO;
+using System.IO.Pipelines;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
+using Ferrite.TL;
+using Ferrite.Utils;
+
+namespace Ferrite.TL" + (nameSpace.Length > 0 ? "." + nameSpace : "") + @";
+
+public readonly struct " + typeName + @" : ITLStreamingObject
+{
+    private readonly PipeReader _reader;
+    private readonly byte[] _header;
+    private readonly int _bytesLength;
+
+    private " + typeName + @"(PipeReader reader, byte[] header, int bytesLength)
+    {
+        _reader = reader;
+        _header = header;
+        _bytesLength = bytesLength;
+    }
+
+    public int Constructor => MemoryMarshal.Read<int>(_header.AsSpan());
+    public readonly int " + streamArgument.Identifier?.ToPascalCase() + @"Length => _bytesLength;
+    public Stream " + streamArgument.Identifier?.ToPascalCase() + @" => new TLBytesStream(_reader, _bytesLength);
+");
+
+        var offset = 4;
+        foreach (var arg in combinator.Arguments.Take(combinator.Arguments.Count - 1))
+        {
+            GenerateStreamingProperty(sourceBuilder, arg, offset);
+            offset += GetFixedSize(arg);
+        }
+
+        sourceBuilder.Append(@"
+    public static async ValueTask<" + typeName + @"> ReadAsync(PipeReader reader)
+    {
+        var header = new byte[" + fixedHeaderLength + @"];
+        int constructor = unchecked((int)0x" + combinator.Name + @");
+        MemoryMarshal.Write(header.AsSpan(0, 4), ref constructor);
+        await reader.ReadToMemoryAsync(header.AsMemory(4, " + (fixedHeaderLength - 4) + @"));
+        int bytesLength = await reader.ReadTLBytesLength();
+        return new " + typeName + @"(reader, header, bytesLength);
+    }
+
+    public async ValueTask DrainAsync(System.Threading.CancellationToken cancellationToken = default)
+    {
+        while (true)
+        {
+            var result = await _reader.ReadAsync(cancellationToken);
+            _reader.AdvanceTo(result.Buffer.End);
+            if (result.IsCompleted)
+            {
+                return;
+            }
+        }
+    }
+}
+");
+        return new GeneratedSource((nameSpace.Length > 0 ? nameSpace.Replace('.', '_') + "_" : "") +
+                                   combinator.Identifier + ".g.cs",
+            sourceBuilder.ToString());
+    }
+
+    private static void GenerateStreamingProperty(StringBuilder sb, SimpleArgumentSyntax arg, int offset)
+    {
+        var type = arg.TypeTerm?.Identifier;
+        if (type != "int" && type != "long")
+        {
+            throw new NotSupportedException("Streaming TL generation only supports fixed int/long fields before bytes.");
+        }
+
+        sb.Append(@"
+    public readonly " + type + " " + arg.Identifier?.ToPascalCase() + @" => MemoryMarshal.Read<" + type + @">(_header.AsSpan(" + offset + @"));");
+    }
+
+    private static int GetFixedSize(SimpleArgumentSyntax arg)
+    {
+        return arg.TypeTerm?.Identifier switch
+        {
+            "int" => 4,
+            "long" => 8,
+            _ => throw new NotSupportedException("Streaming TL generation only supports fixed int/long fields before bytes.")
+        };
+    }
+
+    private void DoRenameKeywords(CombinatorDeclarationSyntax combinator)
+    {
+        if (_typeCount[combinator.Identifier?.TrimEnd('_')] > 1)
+        {
+            combinator.Identifier = combinator.Namespace != null
+                ? combinator.Namespace.ToPascalCase() + combinator.Identifier
+                : combinator.Identifier;
+        }
+        if (combinator.Identifier?.ToLowerInvariant() == "file")
+        {
+            combinator.Identifier = combinator.Namespace?.ToPascalCase()+combinator.Identifier;
+        }
+
+        if (combinator.Arguments != null)
+            foreach (var arg in combinator.Arguments)
+            {
+                if (arg.Identifier == "long")
+                {
+                    arg.Identifier = "longitude";
+                }
+                if (arg.Identifier?.ToLowerInvariant() == combinator.Identifier?.ToLowerInvariant() || 
+                    arg.Identifier == "out" || arg.Identifier == "length" ||
+                    arg.Identifier == "static" || arg.Identifier == "params" ||
+                    arg.Identifier == "default" || arg.Identifier == "public" ||
+                    arg.Identifier == "readonly" || arg.Identifier == "private" ||
+                    arg.Identifier == "short" || arg.Identifier == "checked")
+                {
+                    arg.Identifier += "Property";
+                }
+            }
+    }
+
+    private void ParseCombinators(string nameSpace, Lexer lexer, List<CombinatorDeclarationSyntax> combinators)
+    {
+        var parser = new Parser(lexer);
+        var c = parser.ParseCombinator();
+        
+        while (c != null)
+        {
+            if (c.Name != null)
+            {
+                EnsureCompatibleDeclaration(nameSpace, c);
+                c.Name = NormalizeConstructorId(c.Name);
+            }
+            c.Identifier = c.Identifier?.ToPascalCase();
+            if (IsRootCoreDeclaration(c))
+            {
+                c = parser.ParseCombinator();
+                continue;
+            }
+
+            if (c.Name == null)
+            {
+                if (c.Type != null) c.Type.Identifier += "Bare";
+            }
+            c.ContainingNamespace = nameSpace;
+            var ns = nameSpace;
+            if (c.CombinatorType == CombinatorType.Constructor &&
+                c.Type?.NamespaceIdentifier != null)
+            {
+                ns += (ns.Length > 0 ? "." : "") + c.Type.NamespaceIdentifier;
+                _namespaces.Add(ns);
+                if (c.Type.NamespaceIdentifier != null)
+                {
+                    _bareNamespaces.Add(c.Type.NamespaceIdentifier);
+                }
+            }
+            else if (c.CombinatorType == CombinatorType.Function &&
+                     c.Namespace != null)
+            {
+                ns += (ns.Length > 0 ? "." : "") + c.Namespace;
+                _namespaces.Add(ns);
+                if (c.Namespace != null)
+                {
+                    _bareNamespaces.Add(c.Namespace);
+                }
+            }
+            
+            if (_typeCount.ContainsKey(c.Identifier))
+            {
+                _typeCount[c.Identifier] += 1;
+            }
+            else
+            {
+                _typeCount.Add(c.Identifier, 1);
+            }
+
+            if (c.Name != null && !_combinators.ContainsKey(c.Name))
+            {
+                combinators.Add(c);
+                _combinators.Add(c.Name, c);
+                var typeName = c.Type?.GetFullyQualifiedIdentifier();
+                var bare = c.Type?.IsBare;
+                if(typeName != null && bare !=null && !bare.Value && 
+                   c.CombinatorType == CombinatorType.Constructor)
+                {
+                    if (!_types.ContainsKey(typeName))
+                    {
+                        _types.Add(typeName, new List<CombinatorDeclarationSyntax>{c});
+                    }
+                    else
+                    {
+                        _types[typeName].Add(c);
+                    }
+                }
+            }
+            if(c.Name == null)
+            {
+                combinators.Add(c);
+            }
+            
+
+            if (c.Arguments != null)
+                foreach (var arg in c.Arguments)
+                {
+                    arg.Identifier = arg.Identifier?.ToCamelCase();
+                }
+
+            c = parser.ParseCombinator();
+        }
+    }
+
+    private void EnsureCompatibleDeclaration(string source, CombinatorDeclarationSyntax combinator)
+    {
+        string constructorId = NormalizeConstructorId(combinator.Name!);
+        DeclarationSignature current = DeclarationSignature.Capture(source, combinator);
+        if (!_declarations.TryGetValue(constructorId, out DeclarationSignature? existing))
+        {
+            _declarations.Add(constructorId, current);
+            return;
+        }
+
+        if (existing.Matches(current) || IsPrefixAlias(constructorId, existing, current))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"TL constructor 0x{constructorId} conflicts between '{existing.DeclaredName}' in " +
+            $"'{existing.Source}' and '{current.DeclaredName}' in '{current.Source}'.");
+    }
+
+    private static string NormalizeConstructorId(string value) =>
+        value.PadLeft(8, '0').ToLowerInvariant();
+
+    private static bool IsPrefixAlias(
+        string constructorId,
+        DeclarationSignature first,
+        DeclarationSignature second)
+    {
+        if (!PrefixAliases.TryGetValue(constructorId, out var alias))
+        {
+            return false;
+        }
+
+        DeclarationSignature? prefix = first.DeclaredName == alias.Prefix ? first :
+            second.DeclaredName == alias.Prefix ? second : null;
+        DeclarationSignature? wrapper = first.DeclaredName == alias.Wrapper ? first :
+            second.DeclaredName == alias.Wrapper ? second : null;
+        if (prefix == null || wrapper == null ||
+            prefix.Kind != CombinatorType.Function || wrapper.Kind != CombinatorType.Function ||
+            prefix.OptionalArguments.Length != 0 || prefix.Result != "Error" ||
+            wrapper.OptionalArguments.Length != 1 || wrapper.OptionalArguments[0] != "X:Type" ||
+            wrapper.Arguments.Length != prefix.Arguments.Length + 1 ||
+            wrapper.Arguments[wrapper.Arguments.Length - 1] != "query:!X" || wrapper.Result != "X")
+        {
+            return false;
+        }
+
+        return prefix.Arguments.SequenceEqual(wrapper.Arguments.Take(prefix.Arguments.Length));
+    }
+
+    private sealed class DeclarationSignature
+    {
+        private DeclarationSignature(
+            string source,
+            string declaredName,
+            CombinatorType kind,
+            string[] optionalArguments,
+            string[] arguments,
+            string result)
+        {
+            Source = source;
+            DeclaredName = declaredName;
+            Kind = kind;
+            OptionalArguments = optionalArguments;
+            Arguments = arguments;
+            Result = result;
+        }
+
+        public string Source { get; }
+        public string DeclaredName { get; }
+        public CombinatorType Kind { get; }
+        public string[] OptionalArguments { get; }
+        public string[] Arguments { get; }
+        public string Result { get; }
+
+        public static DeclarationSignature Capture(
+            string source,
+            CombinatorDeclarationSyntax combinator)
+        {
+            string declaredName = combinator.Namespace == null
+                ? combinator.Identifier ?? ""
+                : combinator.Namespace + "." + combinator.Identifier;
+            string[] optionalArguments = combinator.OptionalArguments?
+                .Select(argument => argument.Identifier + ":" + CaptureType(argument.TypeTerm))
+                .ToArray() ?? Array.Empty<string>();
+            string[] arguments = combinator.Arguments?
+                .Select(CaptureArgument)
+                .ToArray() ?? Array.Empty<string>();
+            return new DeclarationSignature(
+                source,
+                declaredName,
+                combinator.CombinatorType,
+                optionalArguments,
+                arguments,
+                CaptureType(combinator.Type));
+        }
+
+        public bool Matches(DeclarationSignature other) =>
+            DeclaredName == other.DeclaredName &&
+            Kind == other.Kind &&
+            OptionalArguments.SequenceEqual(other.OptionalArguments) &&
+            Arguments.SequenceEqual(other.Arguments) &&
+            Result == other.Result;
+
+        private static string CaptureArgument(SimpleArgumentSyntax argument)
+        {
+            string conditional = argument.ConditionalDefinition == null
+                ? ""
+                : argument.ConditionalDefinition.Identifier + "." +
+                  argument.ConditionalDefinition.ConditionalArgumentBit + "?";
+            return argument.Identifier + ":" + conditional + CaptureType(argument.TypeTerm);
+        }
+
+        private static string CaptureType(TypeTermSyntax? type)
+        {
+            if (type == null)
+            {
+                return "<missing>";
+            }
+
+            StringBuilder value = new();
+            if (type.IsBare)
+            {
+                value.Append('%');
+            }
+            if (type.IsTypeOf)
+            {
+                value.Append('!');
+            }
+            if (type.NamespaceIdentifier != null)
+            {
+                value.Append(type.NamespaceIdentifier);
+                value.Append('.');
+            }
+            value.Append(type.Identifier);
+            if (type.OptionalType != null)
+            {
+                value.Append('<');
+                value.Append(CaptureType(type.OptionalType));
+                value.Append('>');
+            }
+            return value.ToString();
+        }
+    }
+
+    private static bool IsRootCoreDeclaration(CombinatorDeclarationSyntax combinator)
+    {
+        if (combinator is
+        {
+            CombinatorType: CombinatorType.Constructor,
+            Name: null,
+            Namespace: null,
+            Arguments: { Count: 0 }
+        } &&
+            combinator.Type?.NamespaceIdentifier == null &&
+            combinator.Identifier is "Bytes" or "Int256" &&
+            combinator.Type.Identifier is "Bytes" or "Int256")
+        {
+            return true;
+        }
+
+        if (combinator is
+        {
+            CombinatorType: CombinatorType.Constructor,
+            Namespace: null,
+            Arguments: { Count: 0 }
+        } &&
+            combinator.Type?.NamespaceIdentifier == null &&
+            ((combinator.Identifier is "True" && combinator.Type.Identifier == "True") ||
+             (combinator.Identifier is "BoolFalse" or "BoolTrue" && combinator.Type.Identifier == "Bool")))
+        {
+            return true;
+        }
+
+        return combinator is
+        {
+            CombinatorType: CombinatorType.Constructor,
+            Namespace: null
+        } &&
+        combinator.Identifier == "Error" &&
+        combinator.Type is { NamespaceIdentifier: null, Identifier: "Error" };
+    }
+
+    public GeneratedSource GenerateObjectReader()
+    {
+        StringBuilder sb = new StringBuilder(@"//  <auto-generated>
+//  This file was auto-generated by the Ferrite TL Generator.
+//  Please do not modify as all changes will be lost.
+//  <auto-generated/>
+
+#nullable enable
+
+using System.Runtime.InteropServices;");
+        foreach (var ns in _namespaces)
+        {
+            sb.Append(@"
+using Ferrite.TL" + (ns.Length > 0 ? "." + ns : "") + ";");
+        }
+
+        sb.Append(@"
+namespace Ferrite.TL;
+
+public static class ObjectReader
+{
+    private static readonly Dictionary<int, ObjectReaderDelegate> _objectReaders = new();
+    private static readonly Dictionary<int, ObjectSizeReaderDelegate> _sizeReaders = new();
+    static ObjectReader()
+    {
+        _objectReaders.Add(Vector.ConstructorId, Vector.Read);
+        _sizeReaders.Add(Vector.ConstructorId, Vector.ReadSize);
+        _objectReaders.Add(unchecked((int)0x997275b5), BoolTrue.Read);
+        _sizeReaders.Add(unchecked((int)0x997275b5), BoolTrue.ReadSize);
+        _objectReaders.Add(unchecked((int)0xbc799737), BoolFalse.Read);
+        _sizeReaders.Add(unchecked((int)0xbc799737), BoolFalse.ReadSize);");
+        foreach (var combinator in _combinators.Values)
+        {
+            if (ShouldGenerateStreamingSource(combinator))
+            {
+                continue;
+            }
+
+            var qualified = "Ferrite.TL." + GetNamespace(combinator.ContainingNamespace ?? "",
+                combinator) + "." + combinator.Identifier;
+            sb.Append(@"
+        _objectReaders.Add(unchecked((int)0x" + combinator.Name + @"), " + qualified + @".Read);
+        _sizeReaders.Add(unchecked((int)0x" + combinator.Name + @"), " + qualified + @".ReadSize);");
+        }
+
+        sb.Append(@"
+    }
+");
+        sb.Append(@"
+    public static Span<byte> Read(Span<byte> buff)
+    {
+        if (buff.Length < 4)
+        {
+            return Span<byte>.Empty;
+        }
+        int constructor = MemoryMarshal.Read<int>(buff);
+        if (_objectReaders.ContainsKey(constructor))
+        {
+            var reader = _objectReaders[constructor];
+            return reader(buff, 0);
+        }
+        return Span<byte>.Empty;
+    }
+    public static Span<byte> Read(Span<byte> buff, int constructor)
+    {
+        if (buff.Length < 4)
+        {
+            return Span<byte>.Empty;
+        }
+        if (_objectReaders.ContainsKey(constructor))
+        {
+            var reader = _objectReaders[constructor];
+            return reader(buff, 0);
+        }
+        return Span<byte>.Empty;
+    }
+    public static int ReadSize(Span<byte> buff)
+    {
+        if (buff.Length < 4)
+        {
+            return 0;
+        }
+        int constructor = MemoryMarshal.Read<int>(buff);
+        if (_sizeReaders.ContainsKey(constructor))
+        {
+            var reader = _sizeReaders[constructor];
+            return reader(buff, 0);
+        }
+        return 0;
+    }
+    public static int ReadSize(Span<byte> buff, int constructor)
+    {
+        if (buff.Length < 4)
+        {
+            return 0;
+        }
+        if (_sizeReaders.ContainsKey(constructor))
+        {
+            var reader = _sizeReaders[constructor];
+            return reader(buff, 0);
+        }
+        return 0;
+    }
+    public static ObjectReaderDelegate? GetObjectReader(int constructor)
+    {
+        if (_objectReaders.ContainsKey(constructor))
+        {
+            return _objectReaders[constructor];
+        }
+
+        return null;
+    }
+    public static ObjectSizeReaderDelegate? GetObjectSizeReader(int constructor)
+    {
+        if (_sizeReaders.ContainsKey(constructor))
+        {
+            return _sizeReaders[constructor];
+        }
+
+        return null;
+    }
+}
+");
+        return new GeneratedSource("ObjectReader.g.cs",
+            sb.ToString());
+    }
+
+    public GeneratedSource GenerateConstructors()
+    {
+        StringBuilder sb = new StringBuilder(@"//  <auto-generated>
+//  This file was auto-generated by the Ferrite TL Generator.
+//  Please do not modify as all changes will be lost.
+//  <auto-generated/>
+
+#nullable enable
+
+using System.Collections.Frozen;
+
+namespace Ferrite.TL;
+
+public static class Constructors
+{
+    ");
+        foreach (var combinator in _combinators.Values)
+        {
+            sb.Append(@"
+    public const int " + combinator.ContainingNamespace + "_" + combinator.Identifier + " = unchecked((int)0x" + combinator.Name + @");");
+        }
+
+        sb.Append(@"
+}
+
+public static class MTProtoConstructors
+{
+    public static FrozenSet<int> All { get; } = new int[]
+    {");
+        foreach (var combinator in _combinators.Values.Where(c => c.ContainingNamespace == "mtproto"))
+        {
+            sb.Append(@"
+        Constructors.mtproto_" + combinator.Identifier + ",");
+        }
+
+        sb.Append(@"
+    }.ToFrozenSet();
+}
+");
+        return new GeneratedSource("Constructors.g.cs",
+            sb.ToString());
+    }
+
+    private static string BoxedTypeUsing(string nameSpace) =>
+        nameSpace.StartsWith("layer") ? "using Ferrite.TL.baseLayer;\n" : "";
+
+    private GeneratedSource GenerateFunctionSource(CombinatorDeclarationSyntax combinator, string nameSpace)
+    {
+        var typeName = combinator.Identifier;
+        StringBuilder sourceBuilder = new StringBuilder(@"//  <auto-generated>
+//  This file was auto-generated by the Ferrite TL Generator.
+//  Please do not modify as all changes will be lost.
+//  <auto-generated/>
+
+#nullable enable
+
+using System.Buffers;
+using System.Runtime.InteropServices;
+using Ferrite.Utils;
+using DotNext.Buffers;
+" + BoxedTypeUsing(nameSpace) + @"
+namespace Ferrite.TL" + (nameSpace.Length > 0 ? "." + nameSpace : "") + @";
+
+public ref struct " + typeName + @"
+{
+    private readonly Span<byte> _buff;
+    private readonly IMemoryOwner<byte>? _memory;");
+        GenerateCreate(sourceBuilder, combinator);
+        if (combinator.Arguments != null)
+        {
+            sourceBuilder.Append(
+                @"
+    public " + typeName + @"(Span<byte> buff)
+    {
+        _buff = buff;
+    }
+    " +
+                (combinator.Name != null
+                    ? @"
+    public readonly int Constructor => MemoryMarshal.Read<int>(_buff);
+
+    private void SetConstructor(int constructor)
+    {
+        MemoryMarshal.Write(_buff.Slice(0, 4), ref constructor);
+    }"
+                    : "") +
+                @"
+    public int Length => _buff.Length;
+    public ReadOnlySpan<byte> ToReadOnlySpan() => _buff;
+    public TLBytes? TLBytes => _memory != null ? new TLBytes(_memory, 0, _buff.Length) : null;
+    public static Span<byte> Read(Span<byte> data, int offset)
+    {
+        var bytesRead = GetOffset(" + (combinator.Arguments.Count + 1) +
+                @", data[offset..]);
+        if (bytesRead > data.Length + offset)
+        {
+            return Span<byte>.Empty;
+        }
+        return data.Slice(offset, bytesRead);
+    }
+");
+            GenerateGetRequiredBufferSize(sourceBuilder, combinator);
+            sourceBuilder.Append(@"
+    public static int ReadSize(Span<byte> data, int offset)
+    {
+        return GetOffset(" + (combinator.Arguments.Count + 1) +
+                                 @", data[offset..]);
+    }");
+        }
+
+        GenerateProperties(sourceBuilder, combinator, out var hasObjectProperty);
+        if (hasObjectProperty)
+        {
+            GenerateBackingMemory(sourceBuilder, typeName!);
+        }
+        GenerateGetOffset(sourceBuilder, combinator);
+        GenerateBuilder(sourceBuilder, combinator);
+        var fromTLBytes = hasObjectProperty ? "b" : "b.AsSpan()";
+        var str = @"
+    public static explicit operator "+ typeName +@"(TLBytes b) => new "+ typeName + "(" + fromTLBytes + @");
+
+    public static explicit operator "+ typeName +@"(Span<byte> b) => new "+ typeName +@"(b);
+
+    public void Dispose()
+    {
+        _memory?.Dispose();
+    }
+}
+";
+        sourceBuilder.Append(str);
+        return new GeneratedSource((nameSpace.Length > 0 ? nameSpace.Replace('.', '_') + "_" : "") +
+                                   combinator.Identifier + ".g.cs",
+            sourceBuilder.ToString());
+    }
+
+    private static void GenerateBackingMemory(StringBuilder sb, string typeName)
+    {
+        sb.Append(@"
+    private Memory<byte>? _mem;
+    private readonly Memory<byte>? _backingMemory;
+    public " + typeName + @"(TLBytes b)
+    {
+        _buff = b.AsSpan();
+        _backingMemory = b.AsMemory();
+    }");
+    }
+
+    private GeneratedSource GenerateSourceFile(CombinatorDeclarationSyntax combinator, string nameSpace)
+    {
+        var baseType = combinator.Type?.Identifier;
+        var typeName = (combinator.Name != null ? combinator.Identifier : combinator.Type?.Identifier);
+        StringBuilder sourceBuilder = new StringBuilder(@"//  <auto-generated>
+//  This file was auto-generated by the Ferrite TL Generator.
+//  Please do not modify as all changes will be lost.
+//  <auto-generated/>
+
+#nullable enable
+
+using System.Buffers;
+using System.Runtime.InteropServices;
+using Ferrite.Utils;
+using DotNext.Buffers;
+" + BoxedTypeUsing(nameSpace) + @"
+namespace Ferrite.TL" + (nameSpace.Length > 0 ? "." + nameSpace : "") + @";
+
+public ref struct " + typeName + @"
+{
+    private readonly Span<byte> _buff;
+    private readonly IMemoryOwner<byte>? _memory;");
+        GenerateCreate(sourceBuilder, combinator);
+        if (combinator.Arguments != null)
+        {
+            sourceBuilder.Append(
+                @"
+    public " + typeName + @"(Span<byte> buff)
+    {
+        _buff = buff;
+    }
+    " +
+                (combinator.Name != null
+                    ? @"
+    public readonly int Constructor => MemoryMarshal.Read<int>(_buff);
+
+    private void SetConstructor(int constructor)
+    {
+        MemoryMarshal.Write(_buff.Slice(0, 4), ref constructor);
+    }"
+                    : "") +
+                @"
+    public int Length => _buff.Length;
+    public ReadOnlySpan<byte> ToReadOnlySpan() => _buff;
+    public TLBytes? TLBytes => _memory != null ? new TLBytes(_memory, 0, _buff.Length) : null;
+    public static Span<byte> Read(Span<byte> data, int offset)
+    {
+        var bytesRead = GetOffset(" + (combinator.Arguments.Count + 1) +
+                @", data[offset..]);
+        if (bytesRead > data.Length + offset)
+        {
+            return Span<byte>.Empty;
+        }
+        return data.Slice(offset, bytesRead);
+    }
+");
+            GenerateGetRequiredBufferSize(sourceBuilder, combinator);
+            sourceBuilder.Append(@"
+    public static int ReadSize(Span<byte> data, int offset)
+    {
+        return GetOffset(" + (combinator.Arguments.Count + 1) +
+                                 @", data[offset..]);
+    }");
+        }
+
+        GenerateProperties(sourceBuilder, combinator, out var hasObjectProperty);
+        if (hasObjectProperty)
+        {
+            GenerateBackingMemory(sourceBuilder, typeName!);
+        }
+        GenerateGetOffset(sourceBuilder, combinator);
+        GenerateBuilder(sourceBuilder, combinator);
+        if (baseType != "MessageBare")
+        {
+            sourceBuilder.Append(@"
+
+    public static implicit operator TL"+baseType+"("+typeName+@" b)
+    {
+        if (b._memory != null) return new TL"+baseType+@"(b._memory, 0, b._buff.Length);
+        var mem = b._buff.ToArray();
+        return new TL"+baseType+@"(mem, 0, mem.Length);
+    }");
+        }
+
+        var fromTLBytes = hasObjectProperty ? "b" : "b.AsSpan()";
+        sourceBuilder.Append(@"
+
+    public static explicit operator " + typeName + @"(TLBytes b) => new " + typeName + "(" + fromTLBytes + @");
+
+    public static explicit operator " + typeName + @"(Span<byte> b) => new " + typeName + @"(b);
+
+    public void Dispose()
+    {
+        _memory?.Dispose();
+    }
+}
+");
+        return new GeneratedSource((nameSpace.Length > 0 ? nameSpace.Replace('.', '_') + "_" : "") +
+                                   combinator.Identifier + ".g.cs",
+            sourceBuilder.ToString());
+    }
+    
+    private GeneratedSource GenerateWrapper(List<CombinatorDeclarationSyntax> combinators, string nameSpace)
+    {
+        var typeName = combinators[0].Type?.Identifier;
+
+        StringBuilder sourceBuilder = new StringBuilder(@"//  <auto-generated>
+//  This file was auto-generated by the Ferrite TL Generator.
+//  Please do not modify as all changes will be lost.
+//  <auto-generated/>
+
+#nullable enable
+
+using System.Buffers;
+using System.Runtime.InteropServices;
+using Ferrite.Utils;
+using Ferrite.TL.mtproto;
+
+namespace Ferrite.TL" + (nameSpace.Length > 0 ? "." + nameSpace : "") + @";
+
+public readonly struct TL" + typeName + @" : IDisposable
+{
+    private readonly TLBytes _tlBytes;
+    private readonly int _constructor;
+    public int Constructor => _constructor;
+    public TL" + typeName + @"(IMemoryOwner<byte> memoryOwner, int offset, int length)
+    {
+        _constructor = MemoryMarshal.Read<int>(memoryOwner.Memory.Span[offset..]);
+        ThrowIfInvalid();
+        _tlBytes = new TLBytes(memoryOwner, offset, length);
+    }
+
+    public TL" + typeName + @"(Memory<byte> memory, int offset, int length)
+    {
+        _constructor = MemoryMarshal.Read<int>(memory.Span[offset..]);
+        ThrowIfInvalid();
+        _tlBytes = new TLBytes(memory, offset, length);
+    }
+
+    private TL" + typeName + @"(TLBytes bytes)
+    {
+        _constructor = bytes.Constructor;
+        ThrowIfInvalid();
+        _tlBytes = bytes;
+    }");
+        GenerateTypeCheck(sourceBuilder, combinators);
+        GenerateOperators(sourceBuilder, combinators);
+        GenerateCastFunctions(sourceBuilder, combinators);
+        GenerateConstructorEnum(sourceBuilder, combinators);
+        var str = @"
+    public Span<byte> AsSpan() => _tlBytes.AsSpan();
+    public void Dispose()
+    {
+        _tlBytes.Dispose();
+    }
+}
+";
+        sourceBuilder.Append(str);
+        GenerateUnionView(sourceBuilder, combinators);
+        return new GeneratedSource( (nameSpace.Length > 0 ? nameSpace.Replace('.', '_') + "_" : "") +
+                                    "TL" + combinators[0].Type!.Identifier + ".g.cs",
+            sourceBuilder.ToString());
+    }
+
+    private void GenerateUnionView(StringBuilder sb, List<CombinatorDeclarationSyntax> combinators)
+    {
+        string typeName = combinators[0].Type?.Identifier!;
+        bool isRpcError = combinators[0].Identifier == "RpcError";
+        sb.Append(@"
+public ref struct " + typeName + @"View
+{
+    private readonly Span<byte> _buff;
+    public " + typeName + @"View(Span<byte> buff)
+    {
+        _buff = buff;
+    }
+    public int Constructor => _buff.Length >= 4 ? MemoryMarshal.Read<int>(_buff) : 0;
+    public TL" + typeName + "." + typeName + @"Type Type => Constructor switch
+    {");
+        for (int i = 0; i < combinators.Count; i++)
+        {
+            sb.Append(@"
+        unchecked((int)0x" + combinators[i].Name + ") => TL" + typeName + "." + typeName + "Type." +
+                      combinators[i].Identifier + ",");
+        }
+        if (!isRpcError)
+        {
+            sb.Append(@"
+        unchecked((int)0x2144ca19) => TL" + typeName + "." + typeName + @"Type.RpcError,");
+        }
+        sb.Append(@"
+        _ => TL" + typeName + "." + typeName + @"Type.InvalidObject
+    };");
+        for (int i = 0; i < combinators.Count; i++)
+        {
+            string constructorName = combinators[i].Identifier!;
+            sb.Append(@"
+    public " + constructorName + " As" + constructorName + "() => (" + constructorName + @")_buff;
+    public bool Is(out " + constructorName + @" value)
+    {
+        if (Type == TL" + typeName + "." + typeName + "Type." + constructorName + @")
+        {
+            value = (" + constructorName + @")_buff;
+            return true;
+        }
+        value = default;
+        return false;
+    }");
+        }
+        if (!isRpcError)
+        {
+            sb.Append(@"
+    public RpcError GetError() => (RpcError)_buff;");
+        }
+        sb.Append(@"
+    public static implicit operator " + typeName + "View(Span<byte> b) => new " + typeName + @"View(b);
+}
+");
+    }
+
+    private void GenerateCastFunctions(StringBuilder sb, List<CombinatorDeclarationSyntax> combinators)
+    {
+        for (var i = 0; i < combinators.Count; i++)
+        {
+            string constructorName = combinators[i].Identifier!;
+            sb.Append(@"
+    public " + constructorName + " As" + constructorName + "() => (" + constructorName + ")_tlBytes;");
+        }
+
+        if (combinators[0].Identifier != "RpcError")
+        {
+            sb.Append(@"
+    public RpcError GetError() => (RpcError)_tlBytes;");
+        }
+    }
+
+    private void GenerateConstructorEnum(StringBuilder sb, List<CombinatorDeclarationSyntax> combinators)
+    {
+        string typeName = combinators[0].Type?.Identifier!;
+        sb.Append(@"
+    public " + typeName + @"Type Type => _constructor switch
+    {");
+        for (int i = 0; i < combinators.Count; i++)
+        {
+            string constructorName = combinators[i].Identifier!;
+            sb.Append(@"
+        unchecked((int)0x" + combinators[i].Name + ") => "+typeName+@"Type."+constructorName+",");
+        }
+        if (combinators[0].Identifier != "RpcError")
+        {
+            sb.Append(@"
+        unchecked((int)0x2144ca19) => " + typeName + @"Type.RpcError,");
+        }
+        sb.Append(@"
+        _ => "+typeName+@"Type.InvalidObject
+    };");
+        sb.Append(@"
+    public enum "+typeName+@"Type
+    {");
+        for (var i = 0; i < combinators.Count; i++)
+        {
+            string constructorName = combinators[i].Identifier!;
+            sb.Append(@"
+        " + constructorName + ",");
+        }
+
+        if (combinators[0].Identifier != "RpcError")
+        {
+            sb.Append(@"
+        RpcError,");
+        }
+        sb.Append(@"
+        InvalidObject,");
+        sb.Append(@"
+    }");
+    }
+
+    private void GenerateOperators(StringBuilder sb, List<CombinatorDeclarationSyntax> combinators)
+    {
+        string typeName = combinators[0].Type?.Identifier!;
+        sb.Append(@"
+    public static explicit operator TL" + typeName + "(TLBytes b) => new (b);");
+        sb.Append(@"
+    public static implicit operator TLBytes(TL" + typeName + " b) => b._tlBytes;");
+    }
+
+    private void GenerateTypeCheck(StringBuilder sb, List<CombinatorDeclarationSyntax> combinators)
+    {
+        sb.Append(@"
+    private void ThrowIfInvalid()
+    {
+        if (");
+        for (int i = 0; i < combinators.Count; i++)
+        {
+            var and = i != 0
+                ? @" && 
+            " 
+                : "";
+            sb.Append(and + "_constructor != unchecked((int)0x" + combinators[i].Name + ")");
+        }
+
+        if (combinators[0].Identifier != "RpcError")
+        {
+            sb.Append(@" &&
+            _constructor != unchecked((int)0x2144ca19)");
+        }
+
+        sb.Append(@")
+        {
+            throw new InvalidCastException();
+        }
+    }");
+    }
+
+    private void GenerateGetRequiredBufferSize(StringBuilder sb, CombinatorDeclarationSyntax combinator)
+    {
+        sb.Append(@"
+    public static int GetRequiredBufferSize(");
+        bool first = true;
+        if (combinator.Arguments != null)
+        {
+            foreach (var arg in combinator.Arguments)
+            {
+                if (arg.TypeTerm != null && arg.ConditionalDefinition != null && arg.TypeTerm.Identifier != "true" &&
+                    arg.TypeTerm.IsBare)
+                {
+                    if (!first)
+                    {
+                        sb.Append(", ");
+                    }
+
+                    first = false;
+                    if (arg.TypeTerm?.Identifier is "int" or "long" or "double" or "int128" or "int256"
+                        or "int512" or "Bool")
+                    {
+                        sb.Append("bool has" + arg.Identifier?.ToPascalCase());
+                    }
+                    else
+                    {
+                        sb.Append("bool has" + arg.Identifier?.ToPascalCase() + ", int len" + arg.Identifier?.ToPascalCase());
+                    }
+                }
+                else if (arg.ConditionalDefinition != null && arg.TypeTerm?.Identifier == "Bool")
+                {
+                    if (!first)
+                    {
+                        sb.Append(", ");
+                    }
+
+                    first = false;
+                    sb.Append("bool has" + arg.Identifier?.ToPascalCase());
+                }
+                else if (arg.ConditionalDefinition != null && arg.TypeTerm?.Identifier != "true")
+                {
+                    if (!first)
+                    {
+                        sb.Append(", ");
+                    }
+
+                    first = false;
+                    sb.Append("int len" + arg.Identifier?.ToPascalCase());
+                }
+                else if (arg.TypeTerm?.Identifier != "#" && arg.TypeTerm?.Identifier != "int" &&
+                         arg.TypeTerm?.Identifier != "long" && arg.TypeTerm?.Identifier != "double" &&
+                         arg.TypeTerm?.Identifier != "int128" && arg.TypeTerm?.Identifier != "int256" &&
+                         arg.TypeTerm?.Identifier != "int512" &&
+                         arg.TypeTerm?.Identifier != "true" && arg.TypeTerm?.Identifier != "Bool")
+                {
+                    if (!first)
+                    {
+                        sb.Append(", ");
+                    }
+
+                    first = false;
+                    sb.Append("int len" + arg.Identifier?.ToPascalCase());
+                }
+            }
+
+            sb.Append(@")
+    {
+        return ");
+            bool appended = false;
+            if (combinator.Name != null)
+            {
+                sb.Append("4");
+                appended = true;
+            }
+
+            for (int i = 0; i < combinator.Arguments.Count; i++)
+            {
+                var arg = combinator.Arguments[i];
+                if (arg.TypeTerm?.Identifier == "#")
+                {
+                    if (appended)
+                    {
+                        sb.Append(" + ");
+                    }
+                    else
+                    {
+                        appended = true;
+                    }
+
+                    sb.Append("4");
+                }
+                else if (arg.TypeTerm?.Identifier == "true")
+                {
+                }
+                else if (arg.TypeTerm?.Identifier == "int")
+                {
+                    if (appended)
+                    {
+                        sb.Append(" + ");
+                    }
+                    else
+                    {
+                        appended = true;
+                    }
+
+                    sb.Append(arg.ConditionalDefinition != null ? "(has" + arg.Identifier?.ToPascalCase() + @"?4:0)" : "4");
+                }
+                else if (arg.TypeTerm?.Identifier == "Bool")
+                {
+                    if (appended)
+                    {
+                        sb.Append(" + ");
+                    }
+                    else
+                    {
+                        appended = true;
+                    }
+
+                    sb.Append(arg.ConditionalDefinition != null ? "(has" + arg.Identifier?.ToPascalCase() + @"?4:0)" : "4");
+                }
+                else if (arg.TypeTerm?.Identifier is "long" or "double")
+                {
+                    if (appended)
+                    {
+                        sb.Append(" + ");
+                    }
+                    else
+                    {
+                        appended = true;
+                    }
+
+                    sb.Append(arg.ConditionalDefinition != null ? "(has" + arg.Identifier?.ToPascalCase() + @"?8:0)" : "8");
+                }
+                else if (arg.TypeTerm?.Identifier == "int128")
+                {
+                    if (appended)
+                    {
+                        sb.Append(" + ");
+                    }
+                    else
+                    {
+                        appended = true;
+                    }
+
+                    sb.Append(arg.ConditionalDefinition != null ? "(has" + arg.Identifier?.ToPascalCase() + @"?16:0)" : "16");
+                }
+                else if (arg.TypeTerm?.Identifier == "int256")
+                {
+                    if (appended)
+                    {
+                        sb.Append(" + ");
+                    }
+                    else
+                    {
+                        appended = true;
+                    }
+
+                    sb.Append(arg.ConditionalDefinition != null ? "(has" + arg.Identifier?.ToPascalCase() + @"?32:0)" : "32");
+                }
+                else if (arg.TypeTerm?.Identifier == "int512")
+                {
+                    if (appended)
+                    {
+                        sb.Append(" + ");
+                    }
+                    else
+                    {
+                        appended = true;
+                    }
+
+                    sb.Append(arg.ConditionalDefinition != null ? "(has" + arg.Identifier?.ToPascalCase() + @"?64:0)" : "64");
+                }
+                else if (arg.TypeTerm?.Identifier  is "bytes" or "string")
+                {
+                    if (appended)
+                    {
+                        sb.Append(" + ");
+                    }
+                    else
+                    {
+                        appended = true;
+                    }
+
+                    if (arg.ConditionalDefinition != null)
+                    {
+                        sb.Append("(has" + arg.Identifier?.ToPascalCase() + "?BufferUtils.CalculateTLBytesLength(len" +
+                                  arg.Identifier?.ToPascalCase() +
+                                  "):0)");
+                    }
+                    else
+                    {
+                        sb.Append("BufferUtils.CalculateTLBytesLength(len" + arg.Identifier?.ToPascalCase() + ")");
+                    }
+                }
+                else
+                {
+                    if (appended)
+                    {
+                        sb.Append(" + ");
+                    }
+                    else
+                    {
+                        appended = true;
+                    }
+
+                    sb.Append("len" + arg.Identifier?.ToPascalCase());
+                }
+            }
+
+            if (!appended)
+            {
+                sb.Append("0");
+            }
+        }
+
+        sb.Append(@";
+    }");
+    }
+
+    private void GenerateCreate(StringBuilder sb, CombinatorDeclarationSyntax combinator)
+    {
+        var typeName = (combinator.Name != null ? combinator.Identifier : combinator.Type?.Identifier);
+        sb.Append(@"
+    public " + typeName +
+                  @"(");
+        if (combinator.Arguments != null)
+        {
+            int count = combinator.Arguments.Count;
+            GenerateCreateArguments(sb, combinator, count);
+        }
+
+        sb.Append(@")
+    {
+        var bufferLength = GetRequiredBufferSize(");
+        bool first = true;
+        GenerateRequiredBufferSizeArguments(sb, combinator, first);
+        sb.Append(@");
+        _memory = UnmanagedMemoryPool<byte>.Shared.Rent(bufferLength);
+        _memory.Memory.Span.Clear();
+        _buff = _memory.Memory.Span[..bufferLength];");
+        if (combinator.Name != null)
+        {
+            sb.Append(@"
+        SetConstructor(unchecked((int)0x" + combinator.Name + "));");
+        }
+        GenerateSetValues(sb, combinator);
+        sb.Append(@"
+    }");
+    }
+
+    private static void GenerateSetValues(StringBuilder sb, CombinatorDeclarationSyntax combinator)
+    {
+        if (combinator.Arguments != null)
+            foreach (var arg in combinator.Arguments)
+            {
+                if (arg.TypeTerm?.Identifier == "#")
+                {
+                    GenerateSetFlagsValue(sb, arg);
+                }
+                else if (arg.TypeTerm?.Identifier == "true")
+                {
+                }
+                else if (arg.TypeTerm is { IsBare: true, OptionalType: null })
+                {
+                    GenerateSetBareTypeValue(sb, arg);
+                }
+                else if (arg.TypeTerm?.Identifier is "Vector" or "VectorBare" or "vector")
+                {
+                    GenerateSetVectorValue(sb, arg);
+                }
+                else
+                {
+                    GenerateSetDefaultValue(sb, arg);
+                }
+            }
+    }
+
+    private static void GenerateSetFlagsValue(StringBuilder sb, SimpleArgumentSyntax arg)
+    {
+        sb.Append(@"
+        Set" + arg.Identifier?.ToPascalCase() + @"(" + arg.Identifier + ");");
+    }
+
+    private static void GenerateSetBareTypeValue(StringBuilder sb, SimpleArgumentSyntax arg)
+    {
+        if (arg.ConditionalDefinition != null &&
+            arg.TypeTerm?.Identifier != "string" && arg.TypeTerm?.Identifier != "bytes" &&
+            arg.TypeTerm?.Identifier != "int128" && arg.TypeTerm?.Identifier != "int256" &&
+            arg.TypeTerm?.Identifier != "int512")
+        {
+            sb.Append(@"
+        if(" + arg.ConditionalDefinition.Identifier + "[" + arg.ConditionalDefinition.ConditionalArgumentBit + @"])" +
+                      @"
+        {
+            Set" + arg.Identifier?.ToPascalCase() + "(" + arg.Identifier + @");
+        }");
+        }
+        else if (arg.ConditionalDefinition != null)
+        {
+            sb.Append(@"
+        if(" + arg.ConditionalDefinition.Identifier + "[" + arg.ConditionalDefinition.ConditionalArgumentBit + @"])" +
+                      @"
+        {
+            Set" + arg.Identifier?.ToPascalCase() + "(" + arg.Identifier + @");
+        }");
+        }
+        else
+        {
+            sb.Append(@"
+        Set" + arg.Identifier?.ToPascalCase() + "(" + arg.Identifier + @");");
+        }
+    }
+
+    private static void GenerateSetDefaultValue(StringBuilder sb, SimpleArgumentSyntax arg)
+    {
+        if (arg.ConditionalDefinition != null)
+        {
+            sb.Append(@"
+        if(" + arg.ConditionalDefinition.Identifier + "[" + arg.ConditionalDefinition.ConditionalArgumentBit + @"])
+        {
+            Set" + arg.Identifier?.ToPascalCase() + "(" + arg.Identifier + @");
+        }");
+        }
+        else
+        {
+            sb.Append(@"
+        Set" + arg.Identifier?.ToPascalCase() + "(" + arg.Identifier + @");");
+        }
+    }
+
+    private static void GenerateSetVectorValue(StringBuilder sb, SimpleArgumentSyntax arg)
+    {
+        if (arg.ConditionalDefinition != null)
+        {
+            sb.Append(@"
+        if(" + arg.ConditionalDefinition.Identifier + "[" + arg.ConditionalDefinition.ConditionalArgumentBit + @"])
+        {
+            Set" + arg.Identifier?.ToPascalCase() + "(" + arg.Identifier + @".ToReadOnlySpan());
+        }");
+        }
+        else
+        {
+            sb.Append(@"
+        Set" + arg.Identifier?.ToPascalCase() + "(" + arg.Identifier + @".ToReadOnlySpan());");
+        }
+    }
+
+    private static void GenerateRequiredBufferSizeArguments(StringBuilder sb, CombinatorDeclarationSyntax combinator,
+        bool first)
+    {
+        if (combinator.Arguments != null)
+            foreach (var arg in combinator.Arguments)
+            {
+                if (arg.ConditionalDefinition != null && arg.TypeTerm != null &&
+                    arg.TypeTerm?.Identifier != "true" && arg.TypeTerm!.IsBare)
+                {
+                    if (!first)
+                    {
+                        sb.Append(", ");
+                    }
+
+                    first = false;
+                    if (arg.TypeTerm?.Identifier != "int" && arg.TypeTerm?.Identifier != "long" &&
+                        arg.TypeTerm?.Identifier != "double" && arg.TypeTerm?.Identifier != "int128" &&
+                        arg.TypeTerm?.Identifier != "int256" && arg.TypeTerm?.Identifier != "int512")
+                    {
+                        sb.Append(arg.ConditionalDefinition.Identifier + "[" +
+                                  arg.ConditionalDefinition.ConditionalArgumentBit + "], " + arg.Identifier +
+                                  ".Length");
+                    }
+                    else
+                    {
+                        sb.Append(arg.ConditionalDefinition.Identifier + "[" +
+                                  arg.ConditionalDefinition.ConditionalArgumentBit + "]");
+                    }
+                }
+                else if (arg.ConditionalDefinition != null && arg.TypeTerm?.Identifier == "Bool")
+                {
+                    if (!first)
+                    {
+                        sb.Append(", ");
+                    }
+
+                    first = false;
+                    sb.Append(arg.ConditionalDefinition.Identifier + "[" +
+                              arg.ConditionalDefinition.ConditionalArgumentBit + "]");
+                }
+                else if (arg.ConditionalDefinition != null && arg.TypeTerm?.Identifier != "true")
+                {
+                    if (!first)
+                    {
+                        sb.Append(", ");
+                    }
+
+                    first = false;
+                    sb.Append("(" + arg.ConditionalDefinition.Identifier + "[" +
+                              arg.ConditionalDefinition.ConditionalArgumentBit + "]?" + arg.Identifier + ".Length:0)");
+                }
+                else if (arg.TypeTerm?.Identifier != "#" && arg.TypeTerm?.Identifier != "int" &&
+                         arg.TypeTerm?.Identifier != "long" && arg.TypeTerm?.Identifier != "double" &&
+                         arg.TypeTerm?.Identifier != "int128" && arg.TypeTerm?.Identifier != "int256" &&
+                         arg.TypeTerm?.Identifier != "int512" &&
+                         arg.TypeTerm?.Identifier != "true" && arg.TypeTerm?.Identifier != "Bool")
+                {
+                    if (!first)
+                    {
+                        sb.Append(", ");
+                    }
+
+                    first = false;
+                    sb.Append(arg.Identifier + ".Length");
+                }
+            }
+    }
+
+    private static void GenerateCreateArguments(StringBuilder sb, CombinatorDeclarationSyntax combinator, int count)
+    {
+        if (combinator.Arguments != null)
+            foreach (var arg in combinator.Arguments)
+            {
+                bool comma = --count != 0;
+
+                if (arg.TypeTerm?.Identifier == "#")
+                {
+                    sb.Append("Flags " + arg.Identifier + (comma ? ", " : ""));
+                }
+                else if (arg.TypeTerm?.Identifier is "true" or "Bool")
+                {
+                    sb.Append("bool " + arg.Identifier + (comma ? ", " : ""));
+                }
+                else if (arg.TypeTerm?.Identifier is "bytes" or "string" or "int128" or "int256" or "int512")
+                {
+                    sb.Append("ReadOnlySpan<byte> " + arg.Identifier + (comma ? ", " : ""));
+                }
+                else if (arg.TypeTerm?.Identifier is "int" or "double" or "long")
+                {
+                    string typeIdent = arg.TypeTerm.GetFullyQualifiedIdentifier();
+                    sb.Append(typeIdent + " " + arg.Identifier + (comma ? ", " : ""));
+                }
+                else if (arg.TypeTerm?.Identifier is "Vector" or "VectorBare" or "vector")
+                {
+                    string typeIdent = arg.TypeTerm.GetFullyQualifiedIdentifier();
+                    sb.Append(typeIdent + " " + arg.Identifier + (comma ? ", " : ""));
+                }
+                else if (arg.TypeTerm?.Identifier != "true")
+                {
+                    sb.Append("ReadOnlySpan<byte> " + arg.Identifier + (comma ? ", " : ""));
+                }
+            }
+    }
+
+    private static void GenerateProperties(StringBuilder sb, CombinatorDeclarationSyntax combinator, out bool hasObjectProperty)
+    {
+        hasObjectProperty = false;
+        int index = 1;
+        if (combinator.Arguments != null)
+            foreach (var arg in combinator.Arguments)
+            {
+                if (arg.TypeTerm?.Identifier == "#")
+                {
+                    GenerateFlagsProperty(sb, arg, index);
+                }
+                else if (arg.TypeTerm?.Identifier == "true" &&
+                         arg.ConditionalDefinition != null)
+                {
+                    GenerateFlagsAccessorProperty(sb, arg);
+                }
+                else if (arg.TypeTerm?.Identifier == "Bool")
+                {
+                    GenerateTLBoolProperty(sb, arg, index);
+                }
+                else if (arg.TypeTerm?.Identifier is "int" or "long" or "double")
+                {
+                    GenerateBareTypeProperty(sb, arg, index);
+                }
+                else if (arg.TypeTerm?.Identifier == "int128")
+                {
+                    GenerateFixedSizeProperty(sb, arg, index, 16);
+                }
+                else if (arg.TypeTerm?.Identifier == "int256")
+                {
+                    GenerateFixedSizeProperty(sb, arg, index, 32);
+                }
+                else if (arg.TypeTerm?.Identifier == "int512")
+                {
+                    GenerateFixedSizeProperty(sb, arg, index, 64);
+                }
+                else if (arg.TypeTerm?.Identifier is "bytes" or "string")
+                {
+                    GenerateStringProperty(sb, arg, index);
+                }
+                else if (arg.TypeTerm?.Identifier is "Vector" or "VectorBare" or "vector")
+                {
+                    GenerateVectorProperty(sb, arg, index);
+                }
+                else
+                {
+                    hasObjectProperty = true;
+                    GenerateObjectProperty(sb, arg, index, combinator.ContainingNamespace);
+                }
+
+                if (arg.TypeTerm?.Identifier != "true")
+                {
+                    index++;
+                }
+            }
+    }
+
+    private static void GenerateFlagsProperty(StringBuilder sb, SimpleArgumentSyntax arg, int index)
+    {
+        sb.Append(@"
+    public readonly Flags " + arg.Identifier?.ToPascalCase() + @" => new Flags(MemoryMarshal.Read<int>(_buff[GetOffset(" + index +
+                  ", _buff)..]));");
+        sb.Append(@"
+    private void Set" + arg.Identifier?.ToPascalCase() + @"(Flags value)
+    {
+        MemoryMarshal.Write(_buff[GetOffset(" + index + @", _buff)..], ref value);
+    }");
+    }
+
+    private static void GenerateFlagsAccessorProperty(StringBuilder sb, SimpleArgumentSyntax arg)
+    {
+        sb.Append(@"
+    public readonly bool " + arg.Identifier?.ToPascalCase() + @" => " + arg.ConditionalDefinition?.Identifier?.ToPascalCase() + "[" +
+                  arg.ConditionalDefinition?.ConditionalArgumentBit + "];");
+    }
+
+    private static void GenerateTLBoolProperty(StringBuilder sb, SimpleArgumentSyntax arg, int index)
+    {
+        sb.Append(@"
+    public readonly bool " + arg.Identifier?.ToPascalCase() + " => " + (arg.ConditionalDefinition != null
+                      ? "!"+arg.ConditionalDefinition.Identifier?.ToPascalCase()+"[" + arg.ConditionalDefinition.ConditionalArgumentBit + "] ? false : "
+                      : "") +
+                  "MemoryMarshal.Read<int>(_buff[GetOffset(" + index +
+                  ", _buff)..]) == unchecked((int)0x997275b5);");
+        sb.Append(@"
+    private void Set" + arg.Identifier?.ToPascalCase() + @"(bool value)
+    {
+        int t = unchecked((int)0x997275b5);
+        int f = unchecked((int)0xbc799737);
+        if(value)
+        {
+            MemoryMarshal.Write(_buff[GetOffset(" + index + @", _buff)..], ref t);
+        }
+        else 
+        {
+            MemoryMarshal.Write(_buff[GetOffset(" + index + @", _buff)..], ref f);
+        }
+    }");
+    }
+
+    private static void GenerateFixedSizeProperty(StringBuilder sb, SimpleArgumentSyntax arg, int index, int size)
+    {
+        sb.Append(@"
+    public ReadOnlySpan<byte> " + arg.Identifier?.ToPascalCase() + " => " + (arg.ConditionalDefinition != null
+                      ? "!"+arg.ConditionalDefinition.Identifier?.ToPascalCase()+"[" + arg.ConditionalDefinition.ConditionalArgumentBit +
+                        "] ? new ReadOnlySpan<byte>() : "
+                      : "") +
+                  " _buff.Slice(GetOffset(" + index + @", _buff), "+size+@");");
+        sb.Append(@"
+    private void Set" + arg.Identifier?.ToPascalCase() + @"(ReadOnlySpan<byte> value)
+    {
+        if(value.Length != "+size+@")
+        {
+            return;
+        }
+        value.CopyTo(_buff.Slice(GetOffset(" + index + @", _buff), "+size+@"));
+    }");
+    }
+
+    private static void GenerateObjectProperty(StringBuilder sb, SimpleArgumentSyntax arg, int index, string nameSpace)
+    {
+        bool isMtprotoMessageBody = nameSpace == "mtproto" &&
+                                    arg.TypeTerm?.Identifier == "Object" &&
+                                    arg.Identifier == "body";
+        if (arg.TypeTerm?.Identifier != "Object" &&
+            arg.TypeTerm?.Identifier != "X" &&
+            !(arg.TypeTerm?.Identifier == "Message" && nameSpace =="mtproto"))
+        {
+            var ns = arg.TypeTerm.NamespaceIdentifier != null
+                ? "Ferrite.TL." + nameSpace + "." +arg.TypeTerm.NamespaceIdentifier + "."
+                : "";
+            string conditional = arg.ConditionalDefinition != null
+                ? @"
+        if(!" + arg.ConditionalDefinition.Identifier?.ToPascalCase() + "[" +
+                  arg.ConditionalDefinition.ConditionalArgumentBit + @"])
+        {
+            return new "+ns+"TL" + arg.TypeTerm?.Identifier + @"();
+        }"
+                : "";
+            string viewConditional = arg.ConditionalDefinition != null
+                ? "!" + arg.ConditionalDefinition.Identifier?.ToPascalCase() + "[" +
+                  arg.ConditionalDefinition.ConditionalArgumentBit + "] ? new " + ns + arg.TypeTerm?.Identifier +
+                  "View() : "
+                : "";
+            sb.Append(@"
+    public "+ns+"TL"+ arg.TypeTerm?.Identifier + " Get_" + arg.Identifier?.ToPascalCase() + @"()
+    {"+conditional+@"
+        var offset = GetOffset(" + index + @", _buff);
+        var size = ObjectReader.ReadSize(_buff[offset..]);
+        if(_backingMemory != null)
+        {
+            return new "+ns+"TL"+ arg.TypeTerm?.Identifier + @"(_backingMemory.Value, offset, size);
+        }
+        if(_memory != null && _mem == null)
+        {
+            _mem = _memory.Memory;
+        }
+        else if(_mem == null)
+        {
+            _mem = _buff.ToArray();
+        }
+        return new "+ns+"TL"+ arg.TypeTerm?.Identifier + @"(_mem!.Value, offset, size);
+    }");
+            sb.Append(@"
+    public " + ns + arg.TypeTerm?.Identifier + "View Get_" + arg.Identifier?.ToPascalCase() + "View() => " +
+                      viewConditional + "(" + ns + arg.TypeTerm?.Identifier +
+                      "View)ObjectReader.Read(_buff[GetOffset(" + index + @", _buff)..]);");
+        }
+        string objectReader = isMtprotoMessageBody
+            ? "_buff.Slice(GetOffset(" + index + ", _buff), Bytes)"
+            : arg.TypeTerm?.IsTypeOf == true
+            ? "_buff[GetOffset(" + index + ", _buff)..]"
+            : "ObjectReader.Read(_buff[GetOffset(" + index + ", _buff)..])";
+        sb.Append(@"
+    public Span<byte> " + arg.Identifier?.ToPascalCase() + " => " + (arg.ConditionalDefinition != null
+                      ? "!"+arg.ConditionalDefinition.Identifier?.ToPascalCase()+"[" + arg.ConditionalDefinition.ConditionalArgumentBit + "] ? new Span<byte>() : "
+                      : "") + objectReader + ";");
+        sb.Append(@"
+    private void Set" + arg.Identifier?.ToPascalCase() + @"(ReadOnlySpan<byte> value)
+    {
+        value.CopyTo(_buff[GetOffset(" + index + @", _buff)..]);
+    }");
+    }
+
+    private static void GenerateVectorProperty(StringBuilder sb, SimpleArgumentSyntax arg, int index)
+    {
+        sb.Append(@"
+    public " + arg.TypeTerm?.GetFullyQualifiedIdentifier() + " " + arg.Identifier?.ToPascalCase() + " => "
+                  + (arg.ConditionalDefinition != null
+                      ? "!"+arg.ConditionalDefinition.Identifier?.ToPascalCase()+"[" + arg.ConditionalDefinition.ConditionalArgumentBit + "] ? new "
+                        + arg.TypeTerm?.GetFullyQualifiedIdentifier() + "() : "
+                      : "")
+                  + "new " + arg.TypeTerm?.GetFullyQualifiedIdentifier() +
+                  "(_buff.Slice(GetOffset(" + index + @", _buff)));");
+        sb.Append(@"
+    private void Set" + arg.Identifier?.ToPascalCase() + @"(ReadOnlySpan<byte> value)
+    {
+        value.CopyTo(_buff[GetOffset(" + index + @", _buff)..]);
+    }");
+    }
+
+    private static void GenerateStringProperty(StringBuilder sb, SimpleArgumentSyntax arg, int index)
+    {
+        sb.Append(@"
+    public ReadOnlySpan<byte> " + arg.Identifier?.ToPascalCase() + " => " + (arg.ConditionalDefinition != null
+                      ? "!"+arg.ConditionalDefinition.Identifier?.ToPascalCase()+"[" + arg.ConditionalDefinition.ConditionalArgumentBit +
+                        "] ? new ReadOnlySpan<byte>() : "
+                      : "") +
+                  " BufferUtils.GetTLBytes(_buff, GetOffset(" + index + @", _buff));");
+        sb.Append(@"
+    private void Set" + arg.Identifier?.ToPascalCase() + @"(ReadOnlySpan<byte> value)
+    {
+        if(value.Length == 0)
+        {
+            return;
+        }
+        var offset = GetOffset(" + index + @", _buff);
+        var lenBytes = BufferUtils.WriteLenBytes(_buff, value, offset);
+        if(_buff.Length < offset + lenBytes + value.Length) return;
+        value.CopyTo(_buff[(offset + lenBytes)..]);
+    }");
+    }
+
+    private static void GenerateBareTypeProperty(StringBuilder sb, SimpleArgumentSyntax arg, int index)
+    {
+        sb.Append(@"
+    public readonly "+arg.TypeTerm?.Identifier+" " + arg.Identifier?.ToPascalCase() + " => " + (arg.ConditionalDefinition != null
+                      ? "!"+arg.ConditionalDefinition.Identifier?.ToPascalCase()+"[" + arg.ConditionalDefinition.ConditionalArgumentBit + "] ? 0 : "
+                      : "") +
+                  "MemoryMarshal.Read<"+arg.TypeTerm?.Identifier+">(_buff[GetOffset(" + index +
+                  ", _buff)..]);");
+        sb.Append(@"
+    private void Set" + arg.Identifier?.ToPascalCase() + @"("+arg.TypeTerm?.Identifier+@" value)
+    {
+        MemoryMarshal.Write(_buff[GetOffset(" + index + @", _buff)..], ref value);
+    }");
+    }
+
+    private static void GenerateBuilder(StringBuilder sb, CombinatorDeclarationSyntax combinator)
+    {
+        var typeName = (combinator.Name != null ? combinator.Identifier : combinator.Type?.Identifier);
+        sb.Append(@"
+    public ref struct TLObjectBuilder
+    {
+        public TLObjectBuilder(){}
+        public TLObjectBuilder(" + typeName + @" from)
+        {");   
+        GenerateBuilderCloneStatements(sb, combinator);
+        sb.Append( @"
+        }
+");
+        if (combinator.Arguments != null)
+            foreach (var arg in combinator.Arguments)
+            {
+                if (arg.TypeTerm?.Identifier == "#")
+                {
+                    GenerateBuilderFlags(sb, arg);
+                }
+                else if (arg.TypeTerm?.Identifier == "true" &&
+                         arg.ConditionalDefinition != null)
+                {
+                    GenerateBuilderSetFlags(sb, arg);
+                }
+                else if (arg.TypeTerm?.Identifier is "int" or "long" or "double" or "Bool")
+                {
+                    GenerateBuilderAppendBareType(sb, arg);
+                }
+                else if (arg.TypeTerm?.Identifier is "Vector" or "VectorBare" or "vector")
+                {
+                    GenerateBuilderAppendVector(sb, arg);
+                }
+                else
+                {
+                    GenerateBuilderAppendDefault(sb, arg);
+                }
+            }
+
+        sb.Append(@"
+        public " + typeName + @" Build()
+        {
+            return new " + typeName);
+
+        GenerateBuilderReturnParameters(sb, combinator);
+
+        sb.Append(@"
+        }
+    }
+    public static TLObjectBuilder Builder()
+    {
+        return new TLObjectBuilder();
+    }
+    public TLObjectBuilder Clone()
+    {
+        return new TLObjectBuilder(this);
+    }
+");
+    }
+    
+    private static void GenerateBuilderCloneStatements(StringBuilder sb, CombinatorDeclarationSyntax combinator)
+    {
+        if (combinator.Arguments == null) return;
+        foreach (var arg in combinator.Arguments)
+        {
+            if (arg.TypeTerm?.Identifier is not "true")
+            {
+                sb.Append(@"
+            _" + arg.Identifier + " = from." + arg.Identifier?.ToPascalCase() + ";");
+            }
+        }
+    }
+
+    private static void GenerateBuilderFlags(StringBuilder sb, SimpleArgumentSyntax arg)
+    {
+        sb.Append(@"
+        private Flags _" + arg.Identifier + " = new Flags();");
+    }
+
+    private static void GenerateBuilderSetFlags(StringBuilder sb, SimpleArgumentSyntax arg)
+    {
+        sb.Append(@"
+        public TLObjectBuilder " + arg.Identifier?.ToPascalCase() + @"(bool value)
+        {
+            _" + arg.ConditionalDefinition?.Identifier + "[" + arg.ConditionalDefinition?.ConditionalArgumentBit +
+                  @"] = value;
+            return this;
+        }");
+    }
+
+    private static void GenerateBuilderAppendBareType(StringBuilder sb, SimpleArgumentSyntax arg)
+    {
+        sb.Append(@"
+        private "+arg.TypeTerm?.Identifier?.ToLowerInvariant()+" _" + arg.Identifier + @";
+        /// <summary>
+        /// This parameter is "+(arg.ConditionalDefinition == null ? "":"NOT ") +@"required.
+        /// </summary>
+        /// <param name=""value"">"+ arg.TypeTerm?.GetFullyQualifiedIdentifier() +@"</param>
+        public TLObjectBuilder " + arg.Identifier?.ToPascalCase() + "("+arg.TypeTerm?.Identifier?.ToLowerInvariant()+@" value)
+        {
+            _" + arg.Identifier + @" = value;"
+                  + (arg.ConditionalDefinition != null
+                      ? @"
+            _" + arg.ConditionalDefinition.Identifier + "[" + arg.ConditionalDefinition.ConditionalArgumentBit +
+                        "] = true;"
+                      : "") +
+                  @"
+            return this;
+        }");
+    }
+
+    private static void GenerateBuilderAppendVector(StringBuilder sb, SimpleArgumentSyntax arg)
+    {
+        string typeIdent = arg.TypeTerm?.GetFullyQualifiedIdentifier() ?? string.Empty;
+        sb.Append(@"
+        private " + typeIdent + " _" + arg.Identifier + @";
+        /// <summary>
+        /// This parameter is "+(arg.ConditionalDefinition == null ? "":"NOT ") +@"required.
+        /// </summary>
+        /// <param name=""value"">"+ arg.TypeTerm?.GetFullyQualifiedIdentifier() +@"</param>
+        public TLObjectBuilder " + arg.Identifier?.ToPascalCase() + "(" + typeIdent + @" value)
+        {
+            _" + arg.Identifier + @" = value;"
+                  + (arg.ConditionalDefinition != null
+                      ? @"
+            _" + arg.ConditionalDefinition.Identifier + "[" + arg.ConditionalDefinition.ConditionalArgumentBit +
+                        "] = true;"
+                      : "") +
+                  @"
+            return this;
+        }");
+    }
+
+    private static void GenerateBuilderAppendDefault(StringBuilder sb, SimpleArgumentSyntax arg)
+    {
+        sb.Append(@"
+        private ReadOnlySpan<byte> _" + arg.Identifier + @";
+        /// <summary>
+        /// This parameter is "+(arg.ConditionalDefinition == null ? "":"NOT ") +@"required.
+        /// </summary>
+        /// <param name=""value"">"+ arg.TypeTerm?.GetFullyQualifiedIdentifier() +@"</param>
+        public TLObjectBuilder " + arg.Identifier?.ToPascalCase() + @"(ReadOnlySpan<byte> value)
+        {
+            _" + arg.Identifier + @" = value;"
+                  + (arg.ConditionalDefinition != null
+                      ? @"
+            _" + arg.ConditionalDefinition.Identifier + "[" + arg.ConditionalDefinition.ConditionalArgumentBit +
+                        "] = true;"
+                      : "") +
+                  @"
+            return this;
+        }");
+    }
+
+    private static void GenerateBuilderReturnParameters(StringBuilder sb, CombinatorDeclarationSyntax combinator)
+    {
+        sb.Append(@"(");
+        if (combinator.Arguments != null)
+        {
+            int count = combinator.Arguments.Count;
+            foreach (var arg in combinator.Arguments)
+            {
+                bool comma = --count != 0;
+                
+                if (arg.TypeTerm?.Identifier is "true")
+                {
+                    sb.Append("_" + arg.ConditionalDefinition!.Identifier + "[" +
+                              arg.ConditionalDefinition!.ConditionalArgumentBit +
+                              "]" + (comma ? ", " : ""));
+                }
+                else
+                {
+                    sb.Append("_" + arg.Identifier + (comma ? ", " : ""));
+                }
+            }
+        }
+
+        sb.Append(@");");
+    }
+
+    private static void GenerateGetOffset(StringBuilder sb, CombinatorDeclarationSyntax combinator)
+    {
+        bool isMtprotoMessageBare = combinator.ContainingNamespace == "mtproto" &&
+                                    combinator.Type?.Identifier == "MessageBare";
+        sb.Append(@"
+    private static int GetOffset(int index, Span<byte> buffer)
+    {
+        int offset = " + (combinator.Name != null ? "4" : "0") + @";" +
+                  (isMtprotoMessageBare ? @"
+        int bodyLength = 0;" : ""));
+        bool hasFlags = false;
+        if (combinator.Arguments != null)
+        {
+            int index = 2;
+            foreach (var arg in combinator.Arguments)
+            {
+                if (arg.TypeTerm?.Identifier == "int")
+                {
+                    if (isMtprotoMessageBare && arg.Identifier == "bytes")
+                    {
+                        sb.Append(@"
+        if(index >= " + index + @")
+        {
+            bodyLength = MemoryMarshal.Read<int>(buffer[offset..]);
+            offset += 4;
+        }");
+                    }
+                    else
+                    {
+                        sb.Append(@"
+        if(index >= " + index +
+                              (arg.ConditionalDefinition != null
+                                  ? " && "+arg.ConditionalDefinition.Identifier+"[" + arg.ConditionalDefinition.ConditionalArgumentBit + "]"
+                                  : "") + @") offset += 4;");
+                    }
+                }
+                else if (arg.TypeTerm?.Identifier == "Bool")
+                {
+                    sb.Append(@"
+        if(index >= " + index +
+                              (arg.ConditionalDefinition != null
+                                  ? " && "+arg.ConditionalDefinition.Identifier+"[" + arg.ConditionalDefinition.ConditionalArgumentBit + "]"
+                                  : "") + @") offset += 4;");
+                }
+                else if (arg.TypeTerm?.Identifier == "#")
+                {
+                    sb.Append(@"
+        Flags " + arg.Identifier + " = new Flags(MemoryMarshal.Read<int>(buffer[offset..]));");
+                    sb.Append(@"
+        if(index >= " + index +
+                              (arg.ConditionalDefinition != null
+                                  ? " && "+arg.ConditionalDefinition.Identifier+"[" + arg.ConditionalDefinition.ConditionalArgumentBit + "]"
+                                  : "") + @") offset += 4;");
+                }
+                else if (arg.TypeTerm?.Identifier == "true")
+                {
+                }
+                else if (arg.TypeTerm?.Identifier is "long" or "double")
+                {
+                    sb.Append(@"
+        if(index >= " + index +
+                              (arg.ConditionalDefinition != null
+                                  ? " && "+arg.ConditionalDefinition.Identifier+"[" + arg.ConditionalDefinition.ConditionalArgumentBit + "]"
+                                  : "") + @") offset += 8;");
+                }
+                else if (arg.TypeTerm?.Identifier == "int128")
+                {
+                    sb.Append(@"
+        if(index >= " + index +
+                              (arg.ConditionalDefinition != null
+                                  ? " && "+arg.ConditionalDefinition.Identifier+"[" + arg.ConditionalDefinition.ConditionalArgumentBit + "]"
+                                  : "") + @") offset += 16;");
+                }
+                else if (arg.TypeTerm?.Identifier == "int256")
+                {
+                    sb.Append(@"
+        if(index >= " + index +
+                              (arg.ConditionalDefinition != null
+                                  ? " && "+arg.ConditionalDefinition.Identifier+"[" + arg.ConditionalDefinition.ConditionalArgumentBit + "]"
+                                  : "") + @") offset += 32;");
+                }
+                else if (arg.TypeTerm?.Identifier == "int512")
+                {
+                    sb.Append(@"
+        if(index >= " + index +
+                              (arg.ConditionalDefinition != null
+                                  ? " && "+arg.ConditionalDefinition.Identifier+"[" + arg.ConditionalDefinition.ConditionalArgumentBit + "]"
+                                  : "") + @") offset += 64;");
+                }
+                else if (arg.TypeTerm?.Identifier is "bytes" or "string")
+                {
+                    sb.Append(@"
+        if(index >= " + index +
+                              (arg.ConditionalDefinition != null
+                                  ? " && "+arg.ConditionalDefinition.Identifier+"[" + arg.ConditionalDefinition.ConditionalArgumentBit + "]"
+                                  : "") + @") offset += BufferUtils.GetTLBytesLength(buffer, offset);");
+                }
+                else if (arg.TypeTerm?.Identifier is "Vector" or "VectorBare" or "vector")
+                {
+                    sb.Append(@"
+        if(index >= " + index +
+                              (arg.ConditionalDefinition != null
+                                  ? " && "+arg.ConditionalDefinition.Identifier+"[" + arg.ConditionalDefinition.ConditionalArgumentBit + "]"
+                                  : "") + @") offset += " + arg.TypeTerm.GetFullyQualifiedIdentifier() +
+                              ".ReadSize(buffer, offset);");
+                }
+                else if (isMtprotoMessageBare && arg.Identifier == "body")
+                {
+                    sb.Append(@"
+        if(index >= " + index + @") offset += bodyLength;");
+                }
+                else if (arg.TypeTerm?.IsTypeOf == true)
+                {
+                    sb.Append(@"
+        if(index >= " + index + @") offset = buffer.Length;");
+                }
+                else
+                {
+                    sb.Append(@"
+        if(index >= " + index +
+                              (arg.ConditionalDefinition != null
+                                  ? " && "+arg.ConditionalDefinition.Identifier+"[" + arg.ConditionalDefinition.ConditionalArgumentBit + "]"
+                                  : "") + @") offset += ObjectReader.ReadSize(buffer[offset..]);");
+                }
+
+                if (arg.TypeTerm?.Identifier != "true")
+                {
+                    index++;
+                }
+            }
+        }
+
+        sb.Append(@"
+        return offset;
+    }");
+    }
+}

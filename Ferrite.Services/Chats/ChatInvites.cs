@@ -27,6 +27,21 @@ public static class ChatInvites
 
     public static string LinkFromHash(string hash) => LinkPrefix + hash;
 
+    public static Ferrite.TL.baseLayer.messages.TLChatInviteJoinResult JoinResult(
+        TLUpdates updates)
+    {
+        if (updates.Type == TLUpdates.UpdatesType.RpcError)
+        {
+            return (Ferrite.TL.baseLayer.messages.TLChatInviteJoinResult)(TLBytes)updates;
+        }
+        using (updates)
+        {
+            return Ferrite.TL.baseLayer.messages.ChatInviteJoinResultOk.Builder()
+                .Updates(updates.AsSpan())
+                .Build();
+        }
+    }
+
     public static string HashFromLink(string link)
     {
         int plus = link.LastIndexOf('+');

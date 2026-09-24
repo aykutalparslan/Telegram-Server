@@ -20,7 +20,9 @@ using Ferrite.GroupCallMedia;
 using Ferrite.Services.Calls;
 using Ferrite.Services.Chatlists;
 using Ferrite.Services.Calls.E2E;
+using Ferrite.Services.Auth;
 using Ferrite.Services.Gateway;
+using Ferrite.Services.Langpack;
 using Ferrite.Services.Phone.Handlers;
 using Ferrite.Services.SecretChats;
 using Ferrite.Services.SecretChats.Handlers;
@@ -28,6 +30,7 @@ using Ferrite.Services.Scheduling;
 using Ferrite.Services.Sessions;
 using Ferrite.Services.Stats;
 using Ferrite.TL;
+using Ferrite.TL.Schema;
 using Ferrite.Transport;
 using Ferrite.Utils;
 
@@ -95,6 +98,10 @@ public class ServerBuilder
         builder.RegisterInstance(callTurn).SingleInstance();
         builder.RegisterType<SerilogLogger>().As<ILogger>().SingleInstance();
         var container = builder.Build();
+        container.Resolve<ClientLayerMigration>().RunAsync()
+            .AsTask().GetAwaiter().GetResult();
+        container.Resolve<LangPackSeed>().RunAsync()
+            .AsTask().GetAwaiter().GetResult();
         return container;
     }
 
@@ -229,142 +236,126 @@ public class ServerBuilder
                 .Create(context.Resolve<IWriteBatchAccessor>());
         static IVolatileKVStore Ephemeral(IComponentContext context) =>
             context.Resolve<IVolatileKVStoreFactory>().Create();
+        void Repository<TRepository>(Func<IComponentContext, TRepository> create)
+            where TRepository : notnull =>
+            builder.Register(create).SingleInstance().AutoActivate();
 
-        builder.Register(c => new AuthKeyRepository(Durable(c), Ephemeral(c)))
-            .As<IAuthKeyRepository>().SingleInstance();
-        builder.Register(c => new AuthorizationRepository(Durable(c), Durable(c)))
-            .As<IAuthorizationRepository>().SingleInstance();
-        builder.Register(c => new TempAuthKeyRepository(Ephemeral(c)))
-            .As<ITempAuthKeyRepository>().SingleInstance();
-        builder.Register(c => new BoundAuthKeyRepository(Ephemeral(c), Ephemeral(c),
-                Ephemeral(c)))
-            .As<IBoundAuthKeyRepository>().SingleInstance();
-        builder.Register(c => new UpdatesStateRepository(Durable(c)))
-            .As<IUpdatesStateRepository>().SingleInstance();
-        builder.Register(c => new MessageRepository(Durable(c),
-                c.Resolve<IUpdatesStateRepository>()))
-            .As<IMessageRepository>().SingleInstance();
-        builder.Register(c => new DraftsRepository(Durable(c)))
-            .As<IDraftsRepository>().SingleInstance();
-        builder.Register(c => new WebPagesRepository(Durable(c)))
-            .As<IWebPagesRepository>().SingleInstance();
-        builder.Register(c => new ChannelContentReadsRepository(Durable(c)))
-            .As<IChannelContentReadsRepository>().SingleInstance();
-        builder.Register(c => new MessageInteractionsRepository(Durable(c), Durable(c)))
-            .As<IMessageInteractionsRepository>().SingleInstance();
-        builder.Register(c => new MessageReadReceiptsRepository(Durable(c)))
-            .As<IMessageReadReceiptsRepository>().SingleInstance();
-        builder.Register(c => new PollsRepository(Durable(c), Durable(c)))
-            .As<IPollsRepository>().SingleInstance();
-        builder.Register(c => new ScheduledMessagesRepository(Durable(c)))
-            .As<IScheduledMessagesRepository>().SingleInstance();
-        builder.Register(c => new MessagingSettingsRepository(Durable(c), Durable(c),
-                Durable(c), Durable(c)))
-            .As<IMessagingSettingsRepository>().SingleInstance();
-        builder.Register(c => new ExpiringMessagesRepository(Durable(c)))
-            .As<IExpiringMessagesRepository>().SingleInstance();
-        builder.Register(c => new TopPeersRepository(Durable(c)))
-            .As<ITopPeersRepository>().SingleInstance();
-        builder.Register(c => new DialogOrganizationRepository(Durable(c), Durable(c),
-                Durable(c), Durable(c), Durable(c)))
-            .As<IDialogOrganizationRepository>().SingleInstance();
-        builder.Register(c => new StickerRepository(Durable(c), Durable(c), Durable(c),
-                Durable(c), Durable(c)))
-            .As<IStickerRepository>().SingleInstance();
-        builder.Register(c => new ChannelAdminRepository(Durable(c), Durable(c)))
-            .As<IChannelAdminRepository>().SingleInstance();
-        builder.Register(c => new ChannelAdminLogRepository(Durable(c)))
-            .As<IChannelAdminLogRepository>().SingleInstance();
-        builder.Register(c => new StatisticsRepository(Durable(c), Durable(c)))
-            .As<IStatisticsRepository>().SingleInstance();
-        builder.Register(c => new AccountSettingsRepository(Durable(c), Durable(c),
-                Durable(c), Durable(c), Durable(c), Durable(c), Durable(c), Durable(c),
-                Durable(c), Durable(c), Durable(c), Durable(c), Durable(c)))
-            .As<IAccountSettingsRepository>().SingleInstance();
-        builder.Register(c => new NearbyLocationsRepository(Durable(c)))
-            .As<INearbyLocationsRepository>().SingleInstance();
-        builder.Register(c => new ModerationRepository(Durable(c), Durable(c)))
-            .As<IModerationRepository>().SingleInstance();
-        builder.Register(c => new UserStatusRepository(Durable(c)))
-            .As<IUserStatusRepository>().SingleInstance();
-        builder.Register(c => new SessionRepository(Ephemeral(c), Ephemeral(c)))
-            .As<ISessionRepository>().SingleInstance();
-        builder.Register(c => new AuthSessionRepository(Ephemeral(c)))
-            .As<IAuthSessionRepository>().SingleInstance();
-        builder.Register(c => new PhoneCodeRepository(Ephemeral(c)))
-            .As<IPhoneCodeRepository>().SingleInstance();
-        builder.Register(c => new SignInRepository(Ephemeral(c)))
-            .As<ISignInRepository>().SingleInstance();
-        builder.Register(c => new ServerSaltRepository(Ephemeral(c), Ephemeral(c)))
-            .As<IServerSaltRepository>().SingleInstance();
-        builder.Register(c => new DeviceLockedRepository(Ephemeral(c)))
-            .As<IDeviceLockedRepository>().SingleInstance();
-        builder.Register(c => new UserRepository(Durable(c), Durable(c), Durable(c)))
-            .As<IUserRepository>().SingleInstance();
-        builder.Register(c => new AppInfoRepository(Durable(c)))
-            .As<IAppInfoRepository>().SingleInstance();
-        builder.Register(c => new DeviceInfoRepository(Durable(c), Durable(c)))
-            .As<IDeviceInfoRepository>().SingleInstance();
-        builder.Register(c => new NotifySettingsRepository(Durable(c)))
-            .As<INotifySettingsRepository>().SingleInstance();
-        builder.Register(c => new ReportReasonRepository(Durable(c)))
-            .As<IReportReasonRepository>().SingleInstance();
-        builder.Register(c => new PrivacyRulesRepository(Durable(c)))
-            .As<IPrivacyRulesRepository>().SingleInstance();
-        builder.Register(c => new ChatRepository(Durable(c), Durable(c), Durable(c)))
-            .As<IChatRepository>().SingleInstance();
-        builder.Register(c => new ChatParticipantsRepository(Durable(c)))
-            .As<IChatParticipantsRepository>().SingleInstance();
-        builder.Register(c => new ChatInvitesRepository(Durable(c), Durable(c), Durable(c)))
-            .As<IChatInvitesRepository>().SingleInstance();
-        builder.Register(c => new ForumTopicsRepository(Durable(c), Durable(c), Durable(c)))
-            .As<IForumTopicsRepository>().SingleInstance();
-        builder.Register(c => new ChannelMessagesRepository(Durable(c), Durable(c),
-                Durable(c)))
-            .As<IChannelMessagesRepository>().SingleInstance();
-        builder.Register(c => new MessageReactionsRepository(Durable(c), Durable(c),
-                Durable(c)))
-            .As<IMessageReactionsRepository>().SingleInstance();
-        builder.Register(c => new ContactsRepository(Durable(c), Durable(c)))
-            .As<IContactsRepository>().SingleInstance();
-        builder.Register(c => new BlockedPeersRepository(Durable(c)))
-            .As<IBlockedPeersRepository>().SingleInstance();
-        builder.Register(c => new FileInfoRepository(Durable(c), Durable(c), Durable(c),
-                Durable(c), Durable(c), Durable(c)))
-            .As<IFileInfoRepository>().SingleInstance();
-        builder.Register(c => new PhotoRepository(Durable(c), Durable(c), Durable(c)))
-            .As<IPhotoRepository>().SingleInstance();
-        builder.Register(c => new DocumentsRepository(Durable(c), Durable(c)))
-            .As<IDocumentsRepository>().SingleInstance();
-        builder.Register(c => new LangPackRepository(Durable(c), Durable(c)))
-            .As<ILangPackRepository>().SingleInstance();
-        builder.Register(c => new SignUpNotificationRepository(Durable(c)))
-            .As<ISignUpNotificationRepository>().SingleInstance();
-        builder.Register(c => new SecretChatsRepository(Durable(c), Durable(c), Durable(c),
-                Durable(c), Durable(c), Durable(c), Durable(c), Durable(c), Durable(c),
-                Durable(c), Durable(c), c.Resolve<IUnitOfWork>().SaveAsync))
-            .As<ISecretChatsRepository>().SingleInstance();
-        builder.Register(c => new GroupCallsRepository(Durable(c), Durable(c), Durable(c),
-                Durable(c), Durable(c), Durable(c), Durable(c),
-                c.Resolve<IUnitOfWork>().SaveAsync))
-            .As<IGroupCallsRepository>().SingleInstance();
-        builder.Register(c => new GroupCallChainRepository(Durable(c), Durable(c),
-                c.Resolve<IUnitOfWork>().SaveAsync))
-            .As<IGroupCallChainRepository>().SingleInstance();
-        builder.Register(c => new AccountPasswordRepository(Durable(c), Durable(c),
-                Ephemeral(c), Ephemeral(c), c.Resolve<IUnitOfWork>().SaveAsync))
-            .As<IAccountPasswordRepository>().SingleInstance();
-        builder.Register(c => new VerificationCodeRepository(Ephemeral(c), Ephemeral(c),
-                Ephemeral(c)))
-            .As<IVerificationCodeRepository>().SingleInstance();
-        builder.Register(c => new LoginAttemptRepository(Ephemeral(c), Ephemeral(c)))
-            .As<ILoginAttemptRepository>().SingleInstance();
-        builder.Register(c => new LoginTokenRepository(Ephemeral(c), Ephemeral(c)))
-            .As<ILoginTokenRepository>().SingleInstance();
+        Repository<IAuthKeyRepository>(c => new AuthKeyRepository(Durable(c),
+            Ephemeral(c)));
+        Repository<IAuthorizationRepository>(c => new AuthorizationRepository(Durable(c),
+            Durable(c), Durable(c)));
+        Repository<ITempAuthKeyRepository>(c => new TempAuthKeyRepository(Ephemeral(c)));
+        Repository<IBoundAuthKeyRepository>(c => new BoundAuthKeyRepository(Ephemeral(c),
+            Ephemeral(c), Ephemeral(c)));
+        Repository<IUpdatesStateRepository>(c => new UpdatesStateRepository(Durable(c)));
+        Repository<IMessageRepository>(c => new MessageRepository(Durable(c),
+            c.Resolve<IUpdatesStateRepository>()));
+        Repository<IDraftsRepository>(c => new DraftsRepository(Durable(c)));
+        Repository<IWebPagesRepository>(c => new WebPagesRepository(Durable(c)));
+        Repository<IChannelContentReadsRepository>(c =>
+            new ChannelContentReadsRepository(Durable(c)));
+        Repository<IMessageInteractionsRepository>(c =>
+            new MessageInteractionsRepository(Durable(c), Durable(c)));
+        Repository<IMessageReadReceiptsRepository>(c =>
+            new MessageReadReceiptsRepository(Durable(c)));
+        Repository<IPollsRepository>(c => new PollsRepository(Durable(c), Durable(c)));
+        Repository<IScheduledMessagesRepository>(c =>
+            new ScheduledMessagesRepository(Durable(c)));
+        Repository<IMessagingSettingsRepository>(c =>
+            new MessagingSettingsRepository(Durable(c), Durable(c), Durable(c),
+            Durable(c)));
+        Repository<IExpiringMessagesRepository>(c =>
+            new ExpiringMessagesRepository(Durable(c)));
+        Repository<ITopPeersRepository>(c => new TopPeersRepository(Durable(c)));
+        Repository<IDialogOrganizationRepository>(c =>
+            new DialogOrganizationRepository(Durable(c), Durable(c), Durable(c),
+            Durable(c), Durable(c)));
+        Repository<IStickerRepository>(c => new StickerRepository(Durable(c), Durable(c),
+            Durable(c), Durable(c), Durable(c)));
+        Repository<IChannelAdminRepository>(c => new ChannelAdminRepository(Durable(c),
+            Durable(c)));
+        Repository<IChannelAdminLogRepository>(c =>
+            new ChannelAdminLogRepository(Durable(c)));
+        Repository<IStatisticsRepository>(c => new StatisticsRepository(Durable(c),
+            Durable(c)));
+        Repository<IAccountSettingsRepository>(c =>
+            new AccountSettingsRepository(Durable(c), Durable(c), Durable(c), Durable(c),
+            Durable(c), Durable(c), Durable(c), Durable(c), Durable(c), Durable(c),
+            Durable(c), Durable(c), Durable(c)));
+        Repository<INearbyLocationsRepository>(c =>
+            new NearbyLocationsRepository(Durable(c)));
+        Repository<IModerationRepository>(c => new ModerationRepository(Durable(c),
+            Durable(c)));
+        Repository<IUserStatusRepository>(c => new UserStatusRepository(Durable(c)));
+        Repository<ISessionRepository>(c => new SessionRepository(Ephemeral(c),
+            Ephemeral(c)));
+        Repository<IAuthSessionRepository>(c => new AuthSessionRepository(Ephemeral(c)));
+        Repository<IPhoneCodeRepository>(c => new PhoneCodeRepository(Ephemeral(c)));
+        Repository<ISignInRepository>(c => new SignInRepository(Ephemeral(c)));
+        Repository<IServerSaltRepository>(c => new ServerSaltRepository(Ephemeral(c),
+            Ephemeral(c)));
+        Repository<IDeviceLockedRepository>(c =>
+            new DeviceLockedRepository(Ephemeral(c)));
+        Repository<IUserRepository>(c => new UserRepository(Durable(c), Durable(c),
+            Durable(c)));
+        Repository<IAppInfoRepository>(c => new AppInfoRepository(Durable(c)));
+        Repository<IClientLayerRepository>(c => new ClientLayerRepository(Durable(c)));
+        Repository<IDeviceInfoRepository>(c => new DeviceInfoRepository(Durable(c),
+            Durable(c)));
+        Repository<INotifySettingsRepository>(c =>
+            new NotifySettingsRepository(Durable(c)));
+        Repository<IReportReasonRepository>(c => new ReportReasonRepository(Durable(c)));
+        Repository<IPrivacyRulesRepository>(c => new PrivacyRulesRepository(Durable(c)));
+        Repository<IChatRepository>(c => new ChatRepository(Durable(c), Durable(c),
+            Durable(c)));
+        Repository<IChatParticipantsRepository>(c =>
+            new ChatParticipantsRepository(Durable(c)));
+        Repository<IChatInvitesRepository>(c => new ChatInvitesRepository(Durable(c),
+            Durable(c), Durable(c)));
+        Repository<IForumTopicsRepository>(c => new ForumTopicsRepository(Durable(c),
+            Durable(c), Durable(c)));
+        Repository<IChannelMessagesRepository>(c =>
+            new ChannelMessagesRepository(Durable(c), Durable(c), Durable(c)));
+        Repository<IMessageReactionsRepository>(c =>
+            new MessageReactionsRepository(Durable(c), Durable(c), Durable(c)));
+        Repository<IContactsRepository>(c => new ContactsRepository(Durable(c),
+            Durable(c)));
+        Repository<IBlockedPeersRepository>(c => new BlockedPeersRepository(Durable(c)));
+        Repository<IFileInfoRepository>(c => new FileInfoRepository(Durable(c),
+            Durable(c), Durable(c), Durable(c), Durable(c), Durable(c)));
+        Repository<IPhotoRepository>(c => new PhotoRepository(Durable(c), Durable(c),
+            Durable(c)));
+        Repository<IDocumentsRepository>(c => new DocumentsRepository(Durable(c),
+            Durable(c)));
+        Repository<ILangPackRepository>(c => new LangPackRepository(Durable(c),
+            Durable(c)));
+        Repository<ISignUpNotificationRepository>(c =>
+            new SignUpNotificationRepository(Durable(c)));
+        Repository<ISecretChatsRepository>(c => new SecretChatsRepository(Durable(c),
+            Durable(c), Durable(c), Durable(c), Durable(c), Durable(c), Durable(c),
+            Durable(c), Durable(c), Durable(c), Durable(c),
+            c.Resolve<IUnitOfWork>().SaveAsync));
+        Repository<IGroupCallsRepository>(c => new GroupCallsRepository(Durable(c),
+            Durable(c), Durable(c), Durable(c), Durable(c), Durable(c), Durable(c),
+            c.Resolve<IUnitOfWork>().SaveAsync));
+        Repository<IGroupCallChainRepository>(c =>
+            new GroupCallChainRepository(Durable(c), Durable(c),
+            c.Resolve<IUnitOfWork>().SaveAsync));
+        Repository<IAccountPasswordRepository>(c =>
+            new AccountPasswordRepository(Durable(c), Durable(c), Ephemeral(c),
+            Ephemeral(c), c.Resolve<IUnitOfWork>().SaveAsync));
+        Repository<IVerificationCodeRepository>(c =>
+            new VerificationCodeRepository(Ephemeral(c), Ephemeral(c), Ephemeral(c)));
+        Repository<ILoginAttemptRepository>(c => new LoginAttemptRepository(Ephemeral(c),
+            Ephemeral(c)));
+        Repository<ILoginTokenRepository>(c => new LoginTokenRepository(Ephemeral(c),
+            Ephemeral(c)));
     }
 
     private static void RegisterCoreComponents(ContainerBuilder builder)
     {
+        builder.RegisterInstance(PublishedLayerTransformRegistry.Create())
+            .As<ILayerTransformRegistry>().SingleInstance();
         builder.RegisterType<MTProtoConnection>();
         builder.RegisterType<AuthKeyProcessor>();
         builder.RegisterType<MsgContainerProcessor>();
@@ -382,6 +373,8 @@ public class ServerBuilder
         builder.RegisterType<MessageIdGenerator>().As<IMessageIdGenerator>().SingleInstance();
         builder.RegisterType<ReceivedMessageIdRegistry>()
             .As<IReceivedMessageIdRegistry>().SingleInstance();
+        builder.RegisterType<SessionOutbox>()
+            .As<ISessionOutbox>().SingleInstance();
         builder.RegisterType<MTProtoSession>().As<IMTProtoSession>();
         builder.RegisterType<MTProtoTransportDetector>().As<ITransportDetector>();
         builder.RegisterType<SocketConnectionListener>().As<IConnectionListener>();
@@ -422,7 +415,10 @@ public class ServerBuilder
                     : typeof(ITLFileFunction).IsAssignableFrom(t)
                         ? typeof(ITLFileFunction)
                         : typeof(ITLFunction);
-                return new[] { new KeyedService(new FunctionKey(a.Layer, a.Constructor), iface) };
+                Service keyed = new KeyedService(new FunctionKey(a.Constructor), iface);
+                return t == typeof(InitConnectionFunc)
+                    ? new Service[] { keyed, new TypedService(t) }
+                    : new[] { keyed };
             })
             .SingleInstance()
             .PropertiesAutowired(PropertyWiringOptions.AllowCircularDependencies);
@@ -432,7 +428,7 @@ public class ServerBuilder
             Func<object, ITLFunction> functionFactory =
                 ServiceMethodFunction.CreateFactory(method);
             builder.Register(c => functionFactory(c.Resolve(method.DeclaringType!)))
-                .Keyed<ITLFunction>(new FunctionKey(attribute.Layer, attribute.Constructor))
+                .Keyed<ITLFunction>(new FunctionKey(attribute.Constructor))
                 .SingleInstance();
         }
 
@@ -459,11 +455,11 @@ public class ServerBuilder
                     : typeof(ITLFileFunction).IsAssignableFrom(t)
                         ? typeof(ITLFileFunction)
                         : typeof(ITLFunction);
-                return (Key: new FunctionKey(attribute.Layer, attribute.Constructor),
+                return (Key: new FunctionKey(attribute.Constructor),
                     FunctionType: functionType, Source: t.FullName!);
             })
             .Concat(serviceMethods.Select(x =>
-                (Key: new FunctionKey(x.Attribute.Layer, x.Attribute.Constructor),
+                (Key: new FunctionKey(x.Attribute.Constructor),
                     FunctionType: typeof(ITLFunction),
                     Source: $"{x.Method.DeclaringType!.FullName}.{x.Method.Name}")))
             .Concat(DisabledMethods.Keys.Select(k =>
@@ -497,6 +493,8 @@ public class ServerBuilder
             .As<IEmailIdentityTokenValidator>().SingleInstance();
         builder.RegisterType<AuthorizationCompletion>()
             .As<IAuthorizationCompletion>().SingleInstance();
+        builder.RegisterType<ClientLayerMigration>().SingleInstance();
+        builder.RegisterType<LangPackSeed>().SingleInstance();
         builder.RegisterType<VerificationCodeService>()
             .As<IVerificationCodeService>().SingleInstance();
         builder.RegisterType<AccountPasswordManager>()

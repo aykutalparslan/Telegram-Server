@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
+using Ferrite.Services.Channels;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.channels;
@@ -75,8 +76,12 @@ public sealed class GetParticipantHandler : ChannelsHandlerBase
         }
 
         byte[] participantBytes = BuildChannelParticipantBytes(stored.Value, currentUserId);
+        byte[] viewerChannelBytes = await ChannelRows.ForViewerAsync(
+            _chatParticipantsRepository, currentUserId, channelId.Value,
+            channel.Value.AsSpan().ToArray());
+
         var chatVector = new Vector();
-        chatVector.AppendTLObject(channel.Value.AsSpan());
+        chatVector.AppendTLObject(viewerChannelBytes);
         var userVector = new Vector();
         AppendUser(currentUserId, ref userVector, participantId.Value);
 

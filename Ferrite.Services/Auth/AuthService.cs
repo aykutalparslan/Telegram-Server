@@ -19,6 +19,7 @@ public class AuthService : IAuthService
     private readonly IAccountPasswordRepository _accountPasswordRepository;
 
     private readonly IAppInfoRepository _appInfoRepository;
+    private readonly IClientLayerRepository _clientLayerRepository;
     private readonly IAuthKeyRepository _authKeyRepository;
     private readonly IAuthorizationRepository _authorizationRepository;
     private readonly IBoundAuthKeyRepository _boundAuthKeyRepository;
@@ -37,7 +38,7 @@ public class AuthService : IAuthService
     private static readonly TimeSpan LoginAttemptTtl = TimeSpan.FromMinutes(5);
 
     public AuthService(IRandomGenerator random, ISearchEngine search,
-        IUnitOfWork unitOfWork, IAccountPasswordRepository accountPasswordRepository, IAppInfoRepository appInfoRepository, IAuthKeyRepository authKeyRepository, IAuthorizationRepository authorizationRepository, IBoundAuthKeyRepository boundAuthKeyRepository, ILoginAttemptRepository loginAttemptRepository, IUserRepository userRepository, ICounterFactory counterFactory,
+        IUnitOfWork unitOfWork, IAccountPasswordRepository accountPasswordRepository, IAppInfoRepository appInfoRepository, IClientLayerRepository clientLayerRepository, IAuthKeyRepository authKeyRepository, IAuthorizationRepository authorizationRepository, IBoundAuthKeyRepository boundAuthKeyRepository, ILoginAttemptRepository loginAttemptRepository, IUserRepository userRepository, ICounterFactory counterFactory,
         IVerificationCodeService verificationCodes,
         IAuthorizationCompletion authorizationCompletion,
         ILoginTokenService loginTokens,
@@ -47,6 +48,7 @@ public class AuthService : IAuthService
         _accountPasswordRepository = accountPasswordRepository;
 
         _appInfoRepository = appInfoRepository;
+        _clientLayerRepository = clientLayerRepository;
         _authKeyRepository = authKeyRepository;
         _authorizationRepository = authorizationRepository;
         _boundAuthKeyRepository = boundAuthKeyRepository;
@@ -172,13 +174,25 @@ public class AuthService : IAuthService
         }
 
         int apiLayer = -1;
-        TLAuthInfo? existing = await _authorizationCompletion.ResolveAsync(
-            authKeyId);
-        using (existing)
+        TLClientLayer? storedLayer = await _clientLayerRepository
+            .GetClientLayerAsync(authKeyId);
+        using (storedLayer)
         {
-            if (existing is { } authorization)
+            if (storedLayer is { } clientLayer)
             {
-                apiLayer = authorization.AsAuthInfo().ApiLayer;
+                apiLayer = clientLayer.AsClientLayer().ApiLayer;
+            }
+        }
+        if (apiLayer < 0)
+        {
+            TLAuthInfo? existing = await _authorizationCompletion.ResolveAsync(
+                authKeyId);
+            using (existing)
+            {
+                if (existing is { } authorization)
+                {
+                    apiLayer = authorization.AsAuthInfo().ApiLayer;
+                }
             }
         }
 
@@ -400,9 +414,34 @@ public class AuthService : IAuthService
         return user;
     }
 
-    public async ValueTask<bool> SaveAppInfo(TLAppInfo info)
+    public async ValueTask<bool> SaveClientInfo(TLAppInfo info, int apiLayer)
     {
-        _appInfoRepository.PutAppInfo(info);
+        var app = info.AsAppInfo();
+        using TLClientLayer clientLayer = ClientLayer.Builder()
+            .AuthKeyId(app.AuthKeyId)
+            .ApiLayer(apiLayer)
+            .Build();
+        if (!_appInfoRepository.PutAppInfo(info) ||
+            !_clientLayerRepository.PutClientLayer(clientLayer))
+        {
+            return false;
+        }
+
+        TLAuthInfo? resolved = await _authorizationRepository
+            .GetAuthorizationAsync(app.AuthKeyId);
+        using (resolved)
+        {
+            if (resolved is { } authorization)
+            {
+                using TLAuthInfo updated = authorization.AsAuthInfo().Clone()
+                    .ApiLayer(apiLayer)
+                    .Build();
+                if (!_authorizationRepository.PutAuthorization(updated))
+                {
+                    return false;
+                }
+            }
+        }
         return await _unitOfWork.SaveAsync();
     }
 

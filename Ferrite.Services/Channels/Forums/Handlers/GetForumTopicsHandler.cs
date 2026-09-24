@@ -4,7 +4,7 @@
 using System.Text;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
-using Ferrite.TL.baseLayer.channels;
+using Ferrite.TL.baseLayer.messages;
 
 namespace Ferrite.Services.Handlers.ChannelForums;
 
@@ -39,7 +39,7 @@ public sealed class GetForumTopicsHandler
         long authKeyId, TLBytes q)
     {
         var request = (GetForumTopics)q;
-        long? channelId = ChannelForumAccess.ResolveInputChannelId(request.Get_ChannelView());
+        long? channelId = PeerResolver.ResolveInputPeerChannelId(request.Get_PeerView());
         string query = request.Flags[0] ? Encoding.UTF8.GetString(request.Q) : string.Empty;
         int offsetDate = request.OffsetDate;
         int offsetId = request.OffsetId;

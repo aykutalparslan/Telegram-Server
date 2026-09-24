@@ -127,9 +127,10 @@ def sha256(path: Path) -> str:
 def candidate_metadata() -> dict[str, Any]:
     values = read_pin()
     required = {
-        "LAYER": r"214",
+        "LAYER": r"[0-9]+",
         "IOS_CANDIDATE_COMMIT": r"[0-9a-f]{40}",
-        "IOS_CANDIDATE_BAZEL": r"8[.]3[.]1",
+        "IOS_CANDIDATE_VERSION": r"[0-9]+(?:[.][0-9]+)*",
+        "IOS_CANDIDATE_BAZEL": r"[0-9]+[.][0-9]+[.][0-9]+",
         "IOS_CANDIDATE_BAZEL_SHA256": r"[0-9a-f]{64}",
         "IOS_CANDIDATE_PATCH_SHA256": r"[0-9a-f]{64}",
     }
@@ -146,6 +147,7 @@ def candidate_metadata() -> dict[str, Any]:
     return {
         "layer": int(values["LAYER"]),
         "commit": values["IOS_CANDIDATE_COMMIT"],
+        "version": values["IOS_CANDIDATE_VERSION"],
         "bazel": values["IOS_CANDIDATE_BAZEL"],
         "patch_sha256": actual,
         "promoted": "IOS_PATCH_SHA256" in values,
@@ -227,6 +229,11 @@ def extract_application(destination: Path) -> Path:
         raise LaunchError(
             f"IPA bundle id is {info.get('CFBundleIdentifier')!r}, "
             f"expected {BUNDLE_ID!r}")
+    expected = read_pin()["IOS_CANDIDATE_VERSION"]
+    if info.get("CFBundleShortVersionString") != expected:
+        raise LaunchError(
+            f"IPA version is {info.get('CFBundleShortVersionString')!r}, "
+            f"expected {expected!r}; rebuild it for the pinned application")
     executable = info.get("CFBundleExecutable")
     if not executable or not (destination / executable).is_file():
         raise LaunchError("IPA application executable is absent")
@@ -373,7 +380,29 @@ def bridge_request(instance: Instance, token: str, payload: dict[str, Any],
     return value
 
 
-def await_state(instance: Instance, token: str, expected: str,
+def application_log(instance: Instance, stream: str) -> Path:
+    return STATE / f"{instance.instance_id}-{stream}.log"
+
+
+def launched_pid(output: str) -> int:
+    match = re.fullmatch(rf"{re.escape(BUNDLE_ID)}: ([0-9]+)", output.strip())
+    if not match:
+        raise LaunchError(
+            f"simctl launch reported no process id: {output.strip()!r}")
+    return int(match.group(1))
+
+
+def application_running(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def await_state(instance: Instance, token: str, expected: str, pid: int,
                 timeout: float = 600.0) -> dict[str, Any]:
     deadline = time.monotonic() + timeout
     last: Any = "bridge did not answer"
@@ -389,6 +418,11 @@ def await_state(instance: Instance, token: str, expected: str,
                     f"{last.get('provisioning_failure')}")
         except (ConnectionError, OSError, json.JSONDecodeError) as error:
             last = str(error)
+            if not application_running(pid):
+                raise LaunchError(
+                    f"{instance.instance_id}: application process {pid} "
+                    f"exited while waiting for {expected}; its output is in "
+                    f"{application_log(instance, 'stderr')}") from error
         time.sleep(2)
     raise LaunchError(
         f"{instance.instance_id}: never reached {expected}; last={last}")
@@ -512,18 +546,20 @@ def command_start(count: int, token: str, ferrite_port: int,
             run(["open", "-a", "Simulator"], check=False)
 
         container = node_container()
+        pids: dict[str, int] = {}
         for instance in instances:
             with verification_code_lock():
                 seen = len(issued_codes(container))
-                stdout = STATE / f"{instance.instance_id}-stdout.log"
-                stderr = STATE / f"{instance.instance_id}-stderr.log"
-                simctl(
+                stdout = application_log(instance, "stdout")
+                stderr = application_log(instance, "stderr")
+                pid = launched_pid(simctl(
                     "launch", "--terminate-running-process",
                     f"--stdout={stdout}", f"--stderr={stderr}",
                     instance.device_udid, BUNDLE_ID,
                     env=instance.environment(token),
-                )
-                await_state(instance, token, "AWAITING_CODE")
+                ))
+                pids[instance.instance_id] = pid
+                await_state(instance, token, "AWAITING_CODE", pid)
                 code = await_code(container, seen, instance.phone)
                 bridge_request(instance, token, {
                     "type": "deliver-code",
@@ -531,7 +567,8 @@ def command_start(count: int, token: str, ferrite_port: int,
                 }, timeout=120)
 
         statuses = {
-            item.instance_id: await_state(item, token, "READY")
+            item.instance_id: await_state(
+                item, token, "READY", pids[item.instance_id])
             for item in instances
         }
         value["status"] = "running"

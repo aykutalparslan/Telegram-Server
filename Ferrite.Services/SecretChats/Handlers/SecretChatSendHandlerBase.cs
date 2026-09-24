@@ -37,10 +37,18 @@ public abstract class SecretChatSendHandlerBase : SecretChatHandlerBase
             return FromCompleted(preparation);
         }
         int date = CurrentDate;
+        int messageDate = date;
+        byte[]? originalFile = null;
         byte[] resultBytes;
-        using (TLSentEncryptedMessage sent = SentEncryptedMessage.Builder()
-                   .Date(date).Build())
+        if (preparation.OriginalResult is { } original)
         {
+            resultBytes = original;
+            (messageDate, originalFile) = ReadOriginal(original);
+        }
+        else
+        {
+            using TLSentEncryptedMessage sent = SentEncryptedMessage.Builder()
+                .Date(date).Build();
             resultBytes = sent.AsSpan().ToArray();
         }
 
@@ -50,19 +58,18 @@ public abstract class SecretChatSendHandlerBase : SecretChatHandlerBase
             message = EncryptedMessageService.Builder()
                 .RandomId(randomId)
                 .ChatId(chatId)
-                .Date(date)
+                .Date(messageDate)
                 .Bytes(data)
                 .Build();
         }
         else
         {
-            using TLEncryptedFile emptyFile = EncryptedFileEmpty.Builder().Build();
             message = EncryptedMessage.Builder()
                 .RandomId(randomId)
                 .ChatId(chatId)
-                .Date(date)
+                .Date(messageDate)
                 .Bytes(data)
-                .File(emptyFile.AsSpan())
+                .File(originalFile ?? EmptyFileBytes())
                 .Build();
         }
 
@@ -106,10 +113,24 @@ public abstract class SecretChatSendHandlerBase : SecretChatHandlerBase
         if (receipt is not null)
         {
             using TLDto.TLSecretChatSendReceipt owned = receipt.Value;
-            return new SecretChatSendPreparation(default,
+            return new SecretChatSendPreparation(resolved.Context, null,
                 owned.AsSecretChatSendReceipt().Result.ToArray());
         }
-        return new SecretChatSendPreparation(resolved.Context, null);
+        return new SecretChatSendPreparation(resolved.Context, null, null);
+    }
+
+    protected static (int Date, byte[]? File) ReadOriginal(byte[] result)
+    {
+        var view = new SentEncryptedMessageView(result);
+        return view.Is(out SentEncryptedFile file)
+            ? (file.Date, file.File.ToArray())
+            : (view.AsSentEncryptedMessage().Date, null);
+    }
+
+    protected static byte[] EmptyFileBytes()
+    {
+        using TLEncryptedFile emptyFile = EncryptedFileEmpty.Builder().Build();
+        return emptyFile.AsSpan().ToArray();
     }
 
     protected async ValueTask<TLSentEncryptedMessage> EnqueuePreparedAsync(
@@ -132,8 +153,8 @@ public abstract class SecretChatSendHandlerBase : SecretChatHandlerBase
         using (append.Entry)
         using (append.Receipt)
         {
-            if ((append.Status == SecretChatSendAppendStatus.Appended ||
-                 append.Status == SecretChatSendAppendStatus.AlreadyExists) &&
+            if (append.Status is (SecretChatSendAppendStatus.Appended or
+                    SecretChatSendAppendStatus.Redelivered) &&
                 append.Receipt is not null)
             {
                 byte[] original = append.Receipt.Value.AsSecretChatSendReceipt()
@@ -174,12 +195,13 @@ public abstract class SecretChatSendHandlerBase : SecretChatHandlerBase
         using (result)
         {
             return new SecretChatSendPreparation(default,
-                result.AsSpan().ToArray());
+                result.AsSpan().ToArray(), null);
         }
     }
 
     protected readonly record struct SecretChatSendPreparation(
-        SecretChatPeerContext Context, byte[]? CompletedResult)
+        SecretChatPeerContext Context, byte[]? CompletedResult,
+        byte[]? OriginalResult)
     {
         public bool Ready => CompletedResult is null;
     }

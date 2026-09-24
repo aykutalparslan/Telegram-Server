@@ -46,7 +46,7 @@ public sealed class SendMessageHandler : MessagesHandlerBase
         _drafts = drafts;
     }
 
-    [TLFunction(Constructors.baseLayer_SendMessage)]
+    [TLFunction(Constructors.baseLayer_MessagesSendMessage)]
     public async Task<TLUpdates> Handle(long authKeyId, TLBytes q)
         {
             var auth = await _authorizationRepository.GetAuthorizationAsync(authKeyId);
@@ -56,7 +56,7 @@ public sealed class SendMessageHandler : MessagesHandlerBase
             }
 
             var userId = auth.Value.AsAuthInfo().UserId;
-            var request = (SendMessage)q;
+            var request = (MessagesSendMessage)q;
             int scheduleDate = request.Flags[10]
                 ? request.ScheduleDate
                 : 0;

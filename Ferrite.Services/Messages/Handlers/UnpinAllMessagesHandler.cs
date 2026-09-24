@@ -42,7 +42,7 @@ public sealed class UnpinAllMessagesHandler : MessagesHandlerBase
     private static TLBytes ToCurrentUnpinAllMessagesRequest(TLBytes q)
     {
         var sent = new Layer120UnpinAllMessages(q.AsSpan());
-        using var current = UnpinAllMessages.Builder()
+        var current = UnpinAllMessages.Builder()
             .Peer(sent.Peer)
             .Build();
         return current.TLBytes!.Value;
@@ -129,6 +129,7 @@ public sealed class UnpinAllMessagesHandler : MessagesHandlerBase
                 unpinnedIds,
                 pinned: false, pts, unpinnedIds.Count);
             await _updates.EnqueueUpdate(userId, update);
+            await userCtx.SettlePts(pts - unpinnedIds.Count + 1, pts);
             _log.Debug($"📌 UnpinAllMessages user:{userId} peerType:{peerType} " +
                        $"peer:{peerId} count:{unpinnedIds.Count} pts:{pts}");
             return AffectedHistory.Builder()

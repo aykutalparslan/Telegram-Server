@@ -3,17 +3,4 @@
 
 namespace Ferrite.Core.Execution.Functions;
 
-public readonly record struct FunctionKey
-{
-    private readonly int _layer;
-    private readonly int _constructorNumber;
-    
-    public FunctionKey(int layer, int constructorNumber)
-    {
-        _layer = layer;
-        _constructorNumber = constructorNumber;
-    }
-
-    public int Constructor => _constructorNumber;
-}
-    
+public readonly record struct FunctionKey(int Constructor);

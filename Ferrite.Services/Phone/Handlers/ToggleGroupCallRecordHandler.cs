@@ -18,13 +18,13 @@ public sealed class ToggleGroupCallRecordHandler : GroupCallHandlerBase
     private readonly IGroupCallRecordingCoordinator _recording;
     private readonly GroupCallRecordingOptions _recordingOptions;
 
-    public ToggleGroupCallRecordHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, UpdateFanout fanout,
+    public ToggleGroupCallRecordHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository, UpdateFanout fanout,
         GroupCallChatLink chatLink, IUpdatesContextFactory updatesContexts,
         IMTProtoTime time, GroupCallVideoOptions videoOptions,
         GroupCallMediaSourceMap sourceMap, ILogger log,
         IGroupCallRecordingCoordinator recording,
         GroupCallRecordingOptions recordingOptions)
-        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, fanout, chatLink, updatesContexts, time, videoOptions,
+        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, messageRepository, fanout, chatLink, updatesContexts, time, videoOptions,
             sourceMap, log)
     {
         _recording = recording;
@@ -36,13 +36,19 @@ public sealed class ToggleGroupCallRecordHandler : GroupCallHandlerBase
     {
         var request = (ToggleGroupCallRecord)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
         bool start = request.Start;
         bool video = request.Video;
         bool portrait = request.Video && request.VideoPortrait;
         string title = request.Flags[1]
             ? Encoding.UTF8.GetString(request.Title).Trim()
             : string.Empty;
+
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
+        }
 
         if (!callRead)
         {
@@ -89,7 +95,7 @@ public sealed class ToggleGroupCallRecordHandler : GroupCallHandlerBase
         {
             BuildCallUpdateBytes(updated, viewer, access.Peer.Id, videoCount)
         };
-        await PushCallUpdateToOtherMembersAsync(updated, access.Peer.Id,
+        await PushCallUpdateToOtherMembersAsync(updated, access,
             access.CurrentUserId, videoCount);
 
         Log.Debug($"📼 toggleGroupCallRecord call:{callId} " +

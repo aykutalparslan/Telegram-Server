@@ -584,9 +584,7 @@ public sealed class ForwardMessagesHandler
         AddOriginPeers(origins, userIds, chatIds);
 
         List<byte[]> chats = await _fanout.GetChatBytesForViewerAsync(userId, chatIds);
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
-        return _fanout.BuildUpdates(userId, updateBytes, userIds, chats, date, seq);
+        return _fanout.BuildUpdates(userId, updateBytes, userIds, chats, date, seq: 0);
     }
 
     private async Task<TLUpdates> BuildScheduledResultAsync(long authKeyId,
@@ -632,9 +630,7 @@ public sealed class ForwardMessagesHandler
         AddOriginPeers(origins, userIds, chatIds);
 
         List<byte[]> chats = await _fanout.GetChatBytesForViewerAsync(userId, chatIds);
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
-        return _fanout.BuildUpdates(userId, updateBytes, userIds, chats, date, seq);
+        return _fanout.BuildUpdates(userId, updateBytes, userIds, chats, date, seq: 0);
     }
 
     private static void AddOriginPeers(IReadOnlyList<ForwardSource> origins,

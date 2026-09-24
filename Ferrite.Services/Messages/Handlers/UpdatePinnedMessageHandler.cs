@@ -95,6 +95,7 @@ public sealed class UpdatePinnedMessageHandler : MessagesHandlerBase
 
             var userCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, userId);
             int pts = await userCtx.IncrementPts();
+            await userCtx.SettlePts(pts, pts);
             _log.Debug($"📌 UpdatePinnedMessage user:{userId} peerType:{peerType} " +
                        $"peer:{peerId} id:{messageId} pinned:{pin} pts:{pts}");
             return await _fanout.BuildPinnedMessagesResultAsync(userId, peerType, peerId,

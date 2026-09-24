@@ -15,6 +15,7 @@ namespace Ferrite.GroupCallMedia;
 public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
 {
     private const int MaxParticipants = 10_000;
+    private const int MaxFailureReasonLength = 512;
 
     private readonly HttpClient _httpClient;
     private readonly GroupCallMediaWorkerOptions _options;
@@ -92,7 +93,7 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
         {
             using var request = Build(HttpMethod.Put, RoomPath(callId));
             using var response = await SendAsync(request, _options.RequestTimeout, ct);
-            EnsureSuccess(response, "createRoom");
+            await EnsureSuccessAsync(response, "createRoom", ct);
             return true;
         }, cancellationToken);
 
@@ -101,7 +102,7 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
         {
             using var request = Build(HttpMethod.Delete, RoomPath(callId));
             using var response = await SendAsync(request, _options.RequestTimeout, ct);
-            EnsureSuccess(response, "endRoom");
+            await EnsureSuccessAsync(response, "endRoom", ct);
             using var document = await ReadJsonAsync(response, ct);
             return ReadBool(document.RootElement, "ended", "endRoom");
         }, cancellationToken);
@@ -114,7 +115,7 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
             ParticipantPath(request.CallId, request.ParticipantId),
             BuildJoinBody(request.Payload));
         using var response = await SendAsync(httpRequest, _options.RequestTimeout, cancellationToken);
-        EnsureSuccess(response, "join");
+        await EnsureSuccessAsync(response, "join", cancellationToken);
         using var document = await ReadJsonAsync(response, cancellationToken);
         return ParseJoinResult(document.RootElement);
     }
@@ -127,7 +128,7 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
         {
             using var request = Build(HttpMethod.Delete, ParticipantPath(callId, participantId));
             using var response = await SendAsync(request, _options.RequestTimeout, ct);
-            EnsureSuccess(response, "leave");
+            await EnsureSuccessAsync(response, "leave", ct);
             using var document = await ReadJsonAsync(response, ct);
             return ReadBool(document.RootElement, "left", "leave");
         }, cancellationToken);
@@ -141,7 +142,7 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
             ParticipantPath(request.CallId, request.ParticipantId) + "/presentation",
             BuildJoinBody(request.Payload));
         using var response = await SendAsync(httpRequest, _options.RequestTimeout, cancellationToken);
-        EnsureSuccess(response, "joinPresentation");
+        await EnsureSuccessAsync(response, "joinPresentation", cancellationToken);
         using var document = await ReadJsonAsync(response, cancellationToken);
         return ParseJoinResult(document.RootElement);
     }
@@ -155,7 +156,7 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
             using var request = Build(HttpMethod.Delete,
                 ParticipantPath(callId, participantId) + "/presentation");
             using var response = await SendAsync(request, _options.RequestTimeout, ct);
-            EnsureSuccess(response, "leavePresentation");
+            await EnsureSuccessAsync(response, "leavePresentation", ct);
             using var document = await ReadJsonAsync(response, ct);
             return ReadBool(document.RootElement, "left", "leavePresentation");
         }, cancellationToken);
@@ -171,7 +172,7 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
                 ParticipantPath(callId, participantId) + "/video-paused",
                 BuildVideoPausedBody(paused));
             using var response = await SendAsync(request, _options.RequestTimeout, ct);
-            EnsureSuccess(response, "videoPaused");
+            await EnsureSuccessAsync(response, "videoPaused", ct);
             return true;
         }, cancellationToken);
     }
@@ -185,7 +186,7 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
             using var request = Build(HttpMethod.Post,
                 ParticipantPath(callId, participantId) + "/mute", BuildMuteBody(muted));
             using var response = await SendAsync(request, _options.RequestTimeout, ct);
-            EnsureSuccess(response, "mute");
+            await EnsureSuccessAsync(response, "mute", ct);
             return true;
         }, cancellationToken);
     }
@@ -199,7 +200,7 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
             using var request = Build(HttpMethod.Get,
                 ParticipantPath(callId, participantId) + "/liveness");
             using var response = await SendAsync(request, _options.RequestTimeout, ct);
-            EnsureSuccess(response, "liveness");
+            await EnsureSuccessAsync(response, "liveness", ct);
             using var document = await ReadJsonAsync(response, ct);
             return ReadBool(document.RootElement, "alive", "liveness");
         }, cancellationToken);
@@ -210,7 +211,7 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
         {
             using var request = Build(HttpMethod.Get, "health");
             using var response = await SendAsync(request, _options.HealthTimeout, ct);
-            EnsureSuccess(response, "health");
+            await EnsureSuccessAsync(response, "health", ct);
             using var document = await ReadJsonAsync(response, ct);
             var root = document.RootElement;
             string instanceId = ReadRequiredString(root, "instanceId");
@@ -258,7 +259,7 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
             using var request = Build(HttpMethod.Get,
                 $"rooms/{callId}/viewer-media");
             using var response = await SendAsync(request, _options.RequestTimeout, ct);
-            EnsureSuccess(response, "viewer-media");
+            await EnsureSuccessAsync(response, "viewer-media", ct);
             using var document = await ReadJsonAsync(response, ct);
             return ParseViewerSources(document.RootElement);
         }, cancellationToken);
@@ -298,7 +299,7 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
                 using var request = Build(HttpMethod.Get, "events");
                 using HttpResponseMessage response = await _httpClient.SendAsync(request,
                     HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-                EnsureSuccess(response, "events");
+                await EnsureSuccessAsync(response, "events", cancellationToken);
                 await using Stream stream = await response.Content
                     .ReadAsStreamAsync(cancellationToken);
                 using var reader = new StreamReader(stream, Encoding.UTF8,
@@ -459,7 +460,8 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
         return request;
     }
 
-    private static void EnsureSuccess(HttpResponseMessage response, string operation)
+    private static async Task EnsureSuccessAsync(HttpResponseMessage response,
+        string operation, CancellationToken cancellationToken)
     {
         if (response.IsSuccessStatusCode)
         {
@@ -473,8 +475,46 @@ public sealed class MediasoupGroupCallMediaPlane : IGroupCallMediaPlane
             HttpStatusCode.RequestTimeout => GroupCallMediaFailureKind.Timeout,
             _ => GroupCallMediaFailureKind.Unavailable,
         };
+        string reason = await ReadFailureReasonAsync(response, cancellationToken);
         throw new GroupCallMediaException(kind,
-            $"group-call media worker {operation} failed with {(int)response.StatusCode}");
+            $"group-call media worker {operation} failed with {(int)response.StatusCode}" +
+            (reason.Length == 0 ? string.Empty : $": {reason}"));
+    }
+
+    private static async Task<string> ReadFailureReasonAsync(HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        string body;
+        try
+        {
+            body = await response.Content.ReadAsStringAsync(cancellationToken);
+        }
+        catch (Exception e) when (e is HttpRequestException or IOException or
+                                      ObjectDisposedException or InvalidOperationException)
+        {
+            return string.Empty;
+        }
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return string.Empty;
+        }
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind == JsonValueKind.Object &&
+                document.RootElement.TryGetProperty("error", out JsonElement error) &&
+                error.ValueKind == JsonValueKind.String)
+            {
+                body = error.GetString() ?? body;
+            }
+        }
+        catch (JsonException)
+        {
+        }
+        body = body.Trim();
+        return body.Length > MaxFailureReasonLength
+            ? body[..MaxFailureReasonLength]
+            : body;
     }
 
     private static async Task<JsonDocument> ReadJsonAsync(HttpResponseMessage response,

@@ -55,7 +55,7 @@ public sealed class DeleteAccountHandler : AccountHandlerBase
     private static TLBytes ToCurrentDeleteAccountRequest(TLBytes q)
     {
         var sent = new TL.layer23.account.AccountDeleteAccount(q.AsSpan());
-        using var current = DeleteAccount.Builder()
+        var current = DeleteAccount.Builder()
             .Reason(sent.Reason)
             .Build();
         return current.TLBytes!.Value;

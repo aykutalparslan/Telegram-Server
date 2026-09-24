@@ -192,7 +192,9 @@ public sealed class StickerSetCatalog
                 : null;
         if (row is null)
         {
-            return null;
+            return FindBuiltInSet(setId, accessHash, shortName) is { } builtIn
+                ? BuildBuiltInSet(builtIn)
+                : null;
         }
         var view = row.Value.AsStickerSetState();
         if (setId.HasValue && accessHash.HasValue &&
@@ -205,6 +207,44 @@ public sealed class StickerSetCatalog
             .Packs(StickerVectors.CopyObjectVector(view.Packs))
             .Keywords(StickerVectors.CopyObjectVector(view.Keywords))
             .Documents(StickerVectors.CopyObjectVector(view.Documents)).Build();
+        return result.TLBytes!.Value;
+    }
+
+    public const string AnimatedEmojiShortName = "AnimatedEmojies";
+
+    private readonly record struct BuiltInSet(string ShortName, long Id,
+        long AccessHash);
+
+    private static readonly BuiltInSet[] BuiltInSets =
+    [
+        new("StaticEmoji", 0x5374617469634501, 0x456d6f6a69534574),
+        new(AnimatedEmojiShortName, 0x416e696d61746501, 0x456d6f6a69657321),
+    ];
+
+    private static BuiltInSet? FindBuiltInSet(long? setId, long? accessHash,
+        string? shortName)
+    {
+        foreach (var set in BuiltInSets)
+        {
+            bool matches = setId.HasValue
+                ? setId.Value == set.Id &&
+                  (!accessHash.HasValue || accessHash.Value == set.AccessHash)
+                : string.Equals(shortName, set.ShortName,
+                    StringComparison.OrdinalIgnoreCase);
+            if (matches) return set;
+        }
+        return null;
+    }
+
+    private static TLBytes BuildBuiltInSet(BuiltInSet builtIn)
+    {
+        byte[] name = Encoding.UTF8.GetBytes(builtIn.ShortName);
+        using StickerSet set = StickerSet.Builder().Official(true)
+            .Id(builtIn.Id).AccessHash(builtIn.AccessHash)
+            .Title(name).ShortName(name).Count(0).Hash(0).Build();
+        var result = MessagesStickerSet.Builder().Set(set.ToReadOnlySpan())
+            .Packs(new Vector()).Keywords(new Vector())
+            .Documents(new Vector()).Build();
         return result.TLBytes!.Value;
     }
 }

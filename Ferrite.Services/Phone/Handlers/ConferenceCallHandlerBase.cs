@@ -52,20 +52,16 @@ public readonly record struct ConferenceCallRef(long CallId, long AccessHash,
 
 public abstract class ConferenceCallHandlerBase : GroupCallHandlerBase
 {
-    private readonly IAuthorizationRepository _authorizationRepository;
     private readonly IGroupCallsRepository _groupCallsRepository;
-    private readonly IMessageRepository _messageRepository;
 
     protected ConferenceCallHandlerBase(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository, UpdateFanout fanout,
         GroupCallChatLink chatLink, IUpdatesContextFactory updatesContexts,
         IMTProtoTime time, GroupCallVideoOptions videoOptions,
         GroupCallMediaSourceMap sourceMap, ILogger log, IGroupCallChainService chain)
-        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, fanout, chatLink, updatesContexts, time, videoOptions,
+        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, messageRepository, fanout, chatLink, updatesContexts, time, videoOptions,
             sourceMap, log)
     {
-        _authorizationRepository = authorizationRepository;
         _groupCallsRepository = groupCallsRepository;
-        _messageRepository = messageRepository;
 
         Chain = chain;
     }
@@ -74,13 +70,6 @@ public abstract class ConferenceCallHandlerBase : GroupCallHandlerBase
 
     protected static TLUpdates Error(string message) =>
         (TLUpdates)RpcErrorGenerator.GenerateError(400, Encoding.UTF8.GetBytes(message));
-
-    protected async ValueTask<long> ResolveUserIdAsync(long authKeyId)
-    {
-        using var auth = await _authorizationRepository
-            .GetAuthorizationAsync(authKeyId);
-        return auth?.AsAuthInfo().UserId ?? 0;
-    }
 
     public static bool TryReadConferenceRef(InputGroupCallView view,
         out ConferenceCallRef reference)
@@ -159,32 +148,6 @@ public abstract class ConferenceCallHandlerBase : GroupCallHandlerBase
 
         return ConferenceResolution.Resolved(call.Value, currentUserId, isCreator,
             isParticipant, accessHash);
-    }
-
-    private async ValueTask<long> ReadInvitedCallIdAsync(long userId, int msgId)
-    {
-        if (msgId == 0)
-        {
-            return 0;
-        }
-
-        using TLDto.TLSavedMessage? saved = await _messageRepository
-            .GetMessageAsync(userId, msgId);
-        if (saved == null)
-        {
-            return 0;
-        }
-
-        TLMessage message = saved.Value.AsSavedMessage().Get_OriginalMessage();
-        if (message.Type != TLMessage.MessageType.MessageService)
-        {
-            return 0;
-        }
-
-        var action = new MessageActionView(message.AsMessageService().Action);
-        return action.Is(out MessageActionConferenceCall conference)
-            ? conference.CallId
-            : 0;
     }
 
     protected async ValueTask<byte[]> BuildChainBlocksBytesAsync(long callId,

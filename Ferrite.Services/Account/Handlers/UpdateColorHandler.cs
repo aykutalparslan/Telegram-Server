@@ -17,21 +17,23 @@ public sealed class UpdateColorHandler : ProfileSettingsHandlerBase
         long? userId = await GetUserIdAsync(authKeyId);
         if (!userId.HasValue) return AuthError();
         var request = new AccountUpdateColor(q.AsSpan());
-        if (request.Flags[2] && request.Color < 0)
-            return Invalid("COLOR_INVALID"u8);
-        if (request.Flags[0] && request.BackgroundEmojiId <= 0)
-            return Invalid("EMOJI_ID_INVALID"u8);
-        TLPeerColor? color = null;
-        if (request.Flags[2] || request.Flags[0])
+        if (!request.Flags[2])
         {
-            var builder = PeerColor.Builder();
-            if (request.Flags[2]) builder = builder.Color(request.Color);
-            if (request.Flags[0])
-                builder = builder.BackgroundEmojiId(request.BackgroundEmojiId);
-            color = builder.Build();
-        }
-        using (color)
             return await Store.UpdateColorAsync(userId.Value,
-                request.ForProfile, color);
+                request.ForProfile, null);
+        }
+
+        var view = request.Get_ColorView();
+        if (view.Is(out PeerColor peerColor))
+        {
+            if (peerColor.Flags[0] && peerColor.Color < 0)
+                return Invalid("COLOR_INVALID"u8);
+            if (peerColor.Flags[1] && peerColor.BackgroundEmojiId <= 0)
+                return Invalid("EMOJI_ID_INVALID"u8);
+        }
+
+        using TLPeerColor color = request.Get_Color();
+        return await Store.UpdateColorAsync(userId.Value,
+            request.ForProfile, color);
     }
 }

@@ -124,8 +124,6 @@ public sealed class SetChatThemeHandler : MessagesHandlerBase
                 peerWrite.Pts);
         }
 
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         var updateBytes = new List<byte[]>(1);
         using (TLUpdate updateNewMessage = UpdateNewMessage.Builder()
                    .Message(callerWrite.Bytes)
@@ -139,7 +137,7 @@ public sealed class SetChatThemeHandler : MessagesHandlerBase
         _log.Debug($"🎨 SetChatTheme user:{userId} peer:{peerUserId} " +
                    $"theme:{emoticon ?? "(none)"}");
         return _fanout.BuildUpdates(userId, updateBytes, new[] { userId, peerUserId },
-            Array.Empty<byte[]>(), date, seq);
+            Array.Empty<byte[]>(), date, seq: 0);
     }
 
     private async Task<TLUpdates> SetBasicGroupThemeAsync(long authKeyId, long chatId,
@@ -200,8 +198,6 @@ public sealed class SetChatThemeHandler : MessagesHandlerBase
         await _fanout.PushChannelServiceMessageAsync(channelId, userId, write.Bytes,
             write.Pts);
 
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         var updateBytes = new List<byte[]>(2);
         using (TLUpdate updateNewChannelMessage = UpdateNewChannelMessage.Builder()
                    .Message(write.Bytes)
@@ -221,7 +217,7 @@ public sealed class SetChatThemeHandler : MessagesHandlerBase
         _log.Debug($"🎨 SetChatTheme user:{userId} channel:{channelId} " +
                    $"theme:{emoticon ?? "(none)"}");
         return _fanout.BuildUpdates(userId, updateBytes, new[] { userId },
-            new[] { channelBytes }, date, seq);
+            new[] { channelBytes }, date, seq: 0);
     }
 
     private static byte[] BuildAction(string? emoticon)

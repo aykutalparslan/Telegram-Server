@@ -146,6 +146,7 @@ public sealed class GetFullChannelHandler : ChannelsHandlerBase
         bool callerCanSetStickers = false;
         bool callerCanChangeInfo = false;
         bool callerIsAdmin = false;
+        byte[]? callerAdminRights = null;
         foreach (var participantInfo in activeParticipants)
         {
             if (participantInfo.AsChatParticipantInfo().UserId != currentUserId)
@@ -155,6 +156,7 @@ public sealed class GetFullChannelHandler : ChannelsHandlerBase
             callerIsActiveMember = true;
             callerIsCreator = participantInfo.AsChatParticipantInfo().Role ==
                 (int)ChatParticipantRole.Creator;
+            callerAdminRights = ChannelRows.ViewerAdminRights(participantInfo);
             callerIsAdmin = ChatRights.HasAdminRight(participantInfo,
                 ChatAdminRightRequirement.Any);
             callerCanChangeInfo = ChatRights.HasAdminRight(participantInfo,
@@ -283,6 +285,14 @@ public sealed class GetFullChannelHandler : ChannelsHandlerBase
             .BotInfo(botInfo)
             .Pts(pts)
             .AvailableReactions(availableReactionsBytes ?? DefaultReactions.AllChatReactionsBytes.ToArray());
+        if (callerIsCreator)
+        {
+            fullChannelBuilder = fullChannelBuilder.CanSetUsername(true);
+        }
+        if (callerIsActiveMember && (isMegagroup || callerIsAdmin))
+        {
+            fullChannelBuilder = fullChannelBuilder.CanViewParticipants(true);
+        }
         if (callerCanSetStickers)
         {
             fullChannelBuilder = fullChannelBuilder.CanSetStickers(true);
@@ -411,7 +421,7 @@ public sealed class GetFullChannelHandler : ChannelsHandlerBase
         }
 
         byte[] channelRowBytes = ChannelRows.ForViewer(chat.Value.AsSpan().ToArray(),
-            callerIsActiveMember, callerIsCreator);
+            callerIsActiveMember, callerIsCreator, callerAdminRights);
 
         using Ferrite.TL.baseLayer.TLChatFull fullChannel = fullChannelBuilder.Build();
         var chatVector = new Vector();

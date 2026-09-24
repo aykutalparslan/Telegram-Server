@@ -73,8 +73,6 @@ public sealed class DeleteHistoryHandler : ChannelsHandlerBase
         await _unitOfWork.SaveAsync();
 
         int date = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
-        var seqCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, currentUserId);
-        int seq = await seqCtx.IncrementSeq();
 
         var resultUpdates = new Vector();
         using (TLUpdate deleteUpdate = UpdateFanout.BuildDeleteChannelMessagesUpdate(
@@ -94,7 +92,7 @@ public sealed class DeleteHistoryHandler : ChannelsHandlerBase
             .Users(userVector)
             .Chats(chatVector)
             .Date(date)
-            .Seq(seq)
+            .Seq(0)
             .Build();
     }
 }

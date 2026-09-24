@@ -3,6 +3,7 @@
 
 using Ferrite.Data.Repositories;
 using Ferrite.Services.Calls;
+using Ferrite.Services.Common;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.Utils;
@@ -208,8 +209,11 @@ public abstract class PhoneCallHandlerBase
     protected async Task PushCallUpdate(long userId, byte[] callBytes,
         UpdateDeliveryScope scope)
     {
-        TLUpdate update = UpdatePhoneCall.Builder().PhoneCall(callBytes).Build();
-        await Updates.EnqueueUpdate(userId, update, scope);
+        await AfterResponse.Run(async () =>
+        {
+            TLUpdate update = UpdatePhoneCall.Builder().PhoneCall(callBytes).Build();
+            await Updates.EnqueueUpdate(userId, update, scope);
+        });
     }
 
     protected static (long Id, long AccessHash) ReadInputPhoneCall(Span<byte> peerSpan)

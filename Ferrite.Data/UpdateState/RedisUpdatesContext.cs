@@ -21,6 +21,27 @@ public class RedisUpdatesContext : IUpdatesContext
         "if tonumber(ARGV[1]) > current then " +
         "redis.call('SET', KEYS[1], ARGV[1]) end " +
         "return redis.call('GET', KEYS[1])";
+    private const string SettlePtsScript = """
+        local committed = tonumber(redis.call('GET', KEYS[2]) or '1')
+        local first, last = tonumber(ARGV[1]), tonumber(ARGV[2])
+        if last <= committed then return 0 end
+        local previous = redis.call('ZSCORE', KEYS[1], ARGV[2])
+        if not previous or first < tonumber(previous) then
+            redis.call('ZADD', KEYS[1], first, ARGV[2])
+        end
+        return 1
+        """;
+    private const string ExtendCommittedPtsScript = """
+        local committed = math.max(tonumber(ARGV[1]), tonumber(redis.call('GET', KEYS[2]) or '1'))
+        local ranges = redis.call('ZRANGE', KEYS[1], 0, -1, 'WITHSCORES')
+        for i = 1, #ranges, 2 do
+            if tonumber(ranges[i + 1]) > committed + 1 then break end
+            committed = math.max(committed, tonumber(ranges[i]))
+            redis.call('ZREM', KEYS[1], ranges[i])
+        end
+        redis.call('SET', KEYS[2], committed)
+        return committed
+        """;
     public RedisUpdatesContext(ConnectionMultiplexer redis, long? authKeyId, long userId)
     {
         _redis = redis;
@@ -153,5 +174,21 @@ public class RedisUpdatesContext : IUpdatesContext
         RedisValue value = await _redis.GetDatabase().StringGetAsync(
             $"updates:pending-publish:{_userId}");
         return value.HasValue ? (int)(long)value : 0;
+    }
+
+    public async ValueTask SettlePts(int first, int last)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(first, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(last, first);
+        await _redis.GetDatabase().ScriptEvaluateAsync(SettlePtsScript,
+            new RedisKey[] { $"updates:settled-pts:{_userId}", $"updates:committed-pts:{_userId}" },
+            new RedisValue[] { first, last });
+    }
+
+    public async ValueTask<int> ExtendCommittedPts(int committed)
+    {
+        return (int)await _redis.GetDatabase().ScriptEvaluateAsync(ExtendCommittedPtsScript,
+            new RedisKey[] { $"updates:settled-pts:{_userId}", $"updates:committed-pts:{_userId}" },
+            new RedisValue[] { committed });
     }
 }

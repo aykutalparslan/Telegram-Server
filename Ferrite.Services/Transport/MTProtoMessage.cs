@@ -15,4 +15,5 @@ public class MTProtoMessage
     public int QuickAck { get; set; }
     public long? RecipientUserId { get; set; }
     public int? Pts { get; set; }
+    public int? RequestConstructor { get; set; }
 }

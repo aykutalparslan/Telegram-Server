@@ -7,7 +7,8 @@ namespace Ferrite.Data.Repositories;
 
 public sealed class CassandraContext : ICassandraContext, IDisposable
 {
-    private readonly Cluster _cluster;
+    private const string SchemaInFlightMarker = "Unknown CF";
+    private readonly Cluster? _cluster;
     private readonly ISession _session;
     private readonly string _keySpace;
 
@@ -26,8 +27,29 @@ public sealed class CassandraContext : ICassandraContext, IDisposable
         _session.CreateKeyspaceIfNotExists(_keySpace, replication);
     }
 
-    public bool TableExists(string keyspace, string table) =>
-        _cluster.Metadata.GetTable(keyspace, table) != null;
+    public CassandraContext(ISession session, string keyspace)
+    {
+        _session = session;
+        _keySpace = keyspace;
+    }
+
+    public bool TableIsQueryable(string keyspace, string table)
+    {
+        try
+        {
+            _session.Prepare($"SELECT * FROM {keyspace}.{table} LIMIT 1;");
+            return true;
+        }
+        catch (InvalidQueryException)
+        {
+            return false;
+        }
+        catch (ServerErrorException exception)
+            when (exception.Message.Contains(SchemaInFlightMarker, StringComparison.Ordinal))
+        {
+            return false;
+        }
+    }
     
     public void Enqueue(Statement statement)
     {
@@ -45,6 +67,6 @@ public sealed class CassandraContext : ICassandraContext, IDisposable
     public void Dispose()
     {
         _session.Dispose();
-        _cluster.Dispose();
+        _cluster?.Dispose();
     }
 }

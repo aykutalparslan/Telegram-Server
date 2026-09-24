@@ -15,12 +15,12 @@ public sealed class GetGroupCallStreamChannelsHandler : GroupCallHandlerBase
 {
     private readonly IGroupCallBroadcastPlane _broadcast;
 
-    public GetGroupCallStreamChannelsHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository,
+    public GetGroupCallStreamChannelsHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository,
         UpdateFanout fanout, GroupCallChatLink chatLink,
         IUpdatesContextFactory updatesContexts, IMTProtoTime time,
         GroupCallVideoOptions videoOptions, GroupCallMediaSourceMap sourceMap,
         ILogger log, IGroupCallBroadcastPlane broadcast)
-        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, fanout, chatLink, updatesContexts, time, videoOptions,
+        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, messageRepository, fanout, chatLink, updatesContexts, time, videoOptions,
             sourceMap, log)
     {
         _broadcast = broadcast;
@@ -31,7 +31,13 @@ public sealed class GetGroupCallStreamChannelsHandler : GroupCallHandlerBase
     {
         var request = (GetGroupCallStreamChannels)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
+        }
+
         if (!callRead)
         {
             return Error(GroupCallErrors.GroupCallInvalid);

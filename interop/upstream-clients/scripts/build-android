@@ -23,7 +23,6 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PUBLIC_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
 PIN="$PUBLIC_ROOT/interop/upstream-clients/PIN"
 PATCH="$PUBLIC_ROOT/interop/upstream-clients/patches/android/0001-ferrite-conformance.patch"
-PRIVATE_PATCH=${FERRITE_ANDROID_PRIVATE_PATCH:-}
 
 die() {
   echo "build-android: $*" >&2
@@ -47,7 +46,7 @@ done
 : "${ANDROID_NDK:?missing ANDROID_NDK}"
 : "${ANDROID_APK_SHA256:?missing ANDROID_APK_SHA256}"
 
-[ "$LAYER" = "214" ] || die "Android layer is $LAYER, expected 214"
+printf '%s\n' "$LAYER" | rg -q '^[0-9]+$' || die "LAYER is not a layer number"
 printf '%s\n' "$ANDROID_COMMIT" | rg -q '^[0-9a-f]{40}$' || \
   die "ANDROID_COMMIT is not a lowercase Git object id"
 printf '%s\n' "$ANDROID_PATCH_SHA256" | rg -q '^[0-9a-f]{64}$' || \
@@ -58,19 +57,6 @@ printf '%s\n' "$ANDROID_APK_SHA256" | rg -q '^[0-9a-f]{64}$' || \
 actual_patch=$(shasum -a 256 "$PATCH" | awk '{print $1}')
 [ "$actual_patch" = "$ANDROID_PATCH_SHA256" ] || \
   die "Android patch digest is $actual_patch, expected $ANDROID_PATCH_SHA256"
-expected_apk=$ANDROID_APK_SHA256
-artifact_name=Telegram.apk
-private_patch_digest=
-if [ -n "$PRIVATE_PATCH" ]; then
-  : "${ANDROID_PRIVATE_PATCH_SHA256:?missing ANDROID_PRIVATE_PATCH_SHA256}"
-  : "${ANDROID_PRIVATE_APK_SHA256:?missing ANDROID_PRIVATE_APK_SHA256}"
-  [ -f "$PRIVATE_PATCH" ] || die "private Android patch is missing: $PRIVATE_PATCH"
-  private_patch_digest=$(shasum -a 256 "$PRIVATE_PATCH" | awk '{print $1}')
-  [ "$private_patch_digest" = "$ANDROID_PRIVATE_PATCH_SHA256" ] || \
-    die "private Android patch digest is $private_patch_digest, expected $ANDROID_PRIVATE_PATCH_SHA256"
-  expected_apk=$ANDROID_PRIVATE_APK_SHA256
-  artifact_name=Telegram-private.apk
-fi
 
 if [ "$MODE" = "metadata" ]; then
   echo "Android metadata OK: layer=$LAYER commit=$ANDROID_COMMIT patch=$actual_patch"
@@ -109,7 +95,7 @@ NDK="$SDK/ndk/$ANDROID_NDK"
 rg -q "^Pkg[.]Revision = $ANDROID_NDK$" "$NDK/source.properties" || \
   die "Android NDK metadata does not report $ANDROID_NDK"
 
-SOURCE=${FERRITE_ANDROID_SOURCE_ROOT:-"$PUBLIC_ROOT/interop/upstream-clients/work/android/source"}
+SOURCE=${FERRITE_ANDROID_SOURCE_ROOT:-"$PUBLIC_ROOT/.ferrite/upstream-apps/work/android/source"}
 ARTIFACTS=${FERRITE_ANDROID_ARTIFACTS:-"$PUBLIC_ROOT/.ferrite/upstream-apps/artifacts/android"}
 mkdir -p "$(dirname -- "$SOURCE")" "$ARTIFACTS"
 
@@ -121,16 +107,14 @@ fi
 current=$(git -C "$SOURCE" rev-parse HEAD 2>/dev/null || true)
 if [ "$current" != "$ANDROID_COMMIT" ]; then
   [ -z "$(git -C "$SOURCE" status --short)" ] || \
-    die "source checkout has unrelated changes: $SOURCE"
+    die "source checkout has changes and is not at $ANDROID_COMMIT; move $SOURCE aside to start from a new clone"
   git -C "$SOURCE" fetch origin "$ANDROID_COMMIT"
   git -C "$SOURCE" switch --detach "$ANDROID_COMMIT"
 fi
+git -C "$SOURCE" submodule sync --recursive
+git -C "$SOURCE" submodule update --init --recursive
 
-if [ -n "$PRIVATE_PATCH" ] && \
-   git -C "$SOURCE" apply --reverse --check "$PRIVATE_PATCH" 2>/dev/null; then
-  : # The checkout already carries the complete public + private series.
-elif [ -z "$PRIVATE_PATCH" ] && \
-   git -C "$SOURCE" apply --reverse --check "$PATCH" 2>/dev/null; then
+if git -C "$SOURCE" apply --reverse --check "$PATCH" 2>/dev/null; then
   : # The checkout already carries the public provisioning patch.
 else
   # A series the checkout already carries cannot be reversed by the patches
@@ -139,7 +123,7 @@ else
   series_paths=$(mktemp)
   checkout_paths=$(mktemp)
   trap 'rm -f "$series_paths" "$checkout_paths"' EXIT
-  git -C "$SOURCE" apply --numstat "$PATCH" ${PRIVATE_PATCH:+"$PRIVATE_PATCH"} \
+  git -C "$SOURCE" apply --numstat "$PATCH" \
     | cut -f3 | sort -u > "$series_paths"
   # Bazel leaves its convenience symlinks in the source root. They are build
   # output, not a change to the source.
@@ -159,18 +143,13 @@ else
   git -C "$SOURCE" apply --check "$PATCH" 2>/dev/null || \
     die "public provisioning patch does not apply to the pinned checkout"
   git -C "$SOURCE" apply "$PATCH"
-  if [ -n "$PRIVATE_PATCH" ]; then
-    git -C "$SOURCE" apply --check "$PRIVATE_PATCH" 2>/dev/null || \
-      die "private Android patch does not apply after the public patch"
-    git -C "$SOURCE" apply "$PRIVATE_PATCH"
-  fi
   rm -f "$series_paths" "$checkout_paths"
   trap - EXIT
 fi
 
-rg -q 'public static final int LAYER = 214;' \
+rg -q "public static final int LAYER = $LAYER;" \
   "$SOURCE/TMessagesProj/src/main/java/org/telegram/tgnet/TLRPC.java" || \
-  die "full Android application does not announce layer 214"
+  die "full Android application does not announce layer $LAYER"
 
 python3 - "$SOURCE/local.properties" "$SDK" "$NDK" <<'PY'
 import sys
@@ -202,13 +181,13 @@ rm -rf "$SOURCE"/*/build "$SOURCE"/*/.cxx
 APK="$SOURCE/TMessagesProj_App/build/intermediates/apk/afat/debug/app.apk"
 [ -f "$APK" ] || die "Gradle produced no conformance APK"
 actual_apk=$(shasum -a 256 "$APK" | awk '{print $1}')
-[ "$actual_apk" = "$expected_apk" ] || \
-  die "APK digest is $actual_apk, expected $expected_apk"
+[ "$actual_apk" = "$ANDROID_APK_SHA256" ] || \
+  die "APK digest is $actual_apk, expected $ANDROID_APK_SHA256"
 badging=$("$TOOLS/aapt" dump badging "$APK")
 printf '%s\n' "$badging" | \
   rg -q "^package: name='org[.]telegram[.]messenger[.]beta'.*versionName='$ANDROID_VERSION'" || \
   die "APK package/version does not match org.telegram.messenger.beta $ANDROID_VERSION"
 printf '%s\n' "$badging" | rg -q "targetSdkVersion:'$ANDROID_COMPILE_SDK'" || \
   die "APK target SDK does not match $ANDROID_COMPILE_SDK"
-cp "$APK" "$ARTIFACTS/$artifact_name"
-echo "$ARTIFACTS/$artifact_name"
+cp "$APK" "$ARTIFACTS/Telegram.apk"
+echo "$ARTIFACTS/Telegram.apk"

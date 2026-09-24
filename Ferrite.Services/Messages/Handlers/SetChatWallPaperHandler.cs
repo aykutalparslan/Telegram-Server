@@ -68,7 +68,7 @@ public sealed class SetChatWallPaperHandler : MessagesHandlerBase
         bool hasSourceMessage = request.Flags[1];
         bool hasSettings = request.Flags[2];
         bool generatedFill = hasWallpaper &&
-            request.Get_WallpaperView().Is(out InputWallPaperNoFile _);
+            IsGeneratedFill(request.Get_WallpaperView());
 
         if (request.Revert && !forBoth && !hasWallpaper &&
             !hasSourceMessage && !hasSettings)
@@ -257,8 +257,6 @@ public sealed class SetChatWallPaperHandler : MessagesHandlerBase
             await _fanout.EnqueueSerializedAsync(peerUserId, peerUpdate);
         }
 
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         var updateBytes = new List<byte[]>(2);
         using (TLUpdate updateNewMessage = UpdateNewMessage.Builder()
                    .Message(callerWrite.Bytes)
@@ -274,7 +272,7 @@ public sealed class SetChatWallPaperHandler : MessagesHandlerBase
         _log.Debug($"🖼️ SetChatWallPaper user:{userId} peer:{peerUserId} " +
                    $"same:{same} forBoth:{forBoth}");
         return _fanout.BuildUpdates(userId, updateBytes, new[] { userId, peerUserId },
-            Array.Empty<byte[]>(), date, seq);
+            Array.Empty<byte[]>(), date, seq: 0);
     }
 
     private async Task<TLUpdates> ClearPrivateWallpaperAsync(long authKeyId,
@@ -312,12 +310,10 @@ public sealed class SetChatWallPaperHandler : MessagesHandlerBase
         {
             return ErrorUpdates("INTERNAL_SERVER_ERROR");
         }
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         _log.Debug($"🖼️ SetChatWallPaper user:{userId} peer:{peerUserId} " +
                    (revert ? "revert" : "delete"));
         return _fanout.BuildUpdates(userId, new[] { updateBytes },
-            new[] { userId, peerUserId }, Array.Empty<byte[]>(), UnixNow(), seq);
+            new[] { userId, peerUserId }, Array.Empty<byte[]>(), UnixNow(), seq: 0);
     }
 
     private async Task<TLUpdates> SetChannelWallpaperAsync(long authKeyId,
@@ -355,10 +351,8 @@ public sealed class SetChatWallPaperHandler : MessagesHandlerBase
             }
             await _fanout.PushSerializedToOtherChannelMembersAsync(channelId,
                 userId, new[] { cleared });
-            int deleteSeq = await _updatesContextFactory
-                .GetUpdatesContext(authKeyId, userId).IncrementSeq();
             return _fanout.BuildUpdates(userId, new[] { cleared }, new[] { userId },
-                new[] { channelBytes }, date, deleteSeq);
+                new[] { channelBytes }, date, seq: 0);
         }
 
         TLWallPaper? built = BuildGeneratedFill(requestBytes);
@@ -385,8 +379,6 @@ public sealed class SetChatWallPaperHandler : MessagesHandlerBase
         await _fanout.PushSerializedToOtherChannelMembersAsync(channelId, userId,
             new[] { wallpaperUpdate });
 
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         var updateBytes = new List<byte[]>(2);
         using (TLUpdate updateNewMessage = UpdateNewChannelMessage.Builder()
                    .Message(write.Bytes)
@@ -399,7 +391,7 @@ public sealed class SetChatWallPaperHandler : MessagesHandlerBase
         updateBytes.Add(wallpaperUpdate);
         _log.Debug($"🖼️ SetChatWallPaper user:{userId} channel:{channelId}");
         return _fanout.BuildUpdates(userId, updateBytes, new[] { userId },
-            new[] { channelBytes }, date, seq);
+            new[] { channelBytes }, date, seq: 0);
     }
 
     private bool IsPremiumUser(long userId)
@@ -423,17 +415,23 @@ public sealed class SetChatWallPaperHandler : MessagesHandlerBase
     private static TLWallPaper? BuildGeneratedFill(TLBytes requestBytes)
     {
         var request = (SetChatWallPaper)requestBytes;
-        if (!request.Get_WallpaperView().Is(out InputWallPaperNoFile input) ||
+        InputWallPaperView wallpaper = request.Get_WallpaperView();
+        if (!IsGeneratedFill(wallpaper) ||
             !request.Get_SettingsView().Is(out WallPaperSettings settings))
         {
             return null;
         }
+        long id = wallpaper.Is(out InputWallPaperNoFile input) ? input.Id : 0;
         using TLWallPaperSettings ownedSettings = settings.Clone().Build();
         return WallPaperNoFile.Builder()
-            .Id(input.Id)
+            .Id(id)
             .Settings(ownedSettings.AsSpan())
             .Build();
     }
+
+    private static bool IsGeneratedFill(InputWallPaperView wallpaper) =>
+        wallpaper.Is(out InputWallPaperNoFile _) ||
+        (wallpaper.Is(out InputWallPaperSlug slug) && slug.Slug.SequenceEqual("c"u8));
 
     private static TLWallPaper? BuildAcknowledgedWallpaper(byte[] messageBytes,
         TLBytes requestBytes)

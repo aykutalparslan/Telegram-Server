@@ -80,6 +80,7 @@ public sealed class ReadHistoryHandler : MessagesHandlerBase
                 .PtsCount(1)
                 .Build();
             await _updates.EnqueueUpdate(userId, inboxUpdate);
+            await userCtx.SettlePts(userPts, userPts);
 
             if (peerType == TLPeer.PeerType.PeerUser)
             {
@@ -93,6 +94,7 @@ public sealed class ReadHistoryHandler : MessagesHandlerBase
                     .PtsCount(1)
                     .Build();
                 await _updates.EnqueueUpdate(peerId, outboxUpdate);
+                await peerCtx.SettlePts(peerPts, peerPts);
             }
 
             _log.Debug($"👁 ReadHistory user:{userId} peerType:{peerType} peer:{peerId} maxId:{maxId} stillUnread:{stillUnread} pts:{userPts}");

@@ -98,8 +98,6 @@ public sealed class SendScreenshotNotificationHandler
 
         await _fanout.EnqueueNewMessageAsync(peerUserId, peerWrite.Bytes, peerWrite.Pts);
 
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         var updateBytes = new List<byte[]>(2);
         using (TLUpdate updateMessageId = UpdateMessageID.Builder()
                    .Id(callerWrite.Id)
@@ -120,7 +118,7 @@ public sealed class SendScreenshotNotificationHandler
         _log.Debug($"📸 SendScreenshotNotification user:{userId} peer:{peerUserId} " +
                    $"id:{callerWrite.Id} pts:{callerWrite.Pts}");
         return _fanout.BuildUpdates(userId, updateBytes, new[] { userId, peerUserId },
-            Array.Empty<byte[]>(), date, seq);
+            Array.Empty<byte[]>(), date, seq: 0);
     }
 
     private static byte[]? BuildReplyToHeader(int replyToMsgId)

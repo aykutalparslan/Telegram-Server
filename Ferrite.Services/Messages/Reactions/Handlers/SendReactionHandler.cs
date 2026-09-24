@@ -134,7 +134,7 @@ public sealed class SendReactionHandler
         ReactionCallerBatch batch = sent.Value!;
         TLUpdates result = await _fanout.BuildReactionsResultAsync(batch.UserId,
             batch.PeerBytes, batch.MsgId, batch.ReactionsBytes, batch.Entries,
-            batch.ReactionConfigChatId, incrementSeq: true, authKeyId: authKeyId);
+            batch.ReactionConfigChatId, authKeyId: authKeyId);
 
         if (addToRecent && requested.Count > 0 &&
             result.Constructor == Constructors.baseLayer_Updates)

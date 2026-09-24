@@ -2,6 +2,7 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Net;
+using Ferrite.Core.Execution;
 
 namespace Ferrite.Core.Connection;
 
@@ -16,6 +17,7 @@ public interface IMTProtoSession
     long UniqueSessionId { get; }
     long ServerSalt { get; }
     Dictionary<string, object> SessionData { get; }
+    ConnectionLayerState ConnectionLayer { get; }
     bool TryFetchAuthKey(long authKeyId);
 
     bool TryResolvePermAuthKeyId();
@@ -26,10 +28,16 @@ public interface IMTProtoSession
         long responseToMessageId);
     bool TryGetSentMessage(long messageId, out MTProtoSentMessage message);
     bool MarkSentMessageAcknowledged(long messageId);
+    void TrackOutgoing(Services.Transport.MTProtoMessage original,
+        Services.Transport.MTProtoMessage sent);
+    void MarkOutgoingSent(Services.Transport.MTProtoMessage sent, long messageId);
+    IReadOnlyList<Services.Transport.MTProtoMessage> TakeUnacknowledged();
 
     long NextMessageId(bool response);
 
     long CreateNewSession(long sessionId, long firstMessageId);
+
+    bool IsKnownSession(long sessionId);
 
     bool IsValidMessageId(long sessionId, long messageId);
     bool TryValidateMessageId(long sessionId, long messageId, out int errorCode,

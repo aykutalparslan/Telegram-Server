@@ -7,14 +7,12 @@ into this repository.
 
 The patches published here are deliberately limited to unattended local
 provisioning. Ferrite's private Harness keeps its broader scenario-control
-patches outside the public repository. The digest of each private continuation
-is recorded in `PIN` only so a Harness run can attest to the complete ordered
-series; recording a digest does not distribute or relicense that patch.
+patches outside the public repository.
 
 ## Telegram for Android
 
 - Repository: <https://github.com/DrKLO/Telegram>
-- Pinned revision: `ddc90f16be1ab952114005347e0102365ba6460b`
+- Pinned revision: `62b56a07ca7e30e39f7fd00a6728d6bbd716ca1c`
 - Upstream license: GNU General Public License, version 2
 
 The public Android provisioning patch remains a modification of Telegram for
@@ -24,7 +22,7 @@ must satisfy the upstream license, including its corresponding-source duties.
 ## Telegram-iOS
 
 - Repository: <https://github.com/TelegramMessenger/Telegram-iOS>
-- Pinned revision: `762f99c0df24556ea5d44382882fa70ab52b6e2d`
+- Pinned revision: `ab836dabd2816682bf4c7ef7dec5539a8ac04ebb`
 - Upstream notices: the repository's `LICENSE`, `README.md`, and third-party
   dependency notices at that revision
 

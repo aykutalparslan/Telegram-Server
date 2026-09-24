@@ -13,7 +13,10 @@ public interface IAuthorizationRepository
     public ValueTask<TLAuthInfo?> GetAuthorizationAsync(long authKeyId);
     public IReadOnlyList<TLAuthInfo> GetAuthorizations(string phone);
     public ValueTask<IReadOnlyList<TLAuthInfo>> GetAuthorizationsAsync(string phone);
+    public IReadOnlyList<TLAuthInfo> GetAuthorizations();
     public bool DeleteAuthorization(long authKeyId);
+    public bool PutImportedAuthorization(long authKeyId, long sourceAuthKeyId);
+    public ValueTask<long?> GetImportSourceAsync(long authKeyId);
     public bool PutExportedAuthorization(TLExportedAuthInfo exportedInfo);
     public TLExportedAuthInfo? GetExportedAuthorization(long userId, byte[] data);
     public ValueTask<TLExportedAuthInfo?> GetExportedAuthorizationAsync(long userId, byte[] data);

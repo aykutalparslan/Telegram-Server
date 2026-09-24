@@ -45,4 +45,8 @@ public class AppInfoRepository : IAppInfoRepository
         if (appInfoBytes == null) return null;
         return ((AppInfo)appInfoBytes.AsSpan()).AuthKeyId;
     }
+
+    public IReadOnlyList<TLAppInfo> GetAppInfos() => _store.Iterate()
+        .Select(bytes => new TLAppInfo(bytes, 0, bytes.Length))
+        .ToArray();
 }

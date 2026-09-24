@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
+using System.Diagnostics;
 using System.Text;
 using Cassandra;
 using Ferrite.Data.Repositories;
@@ -9,9 +10,12 @@ namespace Ferrite.Data.Repositories;
 
 public class CassandraKVStore : IKVStore
 {
+    private static readonly TimeSpan DefaultSchemaVisibilityTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan SchemaVisibilityPollInterval = TimeSpan.FromMilliseconds(50);
     private static long _lastTimestampMicros;
     private readonly ICassandraContext _context;
     private readonly Action<Statement> _enqueue;
+    private readonly TimeSpan _schemaVisibilityTimeout;
     private TableDefinition _table;
     private const string IntStr = "int";
     private const string BoolStr = "boolean";
@@ -45,17 +49,21 @@ public class CassandraKVStore : IKVStore
         DataType.Bytes => typeof(byte[]),
         _ => typeof(object)
     };
-    public CassandraKVStore(ICassandraContext context)
+    public CassandraKVStore(ICassandraContext context,
+        TimeSpan? schemaVisibilityTimeout = null)
     {
         _context = context;
         _enqueue = context.Enqueue;
+        _schemaVisibilityTimeout = schemaVisibilityTimeout ?? DefaultSchemaVisibilityTimeout;
     }
 
     public CassandraKVStore(ICassandraContext context,
-        IWriteBatchAccessor writeBatches)
+        IWriteBatchAccessor writeBatches,
+        TimeSpan? schemaVisibilityTimeout = null)
     {
         _context = context;
         _enqueue = writeBatches.Enqueue;
+        _schemaVisibilityTimeout = schemaVisibilityTimeout ?? DefaultSchemaVisibilityTimeout;
     }
 
     public void SetSchema(TableDefinition table)
@@ -94,10 +102,7 @@ public class CassandraKVStore : IKVStore
         }
         sb.Append("));");
         var statement = new SimpleStatement(sb.ToString());
-        if (!_context.TableExists(_table.Keyspace, _table.Name))
-        {
-            ExecuteSchema(statement);
-        }
+        CreateTable(_table.Name, statement);
         foreach (var sc in _table.SecondaryIndices)
         {
             pcount = 0;
@@ -146,11 +151,27 @@ public class CassandraKVStore : IKVStore
             }
             sb.Append("));");
             statement = new SimpleStatement(sb.ToString());
-            string secondaryTableName = $"{_table.Name}_{sc.Name}";
-            if (!_context.TableExists(_table.Keyspace, secondaryTableName))
+            CreateTable($"{_table.Name}_{sc.Name}", statement);
+        }
+    }
+
+    private void CreateTable(string name, SimpleStatement statement)
+    {
+        if (_context.TableIsQueryable(_table.Keyspace, name))
+        {
+            return;
+        }
+        ExecuteSchema(statement);
+        var waited = Stopwatch.StartNew();
+        while (!_context.TableIsQueryable(_table.Keyspace, name))
+        {
+            if (waited.Elapsed >= _schemaVisibilityTimeout)
             {
-                ExecuteSchema(statement);
+                throw new InvalidOperationException(
+                    $"{_table.Keyspace}.{name} was created but is still not queryable after " +
+                    $"{waited.Elapsed.TotalSeconds:0.###}s; concurrent schema changes have not settled");
             }
+            Thread.Sleep(SchemaVisibilityPollInterval);
         }
     }
 

@@ -61,10 +61,12 @@ public sealed class PollStore
         }
 
         var poll = (Poll)media.Poll;
+        IReadOnlyList<byte[]> options = ReadAnswerOptions(poll.Answers);
         input = new PollInput(poll.Id, poll.Closed, poll.PublicVoters,
             poll.MultipleChoice, poll.Quiz, poll.Question.ToArray(),
-            poll.Answers.ToReadOnlySpan().ToArray(), ReadAnswerOptions(poll.Answers),
-            poll.ClosePeriod, poll.CloseDate, ReadBytesVector(media.CorrectAnswers),
+            poll.Answers.ToReadOnlySpan().ToArray(), options,
+            poll.ClosePeriod, poll.CloseDate,
+            ReadCorrectAnswers(media.CorrectAnswers, options),
             media.Flags[1] ? media.Solution.ToArray() : null,
             media.Flags[1] ? media.SolutionEntities.ToReadOnlySpan().ToArray() : null);
         return true;
@@ -264,6 +266,7 @@ public sealed class PollStore
     {
         var builder = Poll.Builder()
             .Id(poll.PollId)
+            .Hash(0)
             .Closed(closed)
             .PublicVoters(poll.PublicVoters)
             .MultipleChoice(poll.MultipleChoice)
@@ -301,11 +304,27 @@ public sealed class PollStore
                 string key = Convert.ToHexString(option);
                 int voters = votes.Count(vote => vote.Options.Any(
                     picked => Convert.ToHexString(picked) == key));
+                var recentVoters = new Vector();
+                if (poll.PublicVoters)
+                {
+                    foreach (VoteSnapshot vote in votes
+                                 .Where(vote => vote.Options.Any(
+                                     picked => Convert.ToHexString(picked) == key))
+                                 .OrderByDescending(vote => vote.Date)
+                                 .ThenByDescending(vote => vote.UserId)
+                                 .Take(RecentVoterLimit))
+                    {
+                        using TLPeer peer = PeerResolver.BuildPeer(vote.PeerType,
+                            vote.PeerId);
+                        recentVoters.AppendTLObject(peer.AsSpan());
+                    }
+                }
                 using TLPollAnswerVoters answer = PollAnswerVoters.Builder()
                     .Chosen(chosen.Contains(key))
                     .Correct(poll.Quiz && correct.Contains(key))
                     .Option(option)
                     .Voters(voters)
+                    .RecentVoters(recentVoters)
                     .Build();
                 tallies.AppendTLObject(answer.AsSpan());
             }
@@ -393,6 +412,22 @@ public sealed class PollStore
         for (int i = 0; i < count; i++)
         {
             values.Add(source.ReadTLBytes().ToArray());
+        }
+        return values;
+    }
+
+    private static IReadOnlyList<byte[]> ReadCorrectAnswers(VectorOfInt source,
+        IReadOnlyList<byte[]> options)
+    {
+        var values = new List<byte[]>(source.Count);
+        int count = source.Count;
+        for (int i = 0; i < count; i++)
+        {
+            int index = source[i];
+            if (index >= 0 && index < options.Count)
+            {
+                values.Add(options[index]);
+            }
         }
         return values;
     }

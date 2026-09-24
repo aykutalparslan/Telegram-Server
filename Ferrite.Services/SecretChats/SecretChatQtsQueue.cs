@@ -140,7 +140,8 @@ public sealed class SecretChatQtsQueue : ISecretChatQtsQueue
                     _limits.MaxQtsBytesPerAuthKey,
                     _limits.DedupRetentionSeconds, updatesContext.Qts,
                     updatesContext.IncrementQts, cancellationToken);
-            if (append.Status != SecretChatSendAppendStatus.Appended ||
+            if (append.Status is not (SecretChatSendAppendStatus.Appended or
+                    SecretChatSendAppendStatus.Redelivered) ||
                 append.Entry is null)
             {
                 _telemetry?.Rejection("send_append", senderAuthKeyId, chatId,

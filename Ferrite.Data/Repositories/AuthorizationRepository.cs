@@ -11,7 +11,8 @@ public class AuthorizationRepository : IAuthorizationRepository
 {
     private readonly IKVStore _store;
     private readonly IKVStore _storeExported;
-    public AuthorizationRepository(IKVStore store, IKVStore storeExported)
+    private readonly IKVStore _storeImported;
+    public AuthorizationRepository(IKVStore store, IKVStore storeExported, IKVStore storeImported)
     {
         _store = store;
         _store.SetSchema(new TableDefinition("ferrite", "authorizations",
@@ -26,6 +27,10 @@ public class AuthorizationRepository : IAuthorizationRepository
             new KeyDefinition("pk",
                 new DataColumn { Name = "user_id", Type = DataType.Long },
                 new DataColumn { Name = "data", Type = DataType.Bytes })));
+        _storeImported = storeImported;
+        _storeImported.SetSchema(new TableDefinition("ferrite", "imported_authorizations",
+            new KeyDefinition("pk",
+                new DataColumn { Name = "auth_key_id", Type = DataType.Long })));
     }
     public bool PutAuthorization(TLAuthInfo info)
     {
@@ -71,9 +76,26 @@ public class AuthorizationRepository : IAuthorizationRepository
         return infos;
     }
 
+    public IReadOnlyList<TLAuthInfo> GetAuthorizations() => _store.Iterate()
+        .Select(bytes => new TLAuthInfo(bytes, 0, bytes.Length))
+        .ToArray();
+
     public bool DeleteAuthorization(long authKeyId)
     {
+        _storeImported.Delete(authKeyId);
         return _store.Delete(authKeyId);
+    }
+
+    public bool PutImportedAuthorization(long authKeyId, long sourceAuthKeyId)
+    {
+        return _storeImported.Put(BitConverter.GetBytes(sourceAuthKeyId), authKeyId);
+    }
+
+    public async ValueTask<long?> GetImportSourceAsync(long authKeyId)
+    {
+        var sourceBytes = await _storeImported.GetAsync(authKeyId);
+        if (sourceBytes is not { Length: sizeof(long) }) return null;
+        return BitConverter.ToInt64(sourceBytes);
     }
 
     public bool PutExportedAuthorization(TLExportedAuthInfo exportedInfo)

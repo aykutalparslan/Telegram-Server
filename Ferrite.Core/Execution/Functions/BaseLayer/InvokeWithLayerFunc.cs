@@ -9,10 +9,22 @@ namespace Ferrite.Core.Execution.Functions.BaseLayer;
 [TLFunction(Constructors.baseLayer_InvokeWithLayer)]
 public class InvokeWithLayerFunc : ITLFunction
 {
-    public IExecutionEngine? ExecutionEngine { get; set; }
+    private readonly InitConnectionFunc _initConnection;
+
+    public InvokeWithLayerFunc(InitConnectionFunc initConnection)
+    {
+        _initConnection = initConnection;
+    }
+
     public async ValueTask<TLBytes?> Process(TLBytes q, TLExecutionContext ctx)
     {
-        using var query = RequestUnwrapper.InvokeWithLayerQuery(q, out int layer);
-        return ExecutionEngine == null ? null : await ExecutionEngine.Invoke(query, ctx, layer);
+        LayerNegotiationResult negotiation = ConnectionLayerNegotiator.Resolve(q);
+        if (!negotiation.IsSuccess)
+        {
+            return ConnectionLayerNegotiator.WrappedError(negotiation.Failure, ctx.MessageId);
+        }
+
+        using var query = RequestUnwrapper.InvokeWithLayerQuery(q, out _);
+        return await _initConnection.Process(query, ctx, negotiation.ProvisionalLayer);
     }
 }

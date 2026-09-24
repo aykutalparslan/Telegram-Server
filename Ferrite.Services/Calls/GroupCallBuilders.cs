@@ -66,6 +66,12 @@ public static class GroupCallBuilders
         {
             builder = builder.Conference(true);
         }
+        if (call.Flags[14])
+        {
+            builder = builder.InviteLink(Encoding.UTF8.GetBytes(
+                GroupCallInviteLinks.BuildConference(
+                    Encoding.UTF8.GetString(call.InviteSlug))));
+        }
         if (call.RecordVideoActive)
         {
             builder = builder.RecordVideoActive(true);

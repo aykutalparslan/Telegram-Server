@@ -113,6 +113,7 @@ public class ProtoHandler : IProtoHandler
             _writer.Write(message.Data);
             Session.RecordSentMessage(messageId, sequenceNo, message.Data.Length,
                 message.IsContentRelated, message.IsResponse ? message.MessageId : 0);
+            Session.MarkOutgoingSent(message, messageId);
             int paddingLength = _random.GetNext(12, 512);
             while ((message.Data.Length + paddingLength) % 16 != 0)
             {

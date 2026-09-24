@@ -16,12 +16,12 @@ public sealed class ToggleGroupCallStartSubscriptionHandler : GroupCallHandlerBa
 {
     private readonly IGroupCallsRepository _groupCallsRepository;
 
-    public ToggleGroupCallStartSubscriptionHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository,
+    public ToggleGroupCallStartSubscriptionHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository,
         UpdateFanout fanout, GroupCallChatLink chatLink,
         IUpdatesContextFactory updatesContexts, IMTProtoTime time,
         GroupCallVideoOptions videoOptions, GroupCallMediaSourceMap sourceMap,
         ILogger log)
-        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, fanout, chatLink, updatesContexts, time, videoOptions,
+        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, messageRepository, fanout, chatLink, updatesContexts, time, videoOptions,
             sourceMap, log)
     {
         _groupCallsRepository = groupCallsRepository;
@@ -33,8 +33,14 @@ public sealed class ToggleGroupCallStartSubscriptionHandler : GroupCallHandlerBa
     {
         var request = (ToggleGroupCallStartSubscription)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
         bool subscribed = request.Subscribed;
+
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
+        }
 
         if (!callRead)
         {

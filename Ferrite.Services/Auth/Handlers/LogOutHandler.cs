@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
+using System.Text;
 using Ferrite.Crypto;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Auth;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer.auth;
 using Ferrite.Utils;
@@ -41,6 +43,13 @@ public sealed class LogOutHandler
         }
 
         long revokedAuthKeyId = info.Value.AsAuthInfo().AuthKeyId;
+        var importedAuthKeyIds = await _authorizationRepository.GetAuthKeyIdsImportedFromAsync(
+            Encoding.UTF8.GetString(info.Value.AsAuthInfo().Phone), revokedAuthKeyId);
+        foreach (long importedAuthKeyId in importedAuthKeyIds)
+        {
+            await _secretChatCleanup.CleanupAsync(importedAuthKeyId);
+            _authorizationRepository.DeleteAuthorization(importedAuthKeyId);
+        }
         await _secretChatCleanup.CleanupAsync(revokedAuthKeyId);
         _authorizationRepository.DeleteAuthorization(revokedAuthKeyId);
         _log.Debug($"Log Out for authKey with Id: {authKeyId}");

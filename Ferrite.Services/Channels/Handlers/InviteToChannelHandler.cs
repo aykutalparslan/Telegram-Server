@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Ferrite.Data.Repositories;
 using Ferrite.Data.Search;
+using Ferrite.Services.Channels;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.channels;
@@ -46,7 +47,7 @@ public sealed class InviteToChannelHandler : ChannelsHandlerBase
     private static TLBytes ToCurrentInviteRequest(TLBytes q)
     {
         var sent = new TL.layer51.channels.ChannelsInviteToChannel(q.AsSpan());
-        using var current = InviteToChannel.Builder()
+        var current = InviteToChannel.Builder()
             .Channel(sent.Channel)
             .Users(sent.Users)
             .Build();
@@ -216,8 +217,9 @@ public sealed class InviteToChannelHandler : ChannelsHandlerBase
             }
         }
 
-        var seqCtx = _updatesContextFactory.GetUpdatesContext(authKeyId, currentUserId);
-        int seq = await seqCtx.IncrementSeq();
+
+        byte[] viewerChannelBytes = await ChannelRows.ForViewerAsync(
+            _chatParticipantsRepository, currentUserId, id, updatedChannelBytes);
 
         var resultUpdates = new Vector();
         using (TLUpdate updateChannel = UpdateChannel.Builder().ChannelId(id).Build())
@@ -239,7 +241,7 @@ public sealed class InviteToChannelHandler : ChannelsHandlerBase
         resultUserIds.AddRange(added);
         AppendUsers(currentUserId, ref userVector, resultUserIds);
         var chatVector = new Vector();
-        chatVector.AppendTLObject(updatedChannelBytes);
+        chatVector.AppendTLObject(viewerChannelBytes);
 
         _log.Debug($"📣 InviteToChannel user:{currentUserId} channel:{id} " +
                    $"added:{added.Count} megagroup:{megagroup}");
@@ -249,7 +251,7 @@ public sealed class InviteToChannelHandler : ChannelsHandlerBase
             .Users(userVector)
             .Chats(chatVector)
             .Date(date)
-            .Seq(seq)
+            .Seq(0)
             .Build();
         var missingInvitees = new Vector();
         AppendMissingInvitees(ref missingInvitees, missing);

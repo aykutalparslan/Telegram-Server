@@ -138,8 +138,6 @@ public sealed class GroupCallActionMessages
             await _fanout.PushUpdateChannelToOtherMembersAsync(channelId, actorUserId);
         }
 
-        int seq = await _updatesContextFactory
-            .GetUpdatesContext(authKeyId, actorUserId).IncrementSeq();
         var callerUpdateBytes = new List<byte[]>(2);
         if (leadingCallerUpdates != null)
         {
@@ -165,6 +163,6 @@ public sealed class GroupCallActionMessages
             ? new[] { actorUserId }
             : relatedUserIds.Prepend(actorUserId);
         return _fanout.BuildUpdates(actorUserId, callerUpdateBytes, resultUserIds,
-            new[] { channelBytes }, date, seq);
+            new[] { channelBytes }, date, seq: 0);
     }
 }

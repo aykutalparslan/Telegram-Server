@@ -7,5 +7,7 @@ public interface IReceivedMessageIdRegistry
 {
     bool Contains(long authKeyId, long sessionId, long messageId);
 
+    bool ContainsSession(long authKeyId, long sessionId);
+
     void Add(long authKeyId, long sessionId, long messageId);
 }

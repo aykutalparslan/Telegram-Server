@@ -5,7 +5,7 @@ using System.Text;
 using Ferrite.Data.Repositories;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
-using Ferrite.TL.baseLayer.channels;
+using Ferrite.TL.baseLayer.messages;
 using Ferrite.TL.baseLayer.dto;
 
 namespace Ferrite.Services.Handlers.ChannelForums;
@@ -43,7 +43,7 @@ public sealed class DeleteTopicHistoryHandler
         long authKeyId, TLBytes q)
     {
         var request = (DeleteTopicHistory)q;
-        long? channelId = ChannelForumAccess.ResolveInputChannelId(request.Get_ChannelView());
+        long? channelId = PeerResolver.ResolveInputPeerChannelId(request.Get_PeerView());
         int topicId = request.TopMsgId;
         if (topicId == 1)
             return ChannelForumErrors.AffectedHistory("TOPIC_ID_INVALID"u8);

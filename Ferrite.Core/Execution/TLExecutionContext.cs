@@ -6,6 +6,7 @@ namespace Ferrite.Core.Execution;
 public record TLExecutionContext(Dictionary<string, object> SessionData)
 {
     public Dictionary<string, object> SessionData { get; set; } = SessionData;
+    public ConnectionLayerState ConnectionLayer { get; init; } = new();
     public long CurrentAuthKeyId => PermAuthKeyId != 0 ? PermAuthKeyId : AuthKeyId;
     public long AuthKeyId { get; set; }
     public long PermAuthKeyId { get; set; }

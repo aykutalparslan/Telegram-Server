@@ -107,13 +107,11 @@ public sealed class DeleteScheduledMessagesHandler
             }
             List<byte[]> chats = await _fanout.GetChatBytesForViewerAsync(
                 resolved.UserId, chatIds);
-            int seq = await _updatesContextFactory
-                .GetUpdatesContext(authKeyId, resolved.UserId).IncrementSeq();
             _log.Debug($"⏰ DeleteScheduledMessages user:{resolved.UserId} " +
                        $"peer:{resolved.PeerType}:{resolved.PeerId} " +
                        $"deleted:{removed.Count}");
             return _fanout.BuildUpdates(resolved.UserId, new[] { broadcast.AsSpan().ToArray() },
-                userIds, chats, now, seq);
+                userIds, chats, now, seq: 0);
         }
     }
 

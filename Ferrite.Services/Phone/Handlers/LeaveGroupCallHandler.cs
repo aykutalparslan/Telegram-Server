@@ -19,11 +19,11 @@ public sealed class LeaveGroupCallHandler : GroupCallHandlerBase
 
     private readonly IGroupCallMediaPlane _media;
 
-    public LeaveGroupCallHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, UpdateFanout fanout,
+    public LeaveGroupCallHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository, UpdateFanout fanout,
         GroupCallChatLink chatLink, IUpdatesContextFactory updatesContexts,
         IMTProtoTime time, GroupCallVideoOptions videoOptions,
         GroupCallMediaSourceMap sourceMap, ILogger log, IGroupCallMediaPlane media)
-        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, fanout, chatLink, updatesContexts, time, videoOptions,
+        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, messageRepository, fanout, chatLink, updatesContexts, time, videoOptions,
             sourceMap, log)
     {
         _groupCallsRepository = groupCallsRepository;
@@ -36,8 +36,14 @@ public sealed class LeaveGroupCallHandler : GroupCallHandlerBase
     {
         var request = (LeaveGroupCall)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
         int source = request.Source;
+
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
+        }
 
         if (!callRead)
         {
@@ -173,7 +179,7 @@ public sealed class LeaveGroupCallHandler : GroupCallHandlerBase
                     GroupCallParticipantDecoration.Versioned);
                 return BuildParticipantsUpdate(call, row.AsSpan());
             });
-        await PushCallUpdateToOtherMembersAsync(call, access.Peer.Id,
+        await PushCallUpdateToOtherMembersAsync(call, access,
             access.CurrentUserId, videoCount);
     }
 

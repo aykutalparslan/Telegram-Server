@@ -112,6 +112,28 @@ public static class ChannelUsernames
         return string.Empty;
     }
 
+    public static string Public(IReadOnlyList<ChannelUsername> usernames)
+    {
+        string fallback = string.Empty;
+        foreach (ChannelUsername username in usernames)
+        {
+            if (!username.Active)
+            {
+                continue;
+            }
+            if (username.Editable)
+            {
+                return username.Username;
+            }
+            if (fallback.Length == 0)
+            {
+                fallback = username.Username;
+            }
+        }
+
+        return fallback;
+    }
+
     public static bool HasActive(IReadOnlyList<ChannelUsername> usernames)
     {
         foreach (ChannelUsername username in usernames)

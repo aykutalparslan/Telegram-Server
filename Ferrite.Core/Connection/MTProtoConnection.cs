@@ -2,6 +2,7 @@
 // Copyright (C) 2022-2026 Aykut Alparslan KOC
 
 using System.Buffers;
+using System.Buffers.Binary;
 using System.IO.Pipelines;
 using System.Net;
 using System.Threading.Channels;
@@ -9,11 +10,14 @@ using DotNext.Buffers;
 using DotNext.IO;
 using DotNext.IO.Pipelines;
 using Ferrite.Core.RequestChain;
+using Ferrite.Core.Execution.Functions;
 using Ferrite.Services.Sessions;
 using Ferrite.Core.Execution;
+using Ferrite.Services.Common;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.upload;
+using Ferrite.TL.Schema;
 using Ferrite.Transport;
 using Ferrite.Utils;
 using Channel = System.Threading.Channels.Channel;
@@ -35,6 +39,7 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
     private readonly ProtoTransport _protoTransport;
     private readonly Channel<MTProtoMessage> _outgoing = Channel.CreateUnbounded<MTProtoMessage>();
     private readonly Channel<IFileOwner> _outgoingStreams = Channel.CreateUnbounded<IFileOwner>();
+    private readonly ILayerTransformRegistry _layerTransforms;
     private readonly SemaphoreSlim _sendSemaphore = new SemaphoreSlim(1, 1);
     private readonly SemaphoreSlim _incomingSemaphore = new SemaphoreSlim(1, 1);
     private Task? _receiveTask;
@@ -51,7 +56,8 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
     public MTProtoConnection(ITransportConnection connection,
         ILogger logger, ISessionService sessionManager,
         IProtoHandler protoHandler, IMTProtoSession session,
-        ProtoTransport protoTransport, ITLHandler requestChain)
+        ProtoTransport protoTransport, ITLHandler requestChain,
+        ILayerTransformRegistry? layerTransforms = null)
     {
         _socketConnection = connection;
         _log = logger;
@@ -63,6 +69,8 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
         _protoHandler.Session = _session;
         _protoTransport = protoTransport;
         _requestChain = requestChain;
+        _layerTransforms = layerTransforms ??
+                           LayerTransformRegistry.Identity(SupportedLayers.Base);
     }
     public void Start()
     {
@@ -81,8 +89,152 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
     }
     public ValueTask SendAsync(Services.Transport.MTProtoMessage message)
     {
-        _outgoing.Writer.TryWrite(message);
+        if (TryShapeMessage(message, out Services.Transport.MTProtoMessage? shaped))
+        {
+            _session.TrackOutgoing(message, shaped);
+            _outgoing.Writer.TryWrite(shaped);
+        }
         return ValueTask.CompletedTask;
+    }
+    private bool TryShapeMessage(Services.Transport.MTProtoMessage message,
+        out Services.Transport.MTProtoMessage shaped)
+    {
+        shaped = message;
+        if (message.Data == null || !message.IsContentRelated ||
+            message.MessageType is not (MTProtoMessageType.Encrypted or MTProtoMessageType.Updates) ||
+            _session.ConnectionLayer.Value is not ConnectionLayerResolution.Resolved resolved ||
+            resolved.Layer == _layerTransforms.BaseLayer)
+        {
+            return true;
+        }
+
+        byte[] source = message.Data;
+        int? sourceConstructor = ReadConstructor(source);
+        bool isRpcResult = message.IsResponse &&
+                           sourceConstructor == Constructors.mtproto_RpcResult;
+        if (!isRpcResult && sourceConstructor is { } topConstructor &&
+            MTProtoConstructors.All.Contains(topConstructor))
+        {
+            return true;
+        }
+        long? rpcRequestMessageId = null;
+        if (isRpcResult)
+        {
+            if (source.Length < 12)
+            {
+                return HandleTransformFailure(message, resolved.Layer, null,
+                    Constructors.mtproto_RpcResult, "rpc_result is truncated.",
+                    out shaped);
+            }
+            rpcRequestMessageId = BinaryPrimitives.ReadInt64LittleEndian(source.AsSpan(4));
+            if (ReadConstructor(source, 12) is { } resultConstructor &&
+                MTProtoConstructors.All.Contains(resultConstructor))
+            {
+                return true;
+            }
+        }
+
+        if (!_layerTransforms.TryCreatePlan(resolved.Layer,
+                out LayerTransformPlan plan, out string? planError))
+        {
+            return HandleTransformFailure(message, resolved.Layer, null,
+                ReadConstructor(message.Data), planError ?? "Transform plan is unavailable.",
+                out shaped, rpcRequestMessageId);
+        }
+
+        if (isRpcResult)
+        {
+            byte[] resultBytes = source.AsSpan(12).ToArray();
+            string? vectorElementType = null;
+            if (message.RequestConstructor is { } requestConstructor &&
+                plan.TryGetVectorResultElement(requestConstructor, out string element))
+            {
+                vectorElementType = element;
+            }
+            LayerTransformResult result = plan.Transform(resultBytes, vectorElementType);
+            if (!result.IsSuccess)
+            {
+                return HandleTransformFailure(message, resolved.Layer,
+                    result.FailureEdge, result.Constructor,
+                    result.Detail ?? "Layer transform failed.", out shaped,
+                    rpcRequestMessageId);
+            }
+            if (result.Status == LayerTransformStatus.Identity)
+            {
+                return true;
+            }
+            byte[] wrapped = new byte[12 + result.Data!.Length];
+            source.AsSpan(0, 12).CopyTo(wrapped);
+            result.Data.CopyTo(wrapped, 12);
+            shaped = CloneWithData(message, wrapped);
+            return true;
+        }
+
+        LayerTransformResult direct = plan.Transform(source);
+        if (!direct.IsSuccess)
+        {
+            return HandleTransformFailure(message, resolved.Layer,
+                direct.FailureEdge, direct.Constructor,
+                direct.Detail ?? "Layer transform failed.", out shaped);
+        }
+        if (direct.Status == LayerTransformStatus.Transformed)
+        {
+            shaped = CloneWithData(message, direct.Data!);
+        }
+        return true;
+    }
+
+    private bool HandleTransformFailure(Services.Transport.MTProtoMessage message,
+        int targetLayer, LayerEdge? edge, int? constructor, string detail,
+        out Services.Transport.MTProtoMessage shaped,
+        long? requestMessageId = null)
+    {
+        string edgeText = edge?.ToString() ?? _layerTransforms.BaseLayer + "→" + targetLayer;
+        _log.Error("Layer transform failed target:" + targetLayer +
+                   " edge:" + edgeText +
+                   " constructor:" + FormatConstructor(constructor) +
+                   " method:" + FormatConstructor(message.RequestConstructor) +
+                   " detail:" + detail);
+        if (!message.IsResponse)
+        {
+            shaped = message;
+            return false;
+        }
+
+        using TLBytes error = RpcErrorGenerator.GenerateError(
+            500, "LAYER_TRANSFORM_FAILED"u8);
+        using TLBytes rpcResult = RpcResultGenerator.Generate(error,
+            requestMessageId ?? message.MessageId);
+        shaped = CloneWithData(message, rpcResult.AsSpan().ToArray());
+        return true;
+    }
+
+    private static string FormatConstructor(int? constructor)
+    {
+        return constructor is { } value
+            ? "0x" + unchecked((uint)value).ToString("x8")
+            : "unknown";
+    }
+
+    private static int? ReadConstructor(byte[] data, int offset = 0) =>
+        data.Length < offset + 4 ? null : BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(offset));
+
+    private static Services.Transport.MTProtoMessage CloneWithData(
+        Services.Transport.MTProtoMessage source, byte[] data)
+    {
+        return new Services.Transport.MTProtoMessage
+        {
+            SessionId = source.SessionId,
+            IsResponse = source.IsResponse,
+            IsContentRelated = source.IsContentRelated,
+            Data = data,
+            MessageType = source.MessageType,
+            Nonce = source.Nonce,
+            MessageId = source.MessageId,
+            QuickAck = source.QuickAck,
+            RecipientUserId = source.RecipientUserId,
+            Pts = source.Pts
+        };
     }
     private async Task DoReceive()
     {
@@ -322,7 +474,8 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
             return;
         }
 
-        await CreateNewSession(message.Headers);
+        await CreateNewSession(message.Headers,
+            _session.IsKnownSession(message.Headers.SessionId), message.Headers.MessageId);
         var context = GenerateExecutionContext(message.Headers);
         _ = await message.MessageData.Input.ReadInt32Async(true);
         int constructor = await message.MessageData.Input.ReadInt32Async(true);
@@ -367,6 +520,7 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
 
             bool isContainer = message.MessageData.Constructor ==
                                Constructors.mtproto_MsgContainer;
+            bool knownSession = _session.IsKnownSession(message.Headers.SessionId);
             if (!_session.TryValidateMessageId(message.Headers.SessionId,
                     message.Headers.MessageId, out var errorCode, isContainer))
             {
@@ -375,24 +529,50 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
                 return;
             }
 
-            await CreateNewSession(message.Headers);
+            bool bound = await CreateNewSession(message.Headers, knownSession, isContainer
+                ? FirstContainedMessageId(message.MessageData, message.Headers.MessageId)
+                : message.Headers.MessageId);
             var context = GenerateExecutionContext(message.Headers,
                 requiresQuickAck ? _session.GenerateQuickAck(message.MessageData.AsSpan()) : null);
             await _requestChain.Process(this, message.MessageData, context);
+            if (bound)
+            {
+                foreach (var pending in _session.TakeUnacknowledged())
+                {
+                    await SendAsync(pending);
+                }
+            }
         }
     }
 
-    private async ValueTask CreateNewSession(ProtoHeaders headers)
+    private async ValueTask<bool> CreateNewSession(ProtoHeaders headers, bool knownSession,
+        long firstMessageId)
     {
-        if (_session.SessionId == headers.SessionId) return;
-        bool announce = _session.SessionId == 0;
-        if (!announce)
+        if (_session.SessionId == headers.SessionId) return false;
+        bool firstOnConnection = _session.SessionId == 0;
+        if (!firstOnConnection)
         {
             await _sessionManager.RemoveSession(_session.AuthKeyId,
                 _session.PermAuthKeyId, _session.SessionId, this);
         }
         var serverSalt = _session.CreateNewSession(headers.SessionId, headers.MessageId);
-        if (announce) await SendNewSessionCreatedMessage(headers.MessageId, serverSalt);
+        if (firstOnConnection && !knownSession)
+        {
+            await SendNewSessionCreatedMessage(firstMessageId, serverSalt);
+        }
+        return true;
+    }
+
+    private static long FirstContainedMessageId(TLBytes container, long containerId)
+    {
+        var messages = new TL.mtproto.MsgContainer(container.AsSpan()).Messages;
+        long first = containerId;
+        for (int i = 0; i < messages.Count; i++)
+        {
+            first = Math.Min(first, BitConverter.ToInt64(
+                messages.Read(TL.mtproto.MessageBare.Read)));
+        }
+        return first;
     }
 
     private TLExecutionContext GenerateExecutionContext(ProtoHeaders headers, int? quickAck = null)
@@ -400,6 +580,7 @@ public sealed class MTProtoConnection : IMTProtoConnection, IMTProtoSessionOwner
         _session.TryResolvePermAuthKeyId();
         var context = new TLExecutionContext(_session.SessionData)
         {
+            ConnectionLayer = _session.ConnectionLayer,
             AuthKeyId = _session.AuthKeyId,
             PermAuthKeyId = _session.PermAuthKeyId,
             Salt = headers.Salt,

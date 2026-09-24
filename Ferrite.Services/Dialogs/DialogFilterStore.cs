@@ -309,8 +309,7 @@ public sealed class DialogFilterStore
         if (view.Is(out DialogFilter filter))
         {
             if (!filter.Get_TitleView().Is(out TextWithEntities title) ||
-                title.Text.Length == 0 || filter.Id != filterId || filter.Flags[27] &&
-                filter.Color is < -1 or > 6)
+                title.Text.Length == 0 || filter.Id != filterId)
             {
                 return false;
             }
@@ -326,8 +325,13 @@ public sealed class DialogFilterStore
             {
                 return false;
             }
-            using var value = filter.Clone().PinnedPeers(pinned)
-                .IncludePeers(included).ExcludePeers(excluded).Build();
+            var builder = filter.Clone().PinnedPeers(pinned)
+                .IncludePeers(included).ExcludePeers(excluded);
+            if (filter.Flags[27] && !IsFolderColor(filter.Color))
+            {
+                builder = builder.Color(NoFolderColor);
+            }
+            using var value = builder.Build();
             normalized = value.ToReadOnlySpan().ToArray();
             peers = all.ToArray();
             return true;
@@ -335,9 +339,7 @@ public sealed class DialogFilterStore
         if (view.Is(out DialogFilterChatlist chatlist))
         {
             if (!chatlist.Get_TitleView().Is(out TextWithEntities chatTitle) ||
-                chatTitle.Text.Length == 0 || chatlist.Id != filterId ||
-                chatlist.Flags[27] &&
-                chatlist.Color is < -1 or > 6)
+                chatTitle.Text.Length == 0 || chatlist.Id != filterId)
             {
                 return false;
             }
@@ -350,14 +352,23 @@ public sealed class DialogFilterStore
             {
                 return false;
             }
-            using var value = chatlist.Clone().PinnedPeers(pinned)
-                .IncludePeers(included).Build();
+            var builder = chatlist.Clone().PinnedPeers(pinned)
+                .IncludePeers(included);
+            if (chatlist.Flags[27] && !IsFolderColor(chatlist.Color))
+            {
+                builder = builder.Color(NoFolderColor);
+            }
+            using var value = builder.Build();
             normalized = value.ToReadOnlySpan().ToArray();
             peers = all.ToArray();
             return true;
         }
         return false;
     }
+
+    private const int NoFolderColor = -1;
+
+    private static bool IsFolderColor(int color) => color is >= NoFolderColor and <= 6;
 
     private static bool NormalizePeers(ref Vector source, ref Vector destination,
         long userId, HashSet<DialogPeerKey> seen, List<DialogPeerKey> all)

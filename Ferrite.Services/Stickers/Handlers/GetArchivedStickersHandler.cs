@@ -28,7 +28,7 @@ public sealed class GetArchivedStickersHandler : StickerHandlerBase
             return RpcErrorGenerator.GenerateError(400,
                 "STICKERSET_INVALID"u8);
         }
-        if (request.Limit is <= 0 or > 200)
+        if (request.Limit is < 0 or > 200)
         {
             return LimitError();
         }

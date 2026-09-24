@@ -30,6 +30,7 @@ public abstract class AccountHandlerBase
     protected readonly IVerificationGateway _verificationGateway;
     protected static Regex UsernameRegex = new Regex("(^[a-zA-Z0-9_]{5,32}$)", RegexOptions.Compiled);
     protected const int PhoneCodeTimeout = 60;
+    protected const int PhoneCodeLength = 5;
     protected const int OnlineStatusExpiresInSeconds = 60;
     protected AccountHandlerBase(ISearchEngine search, IUpdatesService updates, IRandomGenerator random,
         IUnitOfWork unitOfWork, IChatRepository chatRepository, IPrivacyRulesRepository privacyRulesRepository, IUserRepository userRepository, IVerificationGateway verificationGateway)
@@ -373,6 +374,7 @@ public abstract class AccountHandlerBase
         InputPrivacyKey.Birthday => PrivacyKeyBirthday.Builder().Build(),
         InputPrivacyKey.StarGiftsAutoSave => PrivacyKeyStarGiftsAutoSave.Builder().Build(),
         InputPrivacyKey.NoPaidMessages => PrivacyKeyNoPaidMessages.Builder().Build(),
+        InputPrivacyKey.SavedMusic => PrivacyKeySavedMusic.Builder().Build(),
         _ => throw new ArgumentOutOfRangeException(nameof(key))
     };
 
@@ -404,6 +406,10 @@ public abstract class AccountHandlerBase
         {
             saved2.Add(r);
         }
+        if (saved2.Count == 0)
+        {
+            AddDefaultPrivacyRule(saved2, key);
+        }
 
         var users = new Vector();
         foreach (byte[] user in userRows)
@@ -416,6 +422,19 @@ public abstract class AccountHandlerBase
             .Users(users)
             .Chats(chats.ToVector())
             .Build();
+    }
+
+    private static void AddDefaultPrivacyRule(List<TLBytes> rules,
+        InputPrivacyKey key)
+    {
+        if (key == InputPrivacyKey.NoPaidMessages)
+        {
+            return;
+        }
+        TLPrivacyRule rule = key == InputPrivacyKey.PhoneP2P
+            ? PrivacyValueAllowContacts.Builder().Build()
+            : PrivacyValueAllowAll.Builder().Build();
+        rules.Add(rule);
     }
 
     protected bool TryAppendPrivacyValue(ref Vector result, Span<byte> inputPrivacyValue, long currentUserId)
@@ -617,12 +636,13 @@ public abstract class AccountHandlerBase
         Constructors.baseLayer_InputPrivacyKeyBirthday => InputPrivacyKey.Birthday,
         Constructors.baseLayer_InputPrivacyKeyStarGiftsAutoSave => InputPrivacyKey.StarGiftsAutoSave,
         Constructors.baseLayer_InputPrivacyKeyNoPaidMessages => InputPrivacyKey.NoPaidMessages,
+        Constructors.baseLayer_InputPrivacyKeySavedMusic => InputPrivacyKey.SavedMusic,
         _ => null
     };
 
     protected static TLSentCode GenerateSentCode(string hash)
     {
-        using var codeType = SentCodeTypeSms.Builder().Build();
+        using var codeType = SentCodeTypeSms.Builder().LengthProperty(PhoneCodeLength).Build();
         TLSentCode sentCode = SentCode.Builder()
             .Type(codeType.ToReadOnlySpan())
             .PhoneCodeHash(Encoding.UTF8.GetBytes(hash))
@@ -646,7 +666,7 @@ public abstract class AccountHandlerBase
             var a = info.AsAppInfo();
             using var auth = Authorization.Builder()
                 .Current(a.AuthKeyId == currentAuthKeyId)
-                .Hash(a.Hash)
+                .Hash(a.AuthKeyId == currentAuthKeyId ? 0 : a.Hash)
                 .DeviceModel(a.DeviceModel)
                 .Platform("Unknown"u8)
                 .SystemVersion(a.SystemVersion)

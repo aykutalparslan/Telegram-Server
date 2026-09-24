@@ -87,7 +87,7 @@ public sealed class DraftStore
         TLPeer.PeerType peerType, long peerId, byte[] sendMessageBytes)
     {
         using var owned = new TLBytes(sendMessageBytes, 0, sendMessageBytes.Length);
-        var request = (SendMessage)owned;
+        var request = (MessagesSendMessage)owned;
         if (!request.ClearDraft)
         {
             return Task.FromResult(true);

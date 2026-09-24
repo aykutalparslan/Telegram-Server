@@ -9,6 +9,7 @@ public class RocksDBContext : IDisposable
 {
     private readonly RocksDb _db;
     private readonly ColumnFamilyHandle _cf;
+    private bool _disposed;
     public RocksDBContext()
     {
         _db = RocksDb.Open( new DbOptions().SetCreateIfMissing(true), "ferrite", new ColumnFamilies());
@@ -21,22 +22,27 @@ public class RocksDBContext : IDisposable
     }
     public void Put(ReadOnlySpan<byte> key, ReadOnlySpan<byte> value)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         _db.Put(key, value, _cf);
     }
     public byte[] Get(ReadOnlySpan<byte> key)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         return _db.Get(key, _cf);
     }
     public void Delete(ReadOnlySpan<byte> key)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         _db.Remove(key, _cf);
     }
     public void DeleteWithPrefix(byte[] key)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         _db.RemoveWithPrefix(key, _cf);
     }
     public IEnumerable<byte[]> Iterate(byte[] key)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         var iter = _db.NewIterator(_cf);
         iter.Seek(key);
         while(iter.Valid())
@@ -53,6 +59,7 @@ public class RocksDBContext : IDisposable
     }
     public IEnumerable<byte[]> IterateKeys(byte[] key)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         var iter = _db.NewIterator(_cf);
         iter.Seek(key);
         while(iter.Valid())
@@ -70,6 +77,8 @@ public class RocksDBContext : IDisposable
 
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
         _db.Dispose();
     }
 }

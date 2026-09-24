@@ -19,11 +19,11 @@ public sealed class JoinGroupCallPresentationHandler : GroupCallHandlerBase
 
     private readonly IGroupCallMediaPlane _media;
 
-    public JoinGroupCallPresentationHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, UpdateFanout fanout,
+    public JoinGroupCallPresentationHandler(IUnitOfWork unitOfWork, IChatParticipantsRepository chatParticipantsRepository, IChatRepository chatRepository, IAuthorizationRepository authorizationRepository, IGroupCallsRepository groupCallsRepository, IMessageRepository messageRepository, UpdateFanout fanout,
         GroupCallChatLink chatLink, IUpdatesContextFactory updatesContexts,
         IMTProtoTime time, GroupCallVideoOptions videoOptions,
         GroupCallMediaSourceMap sourceMap, ILogger log, IGroupCallMediaPlane media)
-        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, fanout, chatLink, updatesContexts, time, videoOptions,
+        : base(unitOfWork, chatParticipantsRepository, chatRepository, authorizationRepository, groupCallsRepository, messageRepository, fanout, chatLink, updatesContexts, time, videoOptions,
             sourceMap, log)
     {
         _groupCallsRepository = groupCallsRepository;
@@ -36,10 +36,16 @@ public sealed class JoinGroupCallPresentationHandler : GroupCallHandlerBase
     {
         var request = (JoinGroupCallPresentation)q;
         bool callRead = TryReadInputGroupCall(request.Get_CallView(), out long callId,
-            out long accessHash);
+            out long accessHash, out string? callSlug, out int inviteMsgId);
         byte[] paramsJson = request.Get_ParamsPropertyView().Is(out DataJSON json)
             ? json.Data.ToArray()
             : Array.Empty<byte>();
+
+        if (!callRead)
+        {
+            (callRead, callId, accessHash) = await ResolveCallAddressAsync(authKeyId,
+                callSlug, inviteMsgId);
+        }
 
         if (!callRead)
         {
@@ -190,10 +196,10 @@ public sealed class JoinGroupCallPresentationHandler : GroupCallHandlerBase
         long sharerUserId = view.UserId;
         string producerMediaId = Encoding.UTF8.GetString(view.MediaId);
 
-        await Fanout.PushGroupCallUpdatesAsync(access.Peer.Id, access.CurrentUserId,
+        await PushToCallMembersAsync(access, callId, access.CurrentUserId,
             async memberId =>
             {
-                bool canManage = await CanManageCallAsync(access.Peer.Id, memberId);
+                bool canManage = await CanManageCallAsync(access, memberId);
                 GroupCallViewer viewer = await BuildViewerAsync(callId, memberId,
                     canManage);
                 string? viewerMediaId = await GetMediaIdAsync(callId, memberId);
@@ -204,7 +210,7 @@ public sealed class JoinGroupCallPresentationHandler : GroupCallHandlerBase
                     GroupCallParticipantDecoration.Versioned);
                 return BuildParticipantsUpdate(call, row.AsSpan());
             });
-        await PushCallUpdateToOtherMembersAsync(call, access.Peer.Id,
+        await PushCallUpdateToOtherMembersAsync(call, access,
             access.CurrentUserId, videoCount);
     }
 

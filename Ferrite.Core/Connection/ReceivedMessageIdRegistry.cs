@@ -24,6 +24,14 @@ public sealed class ReceivedMessageIdRegistry : IReceivedMessageIdRegistry
         }
     }
 
+    public bool ContainsSession(long authKeyId, long sessionId)
+    {
+        lock (_lock)
+        {
+            return _bySession.ContainsKey((authKeyId, sessionId));
+        }
+    }
+
     public void Add(long authKeyId, long sessionId, long messageId)
     {
         lock (_lock)

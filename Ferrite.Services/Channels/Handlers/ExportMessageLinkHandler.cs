@@ -4,6 +4,7 @@
 using System.Net;
 using System.Text;
 using Ferrite.Data.Repositories;
+using Ferrite.Services.Channels;
 using Ferrite.TL;
 using Ferrite.TL.baseLayer;
 using Ferrite.TL.baseLayer.channels;
@@ -85,7 +86,10 @@ public sealed class ExportMessageLinkHandler
             ? ResolveThreadId(saved.Value.AsSavedMessage()
                 .Get_OriginalMessage(), messageId)
             : 0;
-        string link = BuildLink(channelId.Value, messageId, grouped, threadId);
+        string username = ChannelUsernames.Public(
+            ChannelUsernames.Read(channel.Value.AsChannel()));
+        string link = BuildLink(channelId.Value, username, messageId, grouped,
+            threadId);
         string escaped = WebUtility.HtmlEncode(link);
         string html = $"<a href=\"{escaped}\">{escaped}</a>";
 
@@ -95,20 +99,28 @@ public sealed class ExportMessageLinkHandler
             .Build();
     }
 
-    internal static string BuildLink(long channelId, int messageId,
-        bool grouped, int threadId)
+    internal static string BuildLink(long channelId, string username,
+        int messageId, bool grouped, int threadId)
     {
-        var link = new StringBuilder("tg://privatepost?channel=")
-            .Append(channelId)
-            .Append("&post=")
-            .Append(messageId);
+        bool publicLink = username.Length > 0;
+        var link = publicLink
+            ? new StringBuilder("https://t.me/")
+                .Append(username)
+                .Append('/')
+                .Append(messageId)
+            : new StringBuilder("tg://privatepost?channel=")
+                .Append(channelId)
+                .Append("&post=")
+                .Append(messageId);
+        char separator = publicLink ? '?' : '&';
         if (!grouped)
         {
-            link.Append("&single");
+            link.Append(separator).Append("single");
+            separator = '&';
         }
         if (threadId > 0)
         {
-            link.Append("&thread=").Append(threadId);
+            link.Append(separator).Append("thread=").Append(threadId);
         }
         return link.ToString();
     }

@@ -85,6 +85,24 @@ public sealed class GetPeerSettingsHandler : MessagesHandlerBase
                 }
                 chatBytes = chat.Value.AsSpan().ToArray();
             }
+            else if (peer.Type == TLPeer.PeerType.PeerChannel)
+            {
+                using (var channel = await _chatRepository.GetChatAsync(peerId))
+                {
+                    if (channel == null || channel.Value.Type != TLChat.ChatType.Channel)
+                    {
+                        return (Ferrite.TL.baseLayer.messages.TLPeerSettings)RpcErrorGenerator
+                            .GenerateError(400, "CHANNEL_INVALID"u8);
+                    }
+                }
+                chatBytes = (await GetChatBytesForViewer(currentUserId, new[] { peerId }))
+                    .FirstOrDefault();
+                if (chatBytes == null)
+                {
+                    return (Ferrite.TL.baseLayer.messages.TLPeerSettings)RpcErrorGenerator
+                        .GenerateError(400, "CHANNEL_INVALID"u8);
+                }
+            }
             else
             {
                 return (Ferrite.TL.baseLayer.messages.TLPeerSettings)RpcErrorGenerator

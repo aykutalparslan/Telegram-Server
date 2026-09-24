@@ -24,6 +24,10 @@ public static class MTProtoMessageEnvelope
             builder.RecipientUserId(recipientUserId);
         }
         if (message.Pts is { } pts) builder.Pts(pts);
+        if (message.RequestConstructor is { } requestConstructor)
+        {
+            builder.RequestConstructor(requestConstructor);
+        }
         using MtprotoMessage row = builder.Build();
         return row.ToReadOnlySpan().ToArray();
     }
@@ -56,6 +60,7 @@ public static class MTProtoMessageEnvelope
             QuickAck = row.QuickAck,
             RecipientUserId = row.Flags[2] ? row.RecipientUserId : null,
             Pts = row.Flags[3] ? row.Pts : null,
+            RequestConstructor = row.Flags[4] ? row.RequestConstructor : null,
         };
     }
 }

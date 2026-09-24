@@ -60,7 +60,7 @@ public sealed class ScheduledMessageSender
             using (var request = new TLBytes(item.SendMessageBytes, 0,
                        item.SendMessageBytes.Length))
             {
-                randomId = ((SendMessage)request).RandomId;
+                randomId = ((MessagesSendMessage)request).RandomId;
                 using TLPeer from = PeerResolver.BuildPeer(target.Sender.Type,
                     target.Sender.Id);
                 using TLPeer to = PeerResolver.BuildPeer(target.PeerType,
@@ -131,11 +131,9 @@ public sealed class ScheduledMessageSender
             chatIds.Add(target.PeerId);
         }
         List<byte[]> chats = await _fanout.GetChatBytesForViewerAsync(userId, chatIds);
-        int seq = await _updatesContextFactory.GetUpdatesContext(authKeyId, userId)
-            .IncrementSeq();
         _log.Debug($"⏰ Scheduled {entries.Count} message(s) user:{userId} " +
                    $"peer:{target.PeerType}:{target.PeerId} at:{scheduleDate}");
-        return _fanout.BuildUpdates(userId, updateBytes, userIds, chats, now, seq);
+        return _fanout.BuildUpdates(userId, updateBytes, userIds, chats, now, seq: 0);
     }
 
     private static TLUpdates Error(int code, string message) =>

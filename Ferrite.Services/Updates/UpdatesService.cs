@@ -70,6 +70,7 @@ public class UpdatesService : IUpdatesService
         try
         {
             updateConstructor = update.Constructor;
+            pts ??= ReadCommonPts(update);
             if (IsUnsequenced(updateConstructor))
             {
                 relatedUsers = new List<byte[]>();
@@ -87,6 +88,7 @@ public class UpdatesService : IUpdatesService
         }
 
         bool unsequenced = IsUnsequenced(updateConstructor);
+        bool orderedElsewhere = pts != null || IsOrderedByAnotherSequence(updateConstructor);
 
         using var user = _userRepository.GetUser(userId);
         if (user == null) return false;
@@ -118,6 +120,12 @@ public class UpdatesService : IUpdatesService
                 continue;
             }
 
+            if (!scope.Targets(targetAuthKeyId) &&
+                await _authorizationRepository.GetImportSourceAsync(targetAuthKeyId) is not null)
+            {
+                continue;
+            }
+
             byte[] data;
             int seq = 0;
             if (unsequenced)
@@ -127,8 +135,11 @@ public class UpdatesService : IUpdatesService
             }
             else
             {
-                var updatesCtx = _updatesContextFactory.GetUpdatesContext(targetAuthKeyId, userId);
-                seq = await updatesCtx.IncrementSeq();
+                if (!orderedElsewhere)
+                {
+                    var updatesCtx = _updatesContextFactory.GetUpdatesContext(targetAuthKeyId, userId);
+                    seq = await updatesCtx.IncrementSeq();
+                }
                 using var updates = BuildUpdates(updateBytes, relatedUsers, relatedChats, seq);
                 data = updates.AsSpan().ToArray();
             }
@@ -229,6 +240,24 @@ public class UpdatesService : IUpdatesService
                 AddUser(viewerUserId, users, seenUsers, fromUserId);
             }
         }
+        else if (update.Constructor is Constructors.baseLayer_UpdateReadHistoryInbox
+                 or Constructors.baseLayer_UpdateReadHistoryOutbox)
+        {
+            var readPeerView = update.Constructor == Constructors.baseLayer_UpdateReadHistoryInbox
+                ? update.AsUpdateReadHistoryInbox().Get_PeerView()
+                : update.AsUpdateReadHistoryOutbox().Get_PeerView();
+            if (TryReadPeer(readPeerView, out var readPeer))
+            {
+                if (readPeer.Type == TLPeer.PeerType.PeerUser)
+                {
+                    AddUser(viewerUserId, users, seenUsers, readPeer.Id);
+                }
+                else if (readPeer.Id > 0)
+                {
+                    await AddChat(chats, seenChats, readPeer.Id);
+                }
+            }
+        }
         else if (update.Constructor == Constructors.baseLayer_UpdatePinnedChannelMessages)
         {
             long channelId = update.AsUpdatePinnedChannelMessages().ChannelId;
@@ -245,17 +274,29 @@ public class UpdatesService : IUpdatesService
                 await AddChat(chats, seenChats, channelId);
             }
         }
-        else if (update.Constructor == Constructors.baseLayer_UpdateChannelPinnedTopic)
+        else if (update.Constructor == Constructors.baseLayer_UpdatePinnedForumTopic)
         {
-            long channelId = update.AsUpdateChannelPinnedTopic().ChannelId;
+            long channelId = 0;
+            var pinnedTopic = update.AsUpdatePinnedForumTopic();
+            if (TryReadPeer(pinnedTopic.Get_PeerView(), out var peer) &&
+                peer.Type == TLPeer.PeerType.PeerChannel)
+            {
+                channelId = peer.Id;
+            }
             if (channelId > 0)
             {
                 await AddChat(chats, seenChats, channelId);
             }
         }
-        else if (update.Constructor == Constructors.baseLayer_UpdateChannelPinnedTopics)
+        else if (update.Constructor == Constructors.baseLayer_UpdatePinnedForumTopics)
         {
-            long channelId = update.AsUpdateChannelPinnedTopics().ChannelId;
+            long channelId = 0;
+            var pinnedTopics = update.AsUpdatePinnedForumTopics();
+            if (TryReadPeer(pinnedTopics.Get_PeerView(), out var peer) &&
+                peer.Type == TLPeer.PeerType.PeerChannel)
+            {
+                channelId = peer.Id;
+            }
             if (channelId > 0)
             {
                 await AddChat(chats, seenChats, channelId);
@@ -324,7 +365,14 @@ public class UpdatesService : IUpdatesService
 
         else if (update.Constructor == Constructors.baseLayer_UpdateGroupCall)
         {
-            long groupCallChatId = update.AsUpdateGroupCall().ChatId;
+            long groupCallChatId = 0;
+            var groupCall = update.AsUpdateGroupCall();
+            if (groupCall.Flags[1] &&
+                TryReadPeer(groupCall.Get_PeerView(), out var peer) &&
+                peer.Type is TLPeer.PeerType.PeerChat or TLPeer.PeerType.PeerChannel)
+            {
+                groupCallChatId = peer.Id;
+            }
             if (groupCallChatId > 0)
             {
                 await AddChat(chats, seenChats, groupCallChatId);
@@ -523,6 +571,59 @@ public class UpdatesService : IUpdatesService
 
         return (userIds, chatIds);
     }
+
+    private static int? ReadCommonPts(TLUpdate update) =>
+        update.Constructor switch
+        {
+            Constructors.baseLayer_UpdateNewMessage => update.AsUpdateNewMessage().Pts,
+            Constructors.baseLayer_UpdateDeleteMessages => update.AsUpdateDeleteMessages().Pts,
+            Constructors.baseLayer_UpdateReadHistoryInbox => update.AsUpdateReadHistoryInbox().Pts,
+            Constructors.baseLayer_UpdateReadHistoryOutbox => update.AsUpdateReadHistoryOutbox().Pts,
+            Constructors.baseLayer_UpdateWebPage => update.AsUpdateWebPage().Pts,
+            Constructors.baseLayer_UpdateReadMessagesContents => update.AsUpdateReadMessagesContents().Pts,
+            Constructors.baseLayer_UpdateEditMessage => update.AsUpdateEditMessage().Pts,
+            Constructors.baseLayer_UpdateFolderPeers => update.AsUpdateFolderPeers().Pts,
+            Constructors.baseLayer_UpdatePinnedMessages => update.AsUpdatePinnedMessages().Pts,
+            _ => null,
+        };
+
+    private static bool IsOrderedByAnotherSequence(int constructor) =>
+        constructor is Constructors.baseLayer_UpdateNewEncryptedMessage
+            or Constructors.baseLayer_UpdateMessagePollVote
+            or Constructors.baseLayer_UpdateChatParticipant
+            or Constructors.baseLayer_UpdateChannelParticipant
+            or Constructors.baseLayer_UpdateBotStopped
+            or Constructors.baseLayer_UpdateBotChatInviteRequester
+            or Constructors.baseLayer_UpdateBotChatBoost
+            or Constructors.baseLayer_UpdateBotMessageReaction
+            or Constructors.baseLayer_UpdateBotMessageReactions
+            or Constructors.baseLayer_UpdateBotBusinessConnect
+            or Constructors.baseLayer_UpdateBotNewBusinessMessage
+            or Constructors.baseLayer_UpdateBotEditBusinessMessage
+            or Constructors.baseLayer_UpdateBotDeleteBusinessMessage
+            or Constructors.baseLayer_UpdateBotPurchasedPaidMedia
+            or Constructors.baseLayer_UpdateManagedBot
+            or Constructors.baseLayer_UpdateBotGuestChatQuery
+            or Constructors.baseLayer_UpdateBotStarsSubscription
+            or Constructors.baseLayer_UpdateChannelTooLong
+            or Constructors.baseLayer_UpdateChannel
+            or Constructors.baseLayer_UpdateNewChannelMessage
+            or Constructors.baseLayer_UpdateEditChannelMessage
+            or Constructors.baseLayer_UpdateDeleteChannelMessages
+            or Constructors.baseLayer_UpdatePinnedChannelMessages
+            or Constructors.baseLayer_UpdateChannelWebPage
+            or Constructors.baseLayer_UpdateReadChannelInbox
+            or Constructors.baseLayer_UpdateReadChannelOutbox
+            or Constructors.baseLayer_UpdateChannelMessageViews
+            or Constructors.baseLayer_UpdateChannelMessageForwards
+            or Constructors.baseLayer_UpdateChannelReadMessagesContents
+            or Constructors.baseLayer_UpdateChannelAvailableMessages
+            or Constructors.baseLayer_UpdateReadChannelDiscussionInbox
+            or Constructors.baseLayer_UpdateReadChannelDiscussionOutbox
+            or Constructors.baseLayer_UpdateChannelViewForumAsMessages
+            or Constructors.baseLayer_UpdateReadMonoForumInbox
+            or Constructors.baseLayer_UpdateReadMonoForumOutbox
+            or Constructors.baseLayer_UpdateMonoForumNoPaidException;
 
     private static bool IsUnsequenced(int constructor) =>
         constructor is Constructors.baseLayer_UpdateUserTyping

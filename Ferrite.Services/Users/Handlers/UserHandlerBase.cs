@@ -114,7 +114,7 @@ public abstract class UserHandlerBase
             .CommonChatsCount(0);
         if (!hasProfilePhoto)
         {
-            using var profilePhoto = PhotoEmpty.Builder().Build();
+            using var profilePhoto = PhotoEmpty.Builder().Id(0).Build();
             userfull = userfull.ProfilePhoto(profilePhoto.ToReadOnlySpan());
         }
         else if (_photoRepository.GetProfilePhoto(user.Id, photoId)
