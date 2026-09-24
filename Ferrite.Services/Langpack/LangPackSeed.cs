@@ -13,7 +13,8 @@ namespace Ferrite.Services.Langpack;
 
 public sealed class LangPackSeed
 {
-    private const string DataDirectory = "LangData";
+    private static readonly string DataDirectory =
+        Path.Combine(AppContext.BaseDirectory, "LangData");
     private static readonly string[] LangPacks =
         ["android", "ios", "tdesktop", "macos", "android_x"];
     private static readonly JsonSerializerOptions JsonOptions = new() { IncludeFields = true };
